@@ -1,0 +1,317 @@
+.portal {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48px 16px 80px;
+}
+
+.portal__header {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.portal__logo {
+  height: 36px;
+  margin-bottom: 14px;
+}
+
+.portal__header h1 {
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.portal__steps {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 26px;
+}
+
+.portal__step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-subtle);
+}
+
+.portal__step + .portal__step::before {
+  content: "";
+  width: 22px;
+  height: 1px;
+  background: var(--border-strong);
+}
+
+.portal__step-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--border);
+  color: var(--text-muted);
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.portal__step.is-active {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.portal__step.is-active .portal__step-dot {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.portal__card {
+  width: 100%;
+  max-width: 560px;
+}
+
+.portal__card--wide {
+  max-width: 760px;
+}
+
+.portal__footer {
+  margin-top: 28px;
+  font-size: 13px;
+  color: var(--text-subtle);
+  text-align: center;
+}
+
+.portal__back {
+  display: inline-block;
+  margin-bottom: 14px;
+  font-size: 14px;
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.portal__back:hover {
+  color: var(--text);
+}
+
+/* ---------- item picker ---------- */
+
+.line-item {
+  display: flex;
+  gap: 14px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.line-item:last-of-type {
+  border-bottom: none;
+}
+
+.line-item.is-disabled {
+  opacity: 0.55;
+}
+
+.line-item__thumb {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: #f0f0f1;
+  flex-shrink: 0;
+}
+
+.line-item__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.line-item__title {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.line-item__meta {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+.line-item__controls {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.line-item__controls select,
+.line-item__controls input {
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-family: inherit;
+  background: var(--surface);
+}
+
+.line-item__controls input {
+  flex: 1;
+  min-width: 180px;
+}
+
+.line-item input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin-top: 3px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* ---------- resolution picker ---------- */
+
+.resolutions {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0 20px;
+}
+
+.resolution {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: 14px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+}
+
+.resolution:hover {
+  border-color: var(--text-subtle);
+}
+
+.resolution.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+  background: #fafafa;
+}
+
+.resolution input {
+  margin-top: 3px;
+  accent-color: var(--accent);
+}
+
+/* These are spans inside a label, so they need to be told to stack. */
+.resolution__label {
+  display: block;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.resolution__desc {
+  display: block;
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+.resolution__bonus {
+  display: inline-block;
+  margin-top: 6px;
+  background: var(--success-bg);
+  color: var(--success-fg);
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* ---------- totals ---------- */
+
+.totals {
+  border-top: 1px solid var(--border);
+  margin-top: 16px;
+  padding-top: 14px;
+}
+
+.totals__row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  padding: 5px 0;
+  color: var(--text-muted);
+}
+
+.totals__row--grand {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+  padding-top: 12px;
+}
+
+.totals__row--credit {
+  color: var(--success-fg);
+}
+
+/* ---------- status timeline ---------- */
+
+.timeline {
+  list-style: none;
+  padding: 0;
+  margin: 24px 0;
+}
+
+.timeline li {
+  display: flex;
+  gap: 12px;
+  padding-bottom: 20px;
+  position: relative;
+}
+
+.timeline li::before {
+  content: "";
+  position: absolute;
+  left: 9px;
+  top: 22px;
+  bottom: 0;
+  width: 2px;
+  background: var(--border);
+}
+
+.timeline li:last-child::before {
+  display: none;
+}
+
+.timeline__marker {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--border);
+  flex-shrink: 0;
+  z-index: 1;
+}
+
+.timeline li.is-done .timeline__marker {
+  background: var(--accent);
+}
+
+.timeline__title {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.timeline__desc {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+@media (max-width: 560px) {
+  .card {
+    padding: 22px;
+  }
+
+  .portal__steps {
+    display: none;
+  }
+}

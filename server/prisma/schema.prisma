@@ -1,0 +1,474 @@
+// Returns & exchanges platform — PostgreSQL schema.
+//
+// Multi-tenant: every row that belongs to a store carries `merchantId`, and
+// every query in the service layer is scoped by it. Money is stored as
+// Decimal(12,2) with a sibling currency column; never as float.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Tenancy & staff
+// ---------------------------------------------------------------------------
+
+model Merchant {
+  id        String   @id @default(cuid())
+  // URL-safe identifier used in portal links: /r/:slug
+  slug      String   @unique
+  name      String
+  // Storefront domain, e.g. acme.myshopify.com or shop.acme.com
+  domain    String?  @unique
+  email     String?
+  currency  String   @default("USD")
+  timezone  String   @default("UTC")
+  status    MerchantStatus @default(ACTIVE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  branding       PortalBranding?
+  users          User[]
+  policies       ReturnPolicy[]
+  reasons        ReturnReason[]
+  orders         Order[]
+  returnRequests ReturnRequest[]
+  storeCredits   StoreCredit[]
+  integrations   Integration[]
+
+  @@map("merchants")
+}
+
+enum MerchantStatus {
+  ACTIVE
+  SUSPENDED
+  CANCELLED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  merchantId   String
+  merchant     Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  email        String
+  passwordHash String
+  name         String?
+  role         UserRole @default(AGENT)
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  reviewedReturns ReturnRequest[] @relation("ReviewedBy")
+  events          ReturnEvent[]
+
+  @@unique([merchantId, email])
+  @@index([merchantId])
+  @@map("users")
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  AGENT
+}
+
+// ---------------------------------------------------------------------------
+// Portal configuration — what the shopper sees and what they're allowed to do
+// ---------------------------------------------------------------------------
+
+model PortalBranding {
+  id           String   @id @default(cuid())
+  merchantId   String   @unique
+  merchant     Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  headline     String   @default("Returns & Exchanges")
+  subheadline  String   @default("Start a return or exchange in a few clicks")
+  logoUrl      String?
+  accentColor  String   @default("#111213")
+  supportEmail String?
+  policyUrl    String?
+  updatedAt    DateTime @updatedAt
+
+  @@map("portal_branding")
+}
+
+/// A merchant can run several policies (e.g. standard, final-sale, holiday)
+/// and pick which one applies to an order. `isDefault` is the fallback.
+model ReturnPolicy {
+  id         String   @id @default(cuid())
+  merchantId String
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  name       String
+  isDefault  Boolean  @default(false)
+  active     Boolean  @default(true)
+
+  // Eligibility
+  returnWindowDays   Int     @default(30)
+  // Window is measured from this event
+  windowStartsFrom   WindowStart @default(DELIVERY)
+  allowFinalSale     Boolean @default(false)
+  requirePhotoProof  Boolean @default(false)
+
+  // Which resolutions the portal offers
+  allowRefund       Boolean @default(true)
+  allowStoreCredit  Boolean @default(true)
+  allowExchange     Boolean @default(true)
+  // Ship the replacement before the original comes back (Loop's instant exchange)
+  allowInstantExchange Boolean @default(false)
+
+  // Incentive to choose credit over cash, as a percentage of item value
+  bonusCreditPercent Decimal @default(0) @db.Decimal(5, 2)
+
+  // Fees deducted from the refund
+  restockingFeePercent Decimal @default(0) @db.Decimal(5, 2)
+  returnShippingFee    Decimal @default(0) @db.Decimal(12, 2)
+  // Waive the return shipping fee when the shopper takes credit or an exchange
+  waiveShippingOnCredit Boolean @default(true)
+
+  // Requests under this value skip manual review
+  autoApprove          Boolean @default(false)
+  autoApproveUnder     Decimal? @db.Decimal(12, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders         Order[]
+  returnRequests ReturnRequest[]
+
+  @@index([merchantId])
+  @@map("return_policies")
+}
+
+enum WindowStart {
+  ORDER_DATE
+  FULFILLMENT
+  DELIVERY
+}
+
+/// Reasons are per-merchant so stores can word them their own way, but each
+/// maps to a stable `code` for reporting.
+model ReturnReason {
+  id            String   @id @default(cuid())
+  merchantId    String
+  merchant      Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  code          String
+  label         String
+  // Force the shopper to explain (e.g. "Other", "Damaged")
+  requiresNote  Boolean  @default(false)
+  requiresPhoto Boolean  @default(false)
+  active        Boolean  @default(true)
+  sortOrder     Int      @default(0)
+
+  returnLineItems ReturnLineItem[]
+
+  @@unique([merchantId, code])
+  @@index([merchantId])
+  @@map("return_reasons")
+}
+
+// ---------------------------------------------------------------------------
+// Commerce data — mirrored from the storefront platform
+// ---------------------------------------------------------------------------
+
+model Order {
+  id         String   @id @default(cuid())
+  merchantId String
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  policyId   String?
+  policy     ReturnPolicy? @relation(fields: [policyId], references: [id], onDelete: SetNull)
+
+  // Identifier on the source platform (Shopify order GID, etc.)
+  externalId    String?
+  // Human-facing number the shopper types in, e.g. "1001"
+  orderNumber   String
+  email         String
+  customerName  String?
+  currency      String   @default("USD")
+  subtotal      Decimal  @default(0) @db.Decimal(12, 2)
+  total         Decimal  @default(0) @db.Decimal(12, 2)
+  placedAt      DateTime
+  fulfilledAt   DateTime?
+  deliveredAt   DateTime?
+  shippingAddress Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  lineItems      OrderLineItem[]
+  returnRequests ReturnRequest[]
+
+  @@unique([merchantId, orderNumber])
+  @@unique([merchantId, externalId])
+  @@index([merchantId, email])
+  @@map("orders")
+}
+
+model OrderLineItem {
+  id        String @id @default(cuid())
+  orderId   String
+  order     Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  externalId   String?
+  productId    String?
+  variantId    String?
+  sku          String?
+  title        String
+  variantTitle String?
+  imageUrl     String?
+  quantity     Int     @default(1)
+  // Per-unit price after line discounts
+  unitPrice    Decimal @default(0) @db.Decimal(12, 2)
+  currency     String  @default("USD")
+  // Excluded from returns entirely
+  finalSale    Boolean @default(false)
+  // Units already returned across all requests; returnable = quantity - returnedQuantity
+  returnedQuantity Int @default(0)
+
+  returnLineItems ReturnLineItem[]
+
+  @@index([orderId])
+  @@map("order_line_items")
+}
+
+// ---------------------------------------------------------------------------
+// Returns
+// ---------------------------------------------------------------------------
+
+model ReturnRequest {
+  id         String   @id @default(cuid())
+  merchantId String
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  policyId   String?
+  policy     ReturnPolicy? @relation(fields: [policyId], references: [id], onDelete: SetNull)
+
+  /// Short human-readable reference shown to the shopper, e.g. "R-7F3K2Q"
+  reference  String   @unique
+  status     ReturnStatus   @default(SUBMITTED)
+  resolution ResolutionType
+
+  customerEmail String
+  customerName  String?
+  customerNote  String?
+
+  // Money breakdown, all in `currency`
+  currency        String  @default("USD")
+  /// Value of the returned items before any adjustments
+  itemsSubtotal   Decimal @default(0) @db.Decimal(12, 2)
+  /// Extra credit granted as an incentive (store credit / exchange only)
+  bonusCredit     Decimal @default(0) @db.Decimal(12, 2)
+  restockingFee   Decimal @default(0) @db.Decimal(12, 2)
+  shippingFee     Decimal @default(0) @db.Decimal(12, 2)
+  /// itemsSubtotal + bonusCredit - restockingFee - shippingFee
+  estimatedTotal  Decimal @default(0) @db.Decimal(12, 2)
+  /// What was actually paid out once resolved
+  settledTotal    Decimal? @db.Decimal(12, 2)
+
+  reviewedById String?
+  reviewedBy   User?     @relation("ReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt   DateTime?
+  rejectionReason String?
+
+  submittedAt DateTime  @default(now())
+  receivedAt  DateTime?
+  resolvedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  lineItems     ReturnLineItem[]
+  exchangeItems ExchangeItem[]
+  shipment      ReturnShipment?
+  storeCredit   StoreCredit?
+  events        ReturnEvent[]
+
+  @@index([merchantId, status])
+  @@index([merchantId, submittedAt])
+  @@index([orderId])
+  @@map("return_requests")
+}
+
+enum ReturnStatus {
+  /// Shopper started but hasn't submitted
+  DRAFT
+  /// Awaiting merchant review
+  SUBMITTED
+  APPROVED
+  REJECTED
+  /// Shopper has shipped the items back
+  IN_TRANSIT
+  /// Items arrived at the warehouse
+  RECEIVED
+  /// Refund issued / credit granted / exchange shipped
+  RESOLVED
+  CANCELLED
+  /// Approved but the shopper never sent the items
+  EXPIRED
+}
+
+enum ResolutionType {
+  REFUND
+  STORE_CREDIT
+  EXCHANGE
+  /// Replacement ships immediately, before the return is received
+  INSTANT_EXCHANGE
+  WARRANTY
+}
+
+model ReturnLineItem {
+  id              String        @id @default(cuid())
+  returnRequestId String
+  returnRequest   ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+  orderLineItemId String
+  orderLineItem   OrderLineItem @relation(fields: [orderLineItemId], references: [id], onDelete: Cascade)
+  reasonId        String?
+  reason          ReturnReason? @relation(fields: [reasonId], references: [id], onDelete: SetNull)
+
+  quantity   Int     @default(1)
+  reasonNote String?
+  /// URLs of shopper-uploaded condition photos
+  photoUrls  String[] @default([])
+  unitPrice  Decimal @default(0) @db.Decimal(12, 2)
+  /// unitPrice * quantity
+  lineTotal  Decimal @default(0) @db.Decimal(12, 2)
+  /// Set by the warehouse when the item is inspected
+  inspection InspectionResult?
+
+  @@index([returnRequestId])
+  @@map("return_line_items")
+}
+
+enum InspectionResult {
+  PENDING
+  ACCEPTED
+  DAMAGED
+  WRONG_ITEM
+  REJECTED
+}
+
+/// What the shopper wants instead, for EXCHANGE / INSTANT_EXCHANGE.
+model ExchangeItem {
+  id              String        @id @default(cuid())
+  returnRequestId String
+  returnRequest   ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+
+  productId    String?
+  variantId    String?
+  sku          String?
+  title        String
+  variantTitle String?
+  imageUrl     String?
+  quantity     Int     @default(1)
+  unitPrice    Decimal @default(0) @db.Decimal(12, 2)
+  /// Amount the shopper still owes when the swap costs more
+  priceDifference Decimal @default(0) @db.Decimal(12, 2)
+
+  @@index([returnRequestId])
+  @@map("exchange_items")
+}
+
+model ReturnShipment {
+  id              String        @id @default(cuid())
+  returnRequestId String        @unique
+  returnRequest   ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+
+  carrier        String?
+  trackingNumber String?
+  trackingUrl    String?
+  labelUrl       String?
+  status         ShipmentStatus @default(PENDING)
+  /// Cost of the label, for merchant reporting
+  labelCost      Decimal? @db.Decimal(12, 2)
+  shippedAt      DateTime?
+  deliveredAt    DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("return_shipments")
+}
+
+enum ShipmentStatus {
+  PENDING
+  LABEL_CREATED
+  IN_TRANSIT
+  DELIVERED
+  FAILED
+}
+
+model StoreCredit {
+  id              String        @id @default(cuid())
+  merchantId      String
+  merchant        Merchant      @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  returnRequestId String?       @unique
+  returnRequest   ReturnRequest? @relation(fields: [returnRequestId], references: [id], onDelete: SetNull)
+
+  code            String   @unique
+  customerEmail   String
+  amount          Decimal  @db.Decimal(12, 2)
+  balance         Decimal  @db.Decimal(12, 2)
+  currency        String   @default("USD")
+  expiresAt       DateTime?
+  createdAt       DateTime @default(now())
+
+  @@index([merchantId, customerEmail])
+  @@map("store_credits")
+}
+
+/// Append-only timeline shown on the return detail page.
+model ReturnEvent {
+  id              String        @id @default(cuid())
+  returnRequestId String
+  returnRequest   ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+  actorId         String?
+  actor           User?         @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  type        ReturnEventType
+  message     String
+  /// Arbitrary context: status transitions, API payloads, etc.
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([returnRequestId, createdAt])
+  @@map("return_events")
+}
+
+enum ReturnEventType {
+  CREATED
+  STATUS_CHANGED
+  NOTE_ADDED
+  LABEL_GENERATED
+  ITEM_INSPECTED
+  REFUND_ISSUED
+  CREDIT_ISSUED
+  EXCHANGE_SHIPPED
+  EMAIL_SENT
+}
+
+// ---------------------------------------------------------------------------
+// Platform integrations (Shopify first, others later)
+// ---------------------------------------------------------------------------
+
+model Integration {
+  id           String   @id @default(cuid())
+  merchantId   String
+  merchant     Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  provider     IntegrationProvider
+  /// Encrypted at rest by the service layer before it lands here
+  accessToken  String?
+  scopes       String?
+  externalShopId String?
+  connectedAt  DateTime @default(now())
+  lastSyncedAt DateTime?
+  active       Boolean  @default(true)
+
+  @@unique([merchantId, provider])
+  @@map("integrations")
+}
+
+enum IntegrationProvider {
+  SHOPIFY
+  WOOCOMMERCE
+  BIGCOMMERCE
+  CUSTOM
+}
