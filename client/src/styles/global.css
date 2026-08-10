@@ -154,6 +154,8 @@ a {
   font-family: inherit;
   cursor: pointer;
   text-decoration: none;
+  /* Labels are short; never let one break across lines mid-word. */
+  white-space: nowrap;
   transition: opacity 0.15s, background 0.15s;
 }
 

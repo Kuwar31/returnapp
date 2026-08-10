@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { ErrorAlert, Loading } from "../components/Feedback";
+import { ShopifyPanel } from "./ShopifyPanel";
 import { useAuth } from "./AuthContext";
 
 interface Policy {
@@ -22,7 +23,7 @@ interface Policy {
   autoApproveUnder: number | null;
 }
 
-export function SettingsPage() {
+export default function SettingsPage() {
   const { session } = useAuth();
   const [policy, setPolicy] = useState<Policy | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -94,6 +95,10 @@ export function SettingsPage() {
 
       <ErrorAlert message={error} />
       {status && <div className="alert alert--info">{status}</div>}
+
+      <div className="settings-form">
+        <ShopifyPanel />
+      </div>
 
       <form className="settings-form" onSubmit={save}>
         <div className="panel">

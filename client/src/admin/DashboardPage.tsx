@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { api } from "../lib/api";
 import { money, shortDate } from "../lib/format";
 import type { DashboardStats, Paginated, ReturnSummary } from "../lib/types";
@@ -7,7 +7,7 @@ import { EmptyState, ErrorAlert } from "../components/Feedback";
 import { StatusBadge } from "../components/StatusBadge";
 import { useAuth } from "./AuthContext";
 
-export function DashboardPage() {
+export default function DashboardPage() {
   const { session } = useAuth();
   const currency = session?.merchant.currency ?? "USD";
 

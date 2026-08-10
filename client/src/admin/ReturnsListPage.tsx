@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router";
 import { api } from "../lib/api";
 import { money, shortDate, titleCase } from "../lib/format";
 import type { Paginated, ReturnSummary } from "../lib/types";
@@ -16,7 +16,7 @@ const STATUS_FILTERS = [
   { value: "REJECTED", label: "Declined" },
 ];
 
-export function ReturnsListPage() {
+export default function ReturnsListPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 

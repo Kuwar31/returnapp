@@ -1,4 +1,9 @@
 {
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".react-router/types/**/*"
+  ],
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
@@ -13,9 +18,11 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
     "noEmit": true,
-    "types": ["vite/client"]
-  },
-  "include": ["src", "vite.config.ts"]
+    "types": ["node", "vite/client"],
+    // React Router generates per-route types into .react-router/types; this
+    // lets route modules import them as "./+types/RouteName".
+    "rootDirs": [".", "./.react-router/types"]
+  }
 }

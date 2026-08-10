@@ -1,34 +1,44 @@
-import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { api, setToken } from "../lib/api";
+import { Form, redirect, useNavigation, useParams } from "react-router";
+import { api, ApiError, setToken } from "../lib/api";
 import { ErrorAlert } from "../components/Feedback";
 import { PortalStepper } from "./PortalLayout";
+import type { Route } from "./+types/LookupPage";
 
-export function LookupPage() {
-  const { slug } = useParams<{ slug: string }>();
-  const navigate = useNavigate();
-  const [orderNumber, setOrderNumber] = useState("");
-  const [email, setEmail] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+/**
+ * Route action: verifies the order, stores the scoped portal token, and moves
+ * on to item selection. Returning an object (rather than throwing) surfaces
+ * the failure inline instead of hitting the error boundary.
+ */
+export async function clientAction({ request, params }: Route.ClientActionArgs) {
+  const formData = await request.formData();
+  const orderNumber = String(formData.get("orderNumber") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim();
 
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      const { token } = await api.post<{ token: string; orderId: string }>(
-        "/portal/lookup",
-        { merchantSlug: slug, orderNumber, email },
-      );
-      setToken("portal", token);
-      navigate(`/r/${slug}/items`);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
-    } finally {
-      setBusy(false);
-    }
-  };
+  if (!orderNumber || !email) {
+    return { error: "Enter both your order number and email address." };
+  }
+
+  try {
+    const { token } = await api.post<{ token: string; orderId: string }>(
+      "/portal/lookup",
+      { merchantSlug: params.slug, orderNumber, email },
+    );
+    setToken("portal", token);
+    return redirect(`/r/${params.slug}/items`);
+  } catch (e) {
+    return {
+      error:
+        e instanceof ApiError
+          ? e.message
+          : "We couldn't look up your order. Please try again.",
+    };
+  }
+}
+
+export default function LookupPage({ actionData }: Route.ComponentProps) {
+  const { slug } = useParams();
+  const navigation = useNavigation();
+  const busy = navigation.state !== "idle";
 
   return (
     <>
@@ -39,15 +49,14 @@ export function LookupPage() {
           Enter your order number and the email you used at checkout.
         </p>
 
-        <ErrorAlert message={error} />
+        <ErrorAlert message={actionData?.error ?? null} />
 
-        <form onSubmit={submit}>
+        <Form method="post" key={slug}>
           <div className="field">
             <label htmlFor="orderNumber">Order number</label>
             <input
               id="orderNumber"
-              value={orderNumber}
-              onChange={(e) => setOrderNumber(e.target.value)}
+              name="orderNumber"
               placeholder="e.g. 1001"
               autoComplete="off"
               required
@@ -57,9 +66,8 @@ export function LookupPage() {
             <label htmlFor="email">Email address</label>
             <input
               id="email"
+              name="email"
               type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
               required
             />
@@ -67,7 +75,7 @@ export function LookupPage() {
           <button className="btn btn--block" type="submit" disabled={busy}>
             {busy ? "Finding your order…" : "Start a return"}
           </button>
-        </form>
+        </Form>
       </div>
     </>
   );

@@ -1,18 +1,31 @@
-import { createContext, useContext, useEffect, useState } from "react";
-import { Outlet, useParams } from "react-router-dom";
+import { createContext, useContext } from "react";
+import { Outlet, useRouteLoaderData } from "react-router";
 import { api } from "../lib/api";
 import type { PortalConfig } from "../lib/types";
-import { Loading } from "../components/Feedback";
+import type { Route } from "./+types/PortalLayout";
+
+const STEPS = ["Find your order", "Choose items", "All set"];
+
+/**
+ * Store branding is fetched once for the whole portal. Runs in the browser
+ * because the app is in SPA mode; it becomes a server `loader` unchanged if
+ * SSR is switched on.
+ */
+export async function clientLoader({ params }: Route.ClientLoaderArgs) {
+  return api.get<PortalConfig>(`/portal/${params.slug}/config`);
+}
 
 const PortalContext = createContext<PortalConfig | null>(null);
 
+/** Branding and store details for the portal being viewed. */
 export const usePortal = (): PortalConfig => {
-  const config = useContext(PortalContext);
-  if (!config) throw new Error("usePortal must be used inside PortalLayout");
-  return config;
+  const ctx = useContext(PortalContext);
+  if (ctx) return ctx;
+  // Child routes can also reach the layout's data directly.
+  const data = useRouteLoaderData("r/:slug") as PortalConfig | undefined;
+  if (!data) throw new Error("usePortal must be used inside PortalLayout");
+  return data;
 };
-
-const STEPS = ["Find your order", "Choose items", "All set"];
 
 export function PortalStepper({ current }: { current: number }) {
   return (
@@ -30,41 +43,12 @@ export function PortalStepper({ current }: { current: number }) {
   );
 }
 
-export function PortalLayout() {
-  const { slug } = useParams<{ slug: string }>();
-  const [config, setConfig] = useState<PortalConfig | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!slug) return;
-    let active = true;
-    api
-      .get<PortalConfig>(`/portal/${slug}/config`)
-      .then((data) => active && setConfig(data))
-      .catch((e) => active && setError(e.message));
-    return () => {
-      active = false;
-    };
-  }, [slug]);
-
-  if (error) {
-    return (
-      <div className="center-screen">
-        <div className="card portal__card">
-          <h2>Portal unavailable</h2>
-          <p className="muted" style={{ marginTop: 8 }}>
-            {error}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!config) return <Loading />;
+export default function PortalLayout({ loaderData }: Route.ComponentProps) {
+  const config = loaderData;
 
   return (
     <PortalContext.Provider value={config}>
-      {/* Merchant's accent color cascades to every button and highlight. */}
+      {/* The merchant's accent colour cascades to buttons and highlights. */}
       <div
         className="portal"
         style={
@@ -82,7 +66,9 @@ export function PortalLayout() {
           <h1>{config.branding.headline}</h1>
           <p className="muted">{config.branding.subheadline}</p>
         </header>
+
         <Outlet />
+
         <footer className="portal__footer">
           {config.branding.supportEmail && (
             <>
@@ -97,5 +83,19 @@ export function PortalLayout() {
         </footer>
       </div>
     </PortalContext.Provider>
+  );
+}
+
+export function ErrorBoundary() {
+  return (
+    <div className="center-screen">
+      <div className="card portal__card">
+        <h2>Portal unavailable</h2>
+        <p className="muted" style={{ marginTop: 8 }}>
+          We couldn't find that store's returns portal. Please use the link the
+          store sent you.
+        </p>
+      </div>
+    </div>
   );
 }

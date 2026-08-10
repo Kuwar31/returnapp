@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { api, getToken } from "../lib/api";
+import { Link, redirect, useNavigate, useParams } from "react-router";
+import { api, ApiError, getToken } from "../lib/api";
 import { money } from "../lib/format";
 import type {
   OrderSession,
@@ -8,13 +8,11 @@ import type {
   ResolutionType,
   ReturnDetail,
 } from "../lib/types";
-import { ErrorAlert, Loading } from "../components/Feedback";
+import { ErrorAlert } from "../components/Feedback";
 import { PortalStepper } from "./PortalLayout";
+import type { Route } from "./+types/SelectItemsPage";
 
-const RESOLUTION_COPY: Record<
-  string,
-  { label: string; description: string }
-> = {
+const RESOLUTION_COPY: Record<string, { label: string; description: string }> = {
   REFUND: {
     label: "Refund",
     description: "Back to your original payment method",
@@ -25,13 +23,30 @@ const RESOLUTION_COPY: Record<
   },
   EXCHANGE: {
     label: "Exchange",
-    description: "Swap for a different size or color",
+    description: "Swap for a different size or colour",
   },
   INSTANT_EXCHANGE: {
     label: "Instant exchange",
     description: "We ship the replacement right away",
   },
 };
+
+/** Loads the order behind the portal token, bouncing to lookup if it's gone. */
+export async function clientLoader({ params }: Route.ClientLoaderArgs) {
+  if (!getToken("portal")) {
+    throw redirect(`/r/${params.slug}`);
+  }
+  try {
+    return await api.get<OrderSession>("/portal/session/order", {
+      auth: "portal",
+    });
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 401) {
+      throw redirect(`/r/${params.slug}`);
+    }
+    throw e;
+  }
+}
 
 interface Selection {
   selected: boolean;
@@ -40,56 +55,31 @@ interface Selection {
   reasonNote: string;
 }
 
-export function SelectItemsPage() {
-  const { slug } = useParams<{ slug: string }>();
+export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
+  const { order, policy, reasons, eligibility } = loaderData;
+  const { slug } = useParams();
   const navigate = useNavigate();
 
-  const [session, setSession] = useState<OrderSession | null>(null);
-  const [selections, setSelections] = useState<Record<string, Selection>>({});
-  const [resolution, setResolution] = useState<ResolutionType>("REFUND");
+  const [selections, setSelections] = useState<Record<string, Selection>>(() =>
+    Object.fromEntries(
+      eligibility.items.map((item) => [
+        item.id,
+        {
+          selected: false,
+          quantity: 1,
+          reasonCode: reasons[0]?.code ?? "",
+          reasonNote: "",
+        },
+      ]),
+    ),
+  );
+  const [resolution, setResolution] = useState<ResolutionType>(
+    eligibility.allowedResolutions[0] ?? "REFUND",
+  );
   const [note, setNote] = useState("");
   const [quote, setQuote] = useState<Quote | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-
-  // Bounce straight back to lookup if the session token is gone or expired.
-  useEffect(() => {
-    if (!getToken("portal")) navigate(`/r/${slug}`, { replace: true });
-  }, [slug, navigate]);
-
-  useEffect(() => {
-    let active = true;
-    api
-      .get<OrderSession>("/portal/session/order", { auth: "portal" })
-      .then((data) => {
-        if (!active) return;
-        setSession(data);
-        setSelections(
-          Object.fromEntries(
-            data.eligibility.items.map((item) => [
-              item.id,
-              {
-                selected: false,
-                quantity: 1,
-                reasonCode: data.reasons[0]?.code ?? "",
-                reasonNote: "",
-              },
-            ]),
-          ),
-        );
-        setResolution(data.eligibility.allowedResolutions[0] ?? "REFUND");
-      })
-      .catch((e) => {
-        if (!active) return;
-        if (e.status === 401) navigate(`/r/${slug}`, { replace: true });
-        else setError(e.message);
-      })
-      .finally(() => active && setLoading(false));
-    return () => {
-      active = false;
-    };
-  }, [slug, navigate]);
 
   const chosen = useMemo(
     () =>
@@ -105,14 +95,14 @@ export function SelectItemsPage() {
     [selections],
   );
 
-  // Re-quote whenever the basket or resolution changes. Debounced so dragging
-  // a quantity selector doesn't fire a request per keystroke.
+  // Re-quote on every change, debounced so dragging a quantity selector
+  // doesn't fire a request per step.
   useEffect(() => {
     if (chosen.length === 0) {
       setQuote(null);
       return;
     }
-    const controller = setTimeout(() => {
+    const timer = setTimeout(() => {
       api
         .post<Quote>(
           "/portal/session/quote",
@@ -122,7 +112,7 @@ export function SelectItemsPage() {
         .then(setQuote)
         .catch(() => setQuote(null));
     }, 250);
-    return () => clearTimeout(controller);
+    return () => clearTimeout(timer);
   }, [chosen, resolution]);
 
   const update = (id: string, patch: Partial<Selection>) =>
@@ -155,19 +145,6 @@ export function SelectItemsPage() {
     }
   };
 
-  if (loading) return <Loading label="Loading your order…" />;
-  if (!session) {
-    return (
-      <div className="card portal__card">
-        <ErrorAlert message={error ?? "We couldn't load your order."} />
-        <Link className="btn btn--secondary btn--block" to={`/r/${slug}`}>
-          Try another order
-        </Link>
-      </div>
-    );
-  }
-
-  const { order, policy, reasons, eligibility } = session;
   const currency = order.currency;
   const reasonFor = (code: string) => reasons.find((r) => r.code === code);
 
@@ -181,7 +158,7 @@ export function SelectItemsPage() {
 
         <div className="spread" style={{ marginBottom: 4 }}>
           <h2>Order #{order.orderNumber}</h2>
-          {eligibility.daysRemaining !== null && eligibility.withinWindow && (
+          {eligibility.withinWindow && eligibility.daysRemaining !== null && (
             <span className="badge badge--neutral">
               {eligibility.daysRemaining} days left to return
             </span>
@@ -308,10 +285,7 @@ export function SelectItemsPage() {
               const copy = RESOLUTION_COPY[key];
               if (!copy) return null;
               const showsBonus =
-                policy.bonusCreditPercent > 0 &&
-                (key === "STORE_CREDIT" ||
-                  key === "EXCHANGE" ||
-                  key === "INSTANT_EXCHANGE");
+                policy.bonusCreditPercent > 0 && key !== "REFUND";
               return (
                 <label
                   key={key}
@@ -327,9 +301,7 @@ export function SelectItemsPage() {
                   />
                   <span>
                     <span className="resolution__label">{copy.label}</span>
-                    <span className="resolution__desc">
-                      {copy.description}
-                    </span>
+                    <span className="resolution__desc">{copy.description}</span>
                     {showsBonus && (
                       <span className="resolution__bonus">
                         +{policy.bonusCreditPercent}% bonus credit

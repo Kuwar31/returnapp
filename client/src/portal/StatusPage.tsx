@@ -1,11 +1,10 @@
-import { useEffect, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { data, Link, useParams } from "react-router";
 import { api } from "../lib/api";
 import { money, shortDate } from "../lib/format";
 import type { ReturnDetail } from "../lib/types";
-import { ErrorAlert, Loading } from "../components/Feedback";
 import { StatusBadge } from "../components/StatusBadge";
 import { PortalStepper } from "./PortalLayout";
+import type { Route } from "./+types/StatusPage";
 
 const RESOLUTION_OUTCOME: Record<string, string> = {
   REFUND: "Refund issued",
@@ -15,46 +14,25 @@ const RESOLUTION_OUTCOME: Record<string, string> = {
   WARRANTY: "Warranty replacement sent",
 };
 
-export function StatusPage() {
-  const { slug, reference } = useParams<{ slug: string; reference: string }>();
-  const [searchParams] = useSearchParams();
-  const email = searchParams.get("email") ?? "";
-
-  const [detail, setDetail] = useState<ReturnDetail | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!slug || !reference || !email) {
-      setError("This status link is incomplete.");
-      setLoading(false);
-      return;
-    }
-    let active = true;
-    api
-      .get<ReturnDetail>(`/portal/returns/${reference}`, {
-        query: { slug, email },
-      })
-      .then((data) => active && setDetail(data))
-      .catch((e) => active && setError(e.message))
-      .finally(() => active && setLoading(false));
-    return () => {
-      active = false;
-    };
-  }, [slug, reference, email]);
-
-  if (loading) return <Loading />;
-
-  if (!detail) {
-    return (
-      <div className="card portal__card">
-        <ErrorAlert message={error} />
-        <Link className="btn btn--secondary btn--block" to={`/r/${slug}`}>
-          Back to returns
-        </Link>
-      </div>
-    );
+/**
+ * The status page is reachable straight from the confirmation email, so it
+ * authenticates on reference + email rather than a portal session.
+ */
+export async function clientLoader({ params, request }: Route.ClientLoaderArgs) {
+  const email = new URL(request.url).searchParams.get("email");
+  if (!email) {
+    throw data("This status link is missing its email address.", {
+      status: 400,
+    });
   }
+  return api.get<ReturnDetail>(`/portal/returns/${params.reference}`, {
+    query: { slug: params.slug!, email },
+  });
+}
+
+export default function StatusPage({ loaderData }: Route.ComponentProps) {
+  const detail = loaderData;
+  const { slug } = useParams();
 
   const reviewed = detail.status !== "SUBMITTED" && detail.status !== "DRAFT";
   const finished = detail.status === "RESOLVED";
@@ -90,7 +68,7 @@ export function StatusPage() {
               <div className="timeline__title">Store review</div>
               <div className="timeline__desc">
                 {detail.status === "REJECTED"
-                  ? detail.rejectionReason ?? "Declined"
+                  ? (detail.rejectionReason ?? "Declined")
                   : reviewed
                     ? "Approved — send your items back"
                     : "Waiting for the store to review"}
@@ -136,9 +114,7 @@ export function StatusPage() {
 
         <div className="totals">
           <div className="totals__row totals__row--grand">
-            <span>
-              {finished ? "You received" : "Estimated total"}
-            </span>
+            <span>{finished ? "You received" : "Estimated total"}</span>
             <span>
               {money(
                 detail.totals.settledTotal ?? detail.totals.estimatedTotal,
@@ -157,5 +133,20 @@ export function StatusPage() {
         </Link>
       </div>
     </>
+  );
+}
+
+export function ErrorBoundary() {
+  const { slug } = useParams();
+  return (
+    <div className="card portal__card">
+      <h2>We couldn't find that return</h2>
+      <p className="muted" style={{ margin: "8px 0 20px" }}>
+        The reference and email don't match, or the link has expired.
+      </p>
+      <Link className="btn btn--secondary btn--block" to={`/r/${slug}`}>
+        Back to returns
+      </Link>
+    </div>
   );
 }

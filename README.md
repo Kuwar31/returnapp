@@ -10,33 +10,38 @@ integration and notification/label providers are the deliberate next steps.
 
 ## Stack
 
-| Layer    | Choice                                          |
-| -------- | ----------------------------------------------- |
-| Frontend | React 18 + Vite + React Router (TypeScript)     |
-| Backend  | Node.js + Express (TypeScript, ESM)             |
-| Database | PostgreSQL via Prisma                           |
-| Auth     | JWT — separate scopes for merchant staff and shoppers |
+| Layer    | Choice                                                       |
+| -------- | ------------------------------------------------------------ |
+| Frontend | React 19 + React Router 8 in framework mode (TypeScript)     |
+| Backend  | Node.js + Express (TypeScript, ESM)                          |
+| Database | PostgreSQL via Prisma                                        |
+| Commerce | Shopify OAuth + webhooks + Admin GraphQL (API 2026-04)        |
+| Auth     | JWT — separate scopes for merchant staff and shoppers        |
 
 ```
 returns-manager/
-├── client/           React app: shopper portal + merchant admin
+├── client/                    React Router app: portal + admin
+│   ├── react-router.config.ts appDirectory + ssr flag
 │   └── src/
-│       ├── portal/   /r/:slug — lookup, item selection, status
-│       ├── admin/    /admin  — dashboard, returns, detail, settings
-│       ├── lib/      API client, shared types, formatters
-│       └── styles/   design tokens + page styles
+│       ├── root.tsx     document shell (Layout), fallback, error boundary
+│       ├── routes.ts    the route tree
+│       ├── portal/      /r/:slug — lookup, item selection, status
+│       ├── admin/       /admin  — dashboard, returns, detail, settings
+│       ├── lib/         API client, shared types, formatters
+│       └── styles/      design tokens + page styles
 ├── server/
-│   ├── prisma/       schema, migrations, seed
+│   ├── prisma/       schema, migrations, seed, dev utilities
 │   └── src/
 │       ├── config/   validated environment
-│       ├── lib/      prisma, logger, errors, money, tokens
+│       ├── lib/      prisma, logger, errors, money, tokens, crypto
 │       ├── middleware/  auth, validation, rate limit, error handling
 │       └── modules/
 │           ├── auth/     merchant sign-in
 │           ├── portal/   shopper-facing flow
 │           ├── policy/   eligibility + quote engines
 │           ├── returns/  admin review, state machine
-│           └── settings/ policy and branding config
+│           ├── settings/ policy and branding config
+│           └── shopify/  OAuth, webhooks, order sync
 └── docker-compose.yml
 ```
 
@@ -66,6 +71,51 @@ npm run db:migrate && npm run db:seed && npm run dev
 
 `npx tsx prisma/add-demo-order.ts 1003` (from `server/`) adds another
 returnable order once you've used up the seeded ones.
+
+## Connecting your Shopify store
+
+Orders reach Postgres two ways: a **backfill** over the Admin GraphQL API when
+you first connect, and **webhooks** from then on.
+
+**1. Create an app** in the [Shopify Partner Dashboard](https://partners.shopify.com)
+(Apps → Create app → Create manually). Copy the client ID and secret.
+
+**2. Expose your server over HTTPS.** Shopify cannot reach `localhost`, so
+local development needs a tunnel:
+
+```bash
+cloudflared tunnel --url http://localhost:4000
+```
+
+**3. Fill in `.env`** with the tunnel URL as `APP_URL`:
+
+```
+APP_URL=https://your-tunnel.trycloudflare.com
+SHOPIFY_API_KEY=<client id>
+SHOPIFY_API_SECRET=<client secret>
+ENCRYPTION_KEY=<openssl rand -hex 32>
+```
+
+**4. Set the redirect URL** in the Partner Dashboard to
+`{APP_URL}/api/shopify/callback`, then restart the server.
+
+**5. Connect** from Settings → Shopify in the admin, or hit
+`/api/shopify/install?shop=your-store.myshopify.com` directly. Approving the
+scopes registers the webhooks and kicks off a 90-day backfill.
+
+Access tokens are AES-256-GCM encrypted with `ENCRYPTION_KEY` before they touch
+the database, and every webhook is HMAC-verified against the raw request body.
+
+### Testing without a store
+
+```bash
+cd server
+npx tsx prisma/connect-test-shop.ts          # mark the demo store connected
+npx tsx prisma/add-demo-order.ts 1003        # add a returnable order
+```
+
+This exercises the inbound webhook path with a dummy token. Anything that calls
+*out* to Shopify (backfill, re-sync) will fail by design.
 
 ## How it works
 

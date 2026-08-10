@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router";
 import { api } from "../lib/api";
 import { dateTime, money, shortDate, titleCase } from "../lib/format";
 import type { ReturnDetail } from "../lib/types";
 import { ErrorAlert, Loading } from "../components/Feedback";
 import { StatusBadge } from "../components/StatusBadge";
 
-export function ReturnDetailPage() {
+export default function ReturnDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [detail, setDetail] = useState<ReturnDetail | null>(null);
   const [error, setError] = useState<string | null>(null);

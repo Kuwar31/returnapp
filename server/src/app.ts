@@ -22,7 +22,13 @@ export const createApp = () => {
       credentials: true,
     }),
   );
-  app.use(express.json({ limit: "1mb" }));
+  // Shopify webhook signatures are computed over the raw bytes, so that one
+  // route parses its own body and must skip the global JSON parser.
+  const jsonParser = express.json({ limit: "1mb" });
+  app.use((req, res, next) => {
+    if (req.path === "/api/shopify/webhooks") return next();
+    jsonParser(req, res, next);
+  });
   app.use(cookieParser());
   app.use(
     pinoHttp({

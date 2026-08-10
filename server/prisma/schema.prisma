@@ -227,6 +227,8 @@ model OrderLineItem {
 
   returnLineItems ReturnLineItem[]
 
+  // Lets a re-synced order upsert its lines instead of duplicating them.
+  @@unique([orderId, externalId])
   @@index([orderId])
   @@map("order_line_items")
 }

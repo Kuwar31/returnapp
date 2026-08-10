@@ -1,4 +1,4 @@
-import { NavLink, Navigate, Outlet } from "react-router-dom";
+import { NavLink, Navigate, Outlet } from "react-router";
 import { Loading } from "../components/Feedback";
 import { useAuth } from "./AuthContext";
 
@@ -8,7 +8,7 @@ const NAV = [
   { to: "/admin/settings", label: "Settings", end: false },
 ];
 
-export function AdminLayout() {
+export default function AdminLayout() {
   const { session, loading, logout } = useAuth();
 
   if (loading) return <Loading />;
