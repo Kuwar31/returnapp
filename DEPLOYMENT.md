@@ -197,8 +197,10 @@ development:
   `customers/redact` and `shop/redact` for any public app. Not implemented.
 - **Email deliverability.** Verify a sending domain in Resend. Unverified
   senders land in spam or are rejected outright.
-- **`read_all_orders`.** Without it Shopify hides orders older than 60 days, so
-  the portal can't find them. Requesting it needs Shopify's approval.
+- **`read_all_orders`.** `read_orders` only reaches back 60 days, and Shopify
+  rejects an over-range query outright rather than trimming it — so the sync is
+  capped at 60 days everywhere. Anything older is invisible to the portal until
+  Shopify approves `read_all_orders`.
 - **Return labels.** No carrier integration — approved returns tell the shopper
   a label is coming, and nothing sends one.
 - **No tests.** Nothing guards a regression on refund maths.

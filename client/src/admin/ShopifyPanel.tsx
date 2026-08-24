@@ -60,7 +60,7 @@ export function ShopifyPanel() {
     try {
       const result = await api.post<{ imported: number; skipped: number }>(
         "/shopify/sync",
-        { days: 90 },
+        { days: 60 },
         { auth: "admin" },
       );
       setStatus(
@@ -122,7 +122,7 @@ export function ShopifyPanel() {
               <div className="settings-row__label">Order sync</div>
               <div className="settings-row__hint">
                 New orders arrive automatically over webhooks. Re-sync pulls the
-                last 90 days again.
+                last 60 days again.
                 {connection.lastSyncedAt &&
                   ` Last full sync ${dateTime(connection.lastSyncedAt)}.`}
               </div>

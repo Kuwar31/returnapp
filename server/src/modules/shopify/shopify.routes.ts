@@ -243,7 +243,12 @@ shopifyRouter.get(
 );
 
 const backfillSchema = z.object({
-  days: z.number().int().positive().max(365).default(90),
+  /**
+   * Capped at 60, which is as far back as `read_orders` reaches. Shopify
+   * rejects an over-range query outright rather than trimming it, so allowing
+   * 365 here meant a re-sync returned nothing at all.
+   */
+  days: z.number().int().positive().max(60).default(60),
 });
 
 /**
