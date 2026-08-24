@@ -5,14 +5,14 @@ import { dateTime } from "../lib/format";
 interface Connection {
   configured: boolean;
   connected: boolean;
+  /** Credentials exist but can't be decrypted — the store must be reconnected. */
+  needsReconnect: boolean;
   shop: string | null;
   scopes: string | null;
   connectedAt: string | null;
   lastSyncedAt: string | null;
   orderCount: number;
 }
-
-const API_BASE = import.meta.env.VITE_API_URL ?? "";
 
 /** Connect-a-store panel plus a manual re-sync trigger. */
 export function ShopifyPanel() {
@@ -21,6 +21,7 @@ export function ShopifyPanel() {
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [connecting, setConnecting] = useState(false);
 
   const load = () =>
     api
@@ -32,15 +33,24 @@ export function ShopifyPanel() {
     void load();
   }, []);
 
-  const connect = (event: React.FormEvent) => {
+  const connect = async (event: React.FormEvent) => {
     event.preventDefault();
-    const shop = shopInput.trim().toLowerCase();
-    // Accept either "acme" or the full myshopify domain.
-    const domain = shop.endsWith(".myshopify.com")
-      ? shop
-      : `${shop}.myshopify.com`;
-    // Full page navigation: OAuth has to happen in the top-level window.
-    window.location.href = `${API_BASE}/api/shopify/install?shop=${encodeURIComponent(domain)}`;
+    setError(null);
+    setConnecting(true);
+    try {
+      // Ask the API for a signed authorize URL first. That ties the install to
+      // this merchant account, instead of creating a new one with no users.
+      const { url } = await api.post<{ url: string }>(
+        "/shopify/install-url",
+        { shop: shopInput },
+        { auth: "admin" },
+      );
+      // OAuth must be a top-level navigation, not a fetch.
+      window.location.href = url;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't start the install.");
+      setConnecting(false);
+    }
   };
 
   const resync = async () => {
@@ -73,6 +83,14 @@ export function ShopifyPanel() {
 
       {error && <div className="alert alert--error">{error}</div>}
       {status && <div className="alert alert--info">{status}</div>}
+
+      {connection.needsReconnect && (
+        <div className="alert alert--warn">
+          {connection.shop} was connected, but the saved credentials can no
+          longer be read — usually because the server's encryption key changed.
+          Reconnect below to fix it.
+        </div>
+      )}
 
       {!connection.configured && (
         <div className="alert alert--warn">
@@ -138,9 +156,9 @@ export function ShopifyPanel() {
           <button
             className="btn"
             type="submit"
-            disabled={!connection.configured || !shopInput.trim()}
+            disabled={!connection.configured || !shopInput.trim() || connecting}
           >
-            Connect Shopify
+            {connecting ? "Redirecting to Shopify…" : "Connect Shopify"}
           </button>
         </form>
       )}

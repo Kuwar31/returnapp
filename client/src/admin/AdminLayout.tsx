@@ -5,7 +5,8 @@ import { useAuth } from "./AuthContext";
 const NAV = [
   { to: "/admin", label: "Dashboard", end: true },
   { to: "/admin/returns", label: "Returns", end: false },
-  { to: "/admin/settings", label: "Settings", end: false },
+  { to: "/admin/settings", label: "Settings", end: true },
+  { to: "/admin/settings/reasons", label: "Return reasons", end: false },
 ];
 
 export default function AdminLayout() {

@@ -17,6 +17,7 @@ export default [
   route("r/:slug", "portal/PortalLayout.tsx", [
     index("portal/LookupPage.tsx"),
     route("items", "portal/SelectItemsPage.tsx"),
+    route("review", "portal/ReviewPage.tsx"),
     route("status/:reference", "portal/StatusPage.tsx"),
   ]),
 
@@ -27,6 +28,7 @@ export default [
       route("returns", "admin/ReturnsListPage.tsx"),
       route("returns/:id", "admin/ReturnDetailPage.tsx"),
       route("settings", "admin/SettingsPage.tsx"),
+      route("settings/reasons", "admin/ReasonsPage.tsx"),
     ]),
   ]),
 

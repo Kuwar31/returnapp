@@ -9,6 +9,8 @@ export interface NormalizedLineItem {
   productId: string | null;
   variantId: string | null;
   sku: string | null;
+  /// Drives which reason group the portal offers for this line.
+  productType: string | null;
   title: string;
   variantTitle: string | null;
   imageUrl: string | null;
@@ -19,12 +21,17 @@ export interface NormalizedLineItem {
 
 export interface NormalizedOrder {
   externalId: string;
+  /** Shopify Customer GID; null for guest checkouts. */
+  customerExternalId: string | null;
   orderNumber: string;
   email: string;
   customerName: string | null;
   currency: string;
   subtotal: number;
   total: number;
+  /** What the customer was charged in, when it differs from shop currency. */
+  presentmentCurrency: string | null;
+  presentmentTotal: number | null;
   placedAt: Date;
   fulfilledAt: Date | null;
   deliveredAt: Date | null;
@@ -56,6 +63,7 @@ interface WebhookLineItem {
   product_id?: number | null;
   variant_id?: number | null;
   sku?: string | null;
+  product_type?: string | null;
   title: string;
   variant_title?: string | null;
   quantity: number;
@@ -72,10 +80,16 @@ export interface WebhookOrder {
   currency: string;
   subtotal_price?: string;
   total_price?: string;
+  presentment_currency?: string | null;
+  total_price_set?: {
+    presentment_money?: { amount?: string; currency_code?: string } | null;
+  } | null;
   created_at: string;
   processed_at?: string | null;
   cancelled_at?: string | null;
   customer?: {
+    id?: number | null;
+    admin_graphql_api_id?: string | null;
     first_name?: string | null;
     last_name?: string | null;
   } | null;
@@ -119,12 +133,24 @@ export const mapWebhookOrder = (
   return {
     externalId:
       payload.admin_graphql_api_id ?? `gid://shopify/Order/${payload.id}`,
+    customerExternalId:
+      payload.customer?.admin_graphql_api_id ??
+      (payload.customer?.id
+        ? `gid://shopify/Customer/${payload.customer.id}`
+        : null),
     orderNumber: stripHash(payload.name),
     email: email.toLowerCase(),
     customerName,
     currency: payload.currency,
     subtotal: num(payload.subtotal_price),
     total: num(payload.total_price),
+    presentmentCurrency:
+      payload.total_price_set?.presentment_money?.currency_code ??
+      payload.presentment_currency ??
+      null,
+    presentmentTotal: payload.total_price_set?.presentment_money?.amount
+      ? num(payload.total_price_set.presentment_money.amount)
+      : null,
     placedAt: date(payload.processed_at) ?? date(payload.created_at) ?? new Date(),
     fulfilledAt,
     deliveredAt,
@@ -144,6 +170,7 @@ export const mapWebhookOrder = (
           ? `gid://shopify/ProductVariant/${line.variant_id}`
           : null,
         sku: line.sku ?? null,
+        productType: line.product_type ?? null,
         title: line.title,
         variantTitle: line.variant_title ?? null,
         // Webhook payloads carry no image; the GraphQL backfill fills it in.
@@ -166,14 +193,27 @@ export interface GraphQLOrderNode {
   email: string | null;
   processedAt: string;
   currencyCode: string;
-  customer: { displayName: string | null } | null;
+  customer: { id: string; displayName: string | null } | null;
   subtotalPriceSet: { shopMoney: { amount: string } } | null;
-  totalPriceSet: { shopMoney: { amount: string } } | null;
+  totalPriceSet: {
+    shopMoney: { amount: string };
+    presentmentMoney?: { amount: string; currencyCode: string } | null;
+  } | null;
   fulfillments: Array<{
     createdAt: string;
     deliveredAt: string | null;
     displayStatus: string | null;
   }>;
+  shippingAddress: {
+    name: string | null;
+    address1: string | null;
+    address2: string | null;
+    city: string | null;
+    provinceCode: string | null;
+    zip: string | null;
+    country: string | null;
+    phone: string | null;
+  } | null;
   lineItems: {
     nodes: Array<{
       id: string;
@@ -183,7 +223,7 @@ export interface GraphQLOrderNode {
       quantity: number;
       image: { url: string } | null;
       discountedUnitPriceSet: { shopMoney: { amount: string } } | null;
-      product: { id: string } | null;
+      product: { id: string; productType: string | null } | null;
       variant: { id: string } | null;
     }>;
   };
@@ -204,19 +244,26 @@ export const mapGraphQLOrder = (
 
   return {
     externalId: node.id,
+    customerExternalId: node.customer?.id ?? null,
     orderNumber: stripHash(node.name),
     email: node.email.toLowerCase(),
     customerName: node.customer?.displayName ?? null,
     currency: node.currencyCode,
     subtotal: num(node.subtotalPriceSet?.shopMoney.amount),
     total: num(node.totalPriceSet?.shopMoney.amount),
+    presentmentCurrency:
+      node.totalPriceSet?.presentmentMoney?.currencyCode ?? null,
+    presentmentTotal: node.totalPriceSet?.presentmentMoney
+      ? num(node.totalPriceSet.presentmentMoney.amount)
+      : null,
     placedAt: date(node.processedAt) ?? new Date(),
     fulfilledAt,
     deliveredAt,
-    shippingAddress: null,
+    shippingAddress: node.shippingAddress ?? null,
     lineItems: node.lineItems.nodes.map((line) => ({
       externalId: line.id,
       productId: line.product?.id ?? null,
+      productType: line.product?.productType || null,
       variantId: line.variant?.id ?? null,
       sku: line.sku ?? null,
       title: line.title,

@@ -1,4 +1,3 @@
-import { createContext, useContext } from "react";
 import { Outlet, useRouteLoaderData } from "react-router";
 import { api } from "../lib/api";
 import type { PortalConfig } from "../lib/types";
@@ -15,14 +14,18 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   return api.get<PortalConfig>(`/portal/${params.slug}/config`);
 }
 
-const PortalContext = createContext<PortalConfig | null>(null);
-
-/** Branding and store details for the portal being viewed. */
+/**
+ * Branding and store details for the portal being viewed.
+ *
+ * Reads the layout route's loader data rather than a React context: a route
+ * module is loaded through the router's own virtual module, so a context
+ * created in this file is a *different* context object from the one a child
+ * route imports, and the provider silently never matches.
+ */
 export const usePortal = (): PortalConfig => {
-  const ctx = useContext(PortalContext);
-  if (ctx) return ctx;
-  // Child routes can also reach the layout's data directly.
-  const data = useRouteLoaderData("r/:slug") as PortalConfig | undefined;
+  const data = useRouteLoaderData("portal/PortalLayout") as
+    | PortalConfig
+    | undefined;
   if (!data) throw new Error("usePortal must be used inside PortalLayout");
   return data;
 };
@@ -47,12 +50,17 @@ export default function PortalLayout({ loaderData }: Route.ComponentProps) {
   const config = loaderData;
 
   return (
-    <PortalContext.Provider value={config}>
+    <>
       {/* The merchant's accent colour cascades to buttons and highlights. */}
       <div
-        className="portal"
+        className={`portal${config.branding.heroImageUrl ? " portal--hero" : ""}`}
         style={
-          { "--accent": config.branding.accentColor } as React.CSSProperties
+          {
+            "--accent": config.branding.accentColor,
+            ...(config.branding.heroImageUrl
+              ? { "--hero": `url("${config.branding.heroImageUrl}")` }
+              : {}),
+          } as React.CSSProperties
         }
       >
         <header className="portal__header">
@@ -82,7 +90,7 @@ export default function PortalLayout({ loaderData }: Route.ComponentProps) {
           {config.merchant.name}
         </footer>
       </div>
-    </PortalContext.Provider>
+    </>
   );
 }
 

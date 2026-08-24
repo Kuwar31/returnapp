@@ -315,3 +315,1193 @@
     display: none;
   }
 }
+
+/* ---------- per-item selection ---------- */
+
+.line-item.is-chosen {
+  border-left: 3px solid var(--accent);
+  padding-left: 13px;
+}
+
+.line-item__action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.line-item__decision {
+  margin-top: 8px;
+  font-size: 14px;
+}
+
+.linkish {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.linkish:hover {
+  color: var(--text);
+}
+
+.section-label {
+  margin: 26px 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.totals__row--due {
+  color: var(--danger-fg);
+  font-weight: 600;
+}
+
+/* Sticky action bar, so the way forward is always reachable. */
+.portal__bar {
+  position: sticky;
+  bottom: 0;
+  margin-top: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
+  font-size: 14px;
+  font-weight: 600;
+  width: 100%;
+  max-width: 720px;
+}
+
+/* ---------- item drawer ---------- */
+
+.drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.drawer__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.drawer__panel {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  width: 100%;
+  max-width: 900px;
+  max-height: 88vh;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.drawer__media {
+  background: #f2f2f3;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.drawer__media img,
+.drawer__placeholder {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: var(--radius);
+  background: #e6e6e7;
+}
+
+.drawer__title {
+  font-weight: 600;
+}
+
+.drawer__body {
+  position: relative;
+  padding: 46px 28px 28px;
+  overflow-y: auto;
+}
+
+.drawer__close,
+.drawer__back {
+  position: absolute;
+  top: 14px;
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 4px 8px;
+}
+
+.drawer__close {
+  right: 14px;
+}
+
+.drawer__back {
+  left: 14px;
+}
+
+.choice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 15px 16px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+
+.choice:hover {
+  border-color: var(--accent);
+  background: #fafafa;
+}
+
+.choice.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.choice--feature {
+  border-color: #b7a3ea;
+  box-shadow: 0 0 0 1px #b7a3ea;
+}
+
+.choice__flag {
+  display: inline-block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #6b4bd6;
+}
+
+.choice__label {
+  display: block;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.choice__desc {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.choice__bonus {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--success-bg);
+  color: var(--success-fg);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.choice__chevron {
+  color: var(--text-subtle);
+  font-size: 18px;
+}
+
+.variant-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 10px;
+}
+
+.variant {
+  padding: 12px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font: inherit;
+  cursor: pointer;
+  text-align: center;
+}
+
+.variant:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.variant:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.variant__title {
+  display: block;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.variant__meta {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.variant--sm {
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 16px;
+}
+
+.product img,
+.product__placeholder {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: #f0f0f1;
+}
+
+.product__title {
+  margin-top: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.product__price {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.product__variants {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+@media (max-width: 760px) {
+  .drawer__panel {
+    grid-template-columns: 1fr;
+    max-height: 92vh;
+  }
+
+  .drawer__media {
+    padding: 16px;
+  }
+
+  .drawer__media img,
+  .drawer__placeholder {
+    aspect-ratio: 16 / 9;
+  }
+}
+
+/* ---------- two-level resolution cards ---------- */
+
+.choice__main {
+  display: block;
+  min-width: 0;
+}
+
+/* Thumbnail beside the "new size" card, so the option shows what it offers. */
+.choice__preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.choice__thumb {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: #f0f0f1;
+  flex-shrink: 0;
+}
+
+/* Strip of real products behind "exchange for another product". */
+.choice__strip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.choice__strip img,
+.choice__strip-blank {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: #f0f0f1;
+  flex-shrink: 0;
+}
+
+.choice__strip-more {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-sm);
+  background: #4a4a4d;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* ---------- review step ---------- */
+
+.review {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 22px;
+  width: 100%;
+  max-width: 1080px;
+  align-items: start;
+}
+
+.review__main h1 {
+  font-size: 30px;
+  margin-bottom: 18px;
+}
+
+.review__card {
+  padding: 24px;
+  margin-bottom: 18px;
+}
+
+.review__card h2 {
+  font-size: 17px;
+  margin-bottom: 4px;
+}
+
+.review__ship {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  margin-top: 16px;
+}
+
+.review__ship-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.review__ship-title {
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.review__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 18px;
+  margin-top: 16px;
+}
+
+.review__tile img,
+.review__tile-blank {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: var(--radius);
+  background: #f0f0f1;
+}
+
+.review__tile-title {
+  margin-top: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.review__kv {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.review__kv:last-child {
+  border-bottom: none;
+}
+
+/* The summary follows the shopper down a long item list. */
+.review__aside {
+  position: sticky;
+  top: 20px;
+}
+
+.review__summary {
+  padding: 22px;
+}
+
+.review__summary h2 {
+  font-size: 17px;
+  margin-bottom: 14px;
+}
+
+.summary__section {
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
+}
+
+.summary__heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.summary__subheading {
+  font-size: 14px;
+  margin: 0 0 10px;
+}
+
+.summary__row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 13px;
+}
+
+.summary__row img,
+.summary__blank {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #f0f0f1;
+}
+
+.summary__label {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+  min-width: 0;
+}
+
+.summary__label .muted {
+  font-size: 12px;
+}
+
+.summary__line {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+  font-size: 14px;
+}
+
+.summary__line--credit {
+  color: var(--success-fg);
+}
+
+.payout-card {
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-bottom: 8px;
+}
+
+.payout-card__title {
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 2px;
+}
+
+.payout-card p {
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.summary__total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 16px 0;
+  border-top: 1px solid var(--border);
+  font-size: 15px;
+}
+
+.summary__total strong {
+  font-size: 22px;
+  letter-spacing: -0.02em;
+}
+
+.summary__total--due {
+  padding-top: 0;
+  border-top: none;
+  color: var(--danger-fg);
+}
+
+@media (max-width: 900px) {
+  .review {
+    grid-template-columns: 1fr;
+  }
+
+  .review__aside {
+    position: static;
+  }
+}
+
+/* ---------- drawer scrolling ---------- */
+
+/*
+ * Grid and flex children default to `min-height: auto`, which refuses to
+ * shrink below their content — so the body grew past the panel and its
+ * `overflow-y: auto` never engaged, leaving the product list unscrollable.
+ * Explicit `min-height: 0` is what lets the column shrink and scroll.
+ */
+.drawer__media,
+.drawer__body {
+  min-height: 0;
+}
+
+.drawer__media {
+  overflow-y: auto;
+}
+
+/* Momentum scrolling on touch, and keep the gesture inside the drawer rather
+   than chaining to the page behind it. */
+.drawer__body {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+@media (max-width: 760px) {
+  /*
+   * Stacked on a phone, two independently scrolling panes fight each other.
+   * The whole panel becomes one scroll surface instead, with the image fixed
+   * to a sensible height so it can't push the options off-screen.
+   */
+  .drawer__panel {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .drawer__media,
+  .drawer__body {
+    overflow: visible;
+  }
+
+  .drawer__media img,
+  .drawer__placeholder {
+    max-height: 34vh;
+    width: auto;
+    margin: 0 auto;
+  }
+}
+
+/*
+ * The row needs constraining too, not just the columns.
+ *
+ * Without an explicit row track the grid sizes its single row to max-content —
+ * so the body grew to its full height, the panel's max-height simply *clipped*
+ * it, and there was nothing to scroll. `minmax(0, 1fr)` lets the row shrink to
+ * the panel, which is what finally hands the overflow to the body.
+ */
+.drawer__panel {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+/* ---------- Loop-style item picker ---------- */
+
+.picker__heading {
+  font-size: 26px;
+  text-align: center;
+  margin-bottom: 6px;
+}
+
+.picker__sub {
+  text-align: center;
+  color: var(--text-muted);
+  margin-bottom: 18px;
+}
+
+.picker__until {
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+}
+
+/*
+ * The whole card is the target, not a button inside it — a bigger hit area and
+ * one obvious action per row.
+ */
+.pick-card {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 18px;
+  margin-bottom: 14px;
+  background: var(--surface);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+
+.pick-card:hover {
+  border-color: var(--border-strong);
+}
+
+.pick-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.pick-card.is-chosen {
+  border-color: #35b34a;
+  box-shadow: 0 0 0 1px #35b34a;
+}
+
+.pick-card .line-item__thumb {
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: #f0f0f1;
+  flex-shrink: 0;
+}
+
+.pick-card .line-item__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.pick-card__side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.pick-card__price {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* ---------- selectable credit options ---------- */
+
+.payout-card {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 10px;
+  background: var(--surface);
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.12s, box-shadow 0.12s, background 0.12s;
+}
+
+.payout-card:hover {
+  border-color: var(--accent);
+}
+
+.payout-card.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+  background: #fafafa;
+}
+
+.payout-card__icon {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: #f2f2f3;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.payout-card__body {
+  display: block;
+  min-width: 0;
+}
+
+.payout-card__title {
+  display: block;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.payout-card__bonus {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--success-bg);
+  color: var(--success-fg);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.payout-card__blurb {
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+/* ---------- full-bleed hero backdrop ---------- */
+
+/*
+ * A fixed, blurred product photo behind the portal.
+ *
+ * The image is decoration, so it goes on a pseudo-element rather than the
+ * container — that keeps it out of the flow, and lets the scrim live in the
+ * same layer. Blur plus a light scrim is what keeps the cards readable over
+ * arbitrary catalogue photography, which we don't control and can't art-direct.
+ */
+.portal--hero::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background-image: var(--hero);
+  background-size: cover;
+  background-position: center;
+  /*
+   * Heavy blur and a big scale on purpose. Catalogue photography is mostly
+   * product-on-white, which reads as a pale smudge at a light blur — pushed
+   * this far it becomes an abstract colour wash that works with any image,
+   * including ones we'd never have art-directed.
+   */
+  transform: scale(1.35);
+  filter: blur(48px) saturate(1.6);
+}
+
+.portal--hero::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  /* Light enough for the colour to come through, heavy enough to keep body
+     text at an accessible contrast over it. */
+  background: linear-gradient(
+    180deg,
+    rgba(248, 248, 249, 0.55) 0%,
+    rgba(248, 248, 249, 0.7) 55%,
+    rgba(248, 248, 249, 0.85) 100%
+  );
+}
+
+.portal--hero {
+  background: transparent;
+}
+
+/* Cards need a touch more presence to sit convincingly over an image. */
+.portal--hero .card,
+.portal--hero .pick-card {
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.06),
+    0 10px 34px rgba(0, 0, 0, 0.1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .portal--hero::before {
+    transform: none;
+  }
+}
+
+/* ---------- confirmation page ---------- */
+
+/*
+ * Same two-column shape as the review step, so submitting doesn't feel like
+ * landing on a different site: the summary the shopper was reading stays put
+ * on the right while the main column changes to "what happens next".
+ */
+.confirm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 22px;
+  width: 100%;
+  max-width: 1080px;
+  align-items: start;
+}
+
+.confirm__heading {
+  font-size: 38px;
+  font-weight: 700;
+  line-height: 1.1;
+  margin-bottom: 20px;
+}
+
+.confirm__card {
+  padding: 24px;
+  margin-bottom: 18px;
+}
+
+/* Disclosure cards put their own padding on the header and panel instead. */
+.confirm__card--flush {
+  padding: 0;
+  overflow: hidden;
+}
+
+.confirm__eyebrow {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--text-subtle);
+  margin-bottom: 10px;
+}
+
+.confirm__card-title {
+  font-size: 20px;
+  margin-bottom: 8px;
+}
+
+.confirm__card-body {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.confirm__timeline {
+  margin: 22px 0 0;
+}
+
+/* The gap under the last step is the connector's spacing, which the final
+   step has no connector to fill — so it just reads as a hole in the card. */
+.confirm__timeline li:last-child {
+  padding-bottom: 0;
+}
+
+.confirm__disclosure {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 22px 24px;
+  background: none;
+  border: none;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+
+.confirm__panel {
+  padding: 0 24px 24px;
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+}
+
+/*
+ * One glyph, one direction. Every caret is the ▲ character and points down
+ * when its section is collapsed, so open/closed reads the same everywhere
+ * rather than depending on which arrow the markup happened to use.
+ */
+.confirm__caret {
+  color: var(--accent);
+  font-size: 11px;
+  transition: transform 0.15s ease;
+  display: inline-block;
+  transform: rotate(180deg);
+}
+
+.confirm__caret.is-open {
+  transform: rotate(0deg);
+}
+
+.confirm__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 20px;
+}
+
+.confirm__tile img,
+.confirm__tile-blank {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: var(--radius);
+  background: #f0f0f1;
+}
+
+.confirm__tile-title {
+  margin-top: 10px;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.confirm__tile .muted {
+  font-size: 13px;
+}
+
+/* "Cancel return" and friends: full-width outlined rows, like Loop's. */
+.confirm__action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-top: 16px;
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  font: inherit;
+  font-weight: 600;
+  /* Buttons centre their text by default; these read as rows, not buttons. */
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+
+.confirm__action:hover:not(:disabled) {
+  border-color: var(--text-subtle);
+}
+
+.confirm__action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.confirm__action-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.confirm__action-label {
+  flex: 1;
+}
+
+.confirm__note {
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+.confirm__cancel {
+  margin-top: 14px;
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--danger-bg);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.confirm__cancel .btn {
+  margin-top: 12px;
+}
+
+.confirm__subhead {
+  font-size: 14px;
+  margin: 18px 0 6px;
+}
+
+.confirm__subhead:first-child {
+  margin-top: 0;
+}
+
+.confirm__panel .muted {
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.confirm__restart {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.confirm__aside {
+  position: sticky;
+  top: 20px;
+}
+
+.confirm__summary {
+  padding: 22px;
+}
+
+.confirm__summary-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.confirm__summary-head h2 {
+  font-size: 19px;
+}
+
+.confirm__total {
+  font-size: 16px;
+}
+
+.confirm__total strong {
+  font-size: 26px;
+}
+
+.confirm__help {
+  margin-top: 18px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.confirm__help a {
+  color: var(--success-fg);
+}
+
+/* ---------- post-return survey ---------- */
+
+.survey {
+  margin-top: 18px;
+  padding: 22px;
+  background: #f6f6f7;
+  box-shadow: none;
+  border: 1px solid var(--border);
+  text-align: center;
+}
+
+.survey__title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.survey__title + * {
+  margin-top: 0;
+}
+
+.survey__scores {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.survey__score {
+  width: 42px;
+  height: 38px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.survey__score:hover {
+  border-color: var(--text-subtle);
+}
+
+.survey__score.is-selected {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+
+/* The anchor labels sit under the ends of the scale, not under each button. */
+.survey__ends {
+  display: flex;
+  justify-content: space-between;
+  margin: 6px 2px 20px;
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+.survey__comment {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font: inherit;
+  font-size: 14px;
+  resize: vertical;
+  margin-bottom: 14px;
+}
+
+.survey__comment:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.survey__edit {
+  margin-top: 12px;
+}
+
+@media (max-width: 900px) {
+  .confirm {
+    grid-template-columns: 1fr;
+  }
+
+  .confirm__aside {
+    position: static;
+  }
+
+  .confirm__heading {
+    font-size: 30px;
+  }
+}
+
+/* Which unit of a multi-quantity line this card is. Quiet, because the shopper
+   is choosing a reason for a thing, not tracking an index. */
+.pick-card__nth {
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #f0f0f1;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  vertical-align: middle;
+}

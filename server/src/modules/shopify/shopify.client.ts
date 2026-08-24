@@ -106,10 +106,30 @@ export const getShopCredentials = async (merchantId: string) => {
       "This store isn't connected to Shopify yet.",
     );
   }
-  return {
-    shop: integration.externalShopId,
-    accessToken: decrypt(integration.accessToken),
-  };
+
+  let accessToken: string;
+  try {
+    accessToken = decrypt(integration.accessToken);
+  } catch {
+    // The token was encrypted under a different ENCRYPTION_KEY — normally
+    // because the key was rotated. It can't be recovered, so surface an
+    // action the merchant can actually take instead of a bare 500.
+    logger.error(
+      { merchantId, shop: integration.externalShopId },
+      "Stored Shopify token could not be decrypted; ENCRYPTION_KEY likely changed",
+    );
+    await prisma.integration
+      .update({ where: { id: integration.id }, data: { active: false } })
+      .catch(() => undefined);
+    throw new AppError(
+      409,
+      "TOKEN_UNREADABLE",
+      "The saved Shopify credentials can't be read, usually because the " +
+        "server's encryption key changed. Reconnect the store to fix this.",
+    );
+  }
+
+  return { shop: integration.externalShopId, accessToken };
 };
 
 /** Convenience wrapper: look up credentials, then run the query. */

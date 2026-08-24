@@ -1,5 +1,6 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { env } from "../../config/env.js";
+import { logger } from "../../lib/logger.js";
 
 const secret = (): string => {
   if (!env.SHOPIFY_API_SECRET) {
@@ -25,8 +26,30 @@ export const verifyOAuthHmac = (
 
   const digest = createHmac("sha256", secret()).update(message).digest();
   const provided = Buffer.from(hmac, "hex");
-  if (provided.length !== digest.length) return false;
-  return timingSafeEqual(digest, provided);
+  const ok =
+    provided.length === digest.length && timingSafeEqual(digest, provided);
+
+  if (!ok) {
+    // A signature mismatch is otherwise completely opaque — it looks identical
+    // whether the secret is wrong, the server is holding a stale one, or the
+    // signed message was assembled differently. Log everything except the
+    // secret itself, plus a short fingerprint so a stale process is visible.
+    logger.warn(
+      {
+        signedMessage: message,
+        expected: digest.toString("hex"),
+        received: hmac,
+        secretFingerprint: createHash("sha256")
+          .update(secret())
+          .digest("hex")
+          .slice(0, 12),
+        secretLength: secret().length,
+      },
+      "OAuth HMAC mismatch",
+    );
+  }
+
+  return ok;
 };
 
 /**

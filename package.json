@@ -2,7 +2,7 @@
   "name": "returns-manager",
   "version": "0.1.0",
   "private": true,
-  "description": "Returns and exchanges platform — shopper portal + merchant admin",
+  "description": "Returns and exchanges platform \u2014 shopper portal + merchant admin",
   "workspaces": [
     "server",
     "client"
@@ -24,6 +24,6 @@
     "concurrently": "^9.1.2"
   },
   "engines": {
-    "node": ">=20.19"
+    "node": ">=22 <23"
   }
 }

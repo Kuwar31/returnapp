@@ -1,0 +1,42 @@
+# Shopify app configuration for returns-manager.
+#
+# This app is NOT a Shopify-CLI-hosted app — the merchant dashboard is a
+# standalone site (like Loop's), and Shopify is only a data source reached over
+# OAuth, webhooks and the Admin API. So `embedded` is false and there are no
+# extensions here; this file exists purely to declare URLs and scopes.
+#
+# Push changes with:  shopify app deploy
+# The two URLs below must share the same host, or OAuth fails with
+# "redirect_uri and application url must have matching hosts".
+
+client_id = "58b2e040993df7541988cdbca72bf38c"
+name = "returns-manager"
+
+# Must match APP_URL in .env. Changes every time the ngrok tunnel restarts.
+application_url = "https://avert-blah-frequent.ngrok-free.dev"
+
+# False because the admin renders on its own domain with its own login, not
+# inside an iframe in the Shopify admin.
+embedded = false
+
+[access_scopes]
+# Orders/products/customers are read-only — the app mirrors them, never edits.
+# Four write scopes, one per way a return can be settled:
+#   write_returns                            creates the Return and issues refunds
+#   write_store_credit_account_transactions  credits the customer's store credit
+#   write_gift_cards                         issues a gift card
+#   write_draft_orders                       opens the exchange's draft order,
+#                                            reserves its stock and invoices it
+# Add read_all_orders to reach orders older than 60 days (needs Shopify approval).
+scopes = "read_orders,read_fulfillments,read_products,read_customers,write_customers,read_returns,write_returns,read_locations,read_store_credit_accounts,read_store_credit_account_transactions,write_store_credit_account_transactions,read_gift_cards,write_gift_cards,read_draft_orders,write_draft_orders"
+
+[auth]
+redirect_urls = [
+  "https://avert-blah-frequent.ngrok-free.dev/api/shopify/callback"
+]
+
+[webhooks]
+# Order and fulfillment subscriptions are registered at runtime by the app
+# itself (see server/src/modules/shopify/shopify.install.ts), so only the
+# version is declared here.
+api_version = "2026-04"

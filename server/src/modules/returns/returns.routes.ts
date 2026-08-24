@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { prisma } from "../../lib/prisma.js";
 import { asyncHandler } from "../../middleware/asyncHandler.js";
 import { requireRole } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
@@ -54,7 +55,26 @@ returnsRouter.get(
       req.admin!.merchantId,
       req.params.id,
     );
-    res.json(serializeReturn(request));
+    // Sidebar context the return itself doesn't carry: who this shopper is to
+    // the store, and which policy the request was judged against.
+    const [shopper, merchant, payout] = await Promise.all([
+      returnsService.getShopperStats(
+        req.admin!.merchantId,
+        request.customerEmail,
+      ),
+      prisma.merchant.findUnique({
+        where: { id: req.admin!.merchantId },
+        select: { slug: true },
+      }),
+      returnsService.getPayoutBreakdown(req.admin!.merchantId, req.params.id),
+    ]);
+    res.json({
+      ...serializeReturn(request),
+      shopper,
+      payout,
+      policyName: request.policy?.name ?? null,
+      portalSlug: merchant?.slug ?? null,
+    });
   }),
 );
 
@@ -106,6 +126,140 @@ returnsRouter.post(
   requireRole("OWNER", "ADMIN"),
   asyncHandler(async (req, res) => {
     const updated = await returnsService.resolveReturn(
+      req.admin!.merchantId,
+      req.params.id,
+      req.admin!.sub,
+    );
+    res.json(serializeReturn(updated));
+  }),
+);
+
+/**
+ * Preview what resolving will pay out, straight from Shopify.
+ *
+ * Lets a merchant see the exact refund — taxes, discounts and prior refunds
+ * accounted for — before committing, which is the reassurance Shopify's own
+ * "Process and refund" screen provides.
+ */
+returnsRouter.get(
+  "/:id/refund-preview",
+  asyncHandler(async (req, res) => {
+    const preview = await returnsService.previewRefund(
+      req.admin!.merchantId,
+      req.params.id,
+    );
+    res.json(preview);
+  }),
+);
+
+/**
+ * Receive and resolve in one action — the equivalent of Shopify's
+ * "Process and refund", so the merchant never has to leave this app.
+ */
+returnsRouter.post(
+  "/:id/process",
+  requireRole("OWNER", "ADMIN"),
+  asyncHandler(async (req, res) => {
+    const updated = await returnsService.processAndRefund(
+      req.admin!.merchantId,
+      req.params.id,
+      req.admin!.sub,
+    );
+    res.json(serializeReturn(updated));
+  }),
+);
+
+const reasonOnlySchema = z.object({
+  reason: z.string().trim().max(500).optional(),
+});
+
+/**
+ * Withdraw the request without judging it.
+ *
+ * Separate from reject: a rejection is a decision the customer is told about,
+ * a cancellation just takes the request off the board — raised in error,
+ * duplicated, or settled another way.
+ */
+returnsRouter.post(
+  "/:id/cancel",
+  requireRole("OWNER", "ADMIN"),
+  validate(reasonOnlySchema),
+  asyncHandler(async (req, res) => {
+    const updated = await returnsService.cancelReturn(
+      req.admin!.merchantId,
+      req.params.id,
+      req.admin!.sub,
+      req.body.reason,
+    );
+    res.json(serializeReturn(updated));
+  }),
+);
+
+/** Toggles the "needs a second look" flag. Any role can raise one. */
+returnsRouter.post(
+  "/:id/flag",
+  validate(reasonOnlySchema),
+  asyncHandler(async (req, res) => {
+    const updated = await returnsService.flagReturn(
+      req.admin!.merchantId,
+      req.params.id,
+      req.admin!.sub,
+      req.body.reason,
+    );
+    res.json(serializeReturn(updated));
+  }),
+);
+
+const inspectSchema = z
+  .object({
+    /** Null clears the decision and puts the line back to uninspected. */
+    acceptedQuantity: z.number().int().min(0).max(999).nullable().optional(),
+    restock: z.boolean().optional(),
+    rejectionNote: z.string().trim().max(500).nullable().optional(),
+    /** "Change to keep" — credit the shopper without asking for the item back. */
+    keepItem: z.boolean().optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, {
+    message: "Nothing to update.",
+  });
+
+/** Unit-level inspection: accept some, all or none of a line's units. */
+returnsRouter.patch(
+  "/:id/line-items/:lineItemId",
+  requireRole("OWNER", "ADMIN"),
+  validate(inspectSchema),
+  asyncHandler(async (req, res) => {
+    const updated = await returnsService.inspectLineItem(
+      req.admin!.merchantId,
+      req.params.id,
+      req.params.lineItemId,
+      req.admin!.sub,
+      req.body,
+    );
+    res.json(serializeReturn(updated));
+  }),
+);
+
+/** Retries the exchange draft order when the automatic attempt failed. */
+returnsRouter.post(
+  "/:id/exchange/retry",
+  requireRole("OWNER", "ADMIN"),
+  asyncHandler(async (req, res) => {
+    const updated = await returnsService.retryExchangeDraftOrder(
+      req.admin!.merchantId,
+      req.params.id,
+      req.admin!.sub,
+    );
+    res.json(serializeReturn(updated));
+  }),
+);
+
+/** Re-sends the exchange checkout link when the shopper never got the first. */
+returnsRouter.post(
+  "/:id/exchange/invoice",
+  requireRole("OWNER", "ADMIN"),
+  asyncHandler(async (req, res) => {
+    const updated = await returnsService.resendExchangeInvoice(
       req.admin!.merchantId,
       req.params.id,
       req.admin!.sub,

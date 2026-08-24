@@ -13,12 +13,11 @@ interface Policy {
   allowFinalSale: boolean;
   allowRefund: boolean;
   allowStoreCredit: boolean;
+  allowGiftCard: boolean;
   allowExchange: boolean;
   allowInstantExchange: boolean;
   bonusCreditPercent: number;
   restockingFeePercent: number;
-  returnShippingFee: number;
-  waiveShippingOnCredit: boolean;
   autoApprove: boolean;
   autoApproveUnder: number | null;
 }
@@ -165,6 +164,7 @@ export default function SettingsPage() {
             [
               ["allowRefund", "Refund to original payment"],
               ["allowStoreCredit", "Store credit"],
+              ["allowGiftCard", "Gift card"],
               ["allowExchange", "Exchange"],
               ["allowInstantExchange", "Instant exchange"],
             ] as const
@@ -216,43 +216,6 @@ export default function SettingsPage() {
               value={policy.restockingFeePercent}
               onChange={(e) =>
                 update("restockingFeePercent", Number(e.target.value))
-              }
-            />
-          </div>
-
-          <div className="settings-row">
-            <div>
-              <div className="settings-row__label">Return shipping fee</div>
-              <div className="settings-row__hint">
-                Charged for the return label.
-              </div>
-            </div>
-            <input
-              type="number"
-              min={0}
-              step="0.01"
-              value={policy.returnShippingFee}
-              onChange={(e) =>
-                update("returnShippingFee", Number(e.target.value))
-              }
-            />
-          </div>
-
-          <div className="settings-row">
-            <div>
-              <div className="settings-row__label">
-                Waive shipping on credit
-              </div>
-              <div className="settings-row__hint">
-                Skip the shipping fee when the customer takes credit or an
-                exchange.
-              </div>
-            </div>
-            <input
-              type="checkbox"
-              checked={policy.waiveShippingOnCredit}
-              onChange={(e) =>
-                update("waiveShippingOnCredit", e.target.checked)
               }
             />
           </div>

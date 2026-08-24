@@ -35,6 +35,7 @@ model Merchant {
   users          User[]
   policies       ReturnPolicy[]
   reasons        ReturnReason[]
+  reasonGroups   ReturnReasonGroup[]
   orders         Order[]
   returnRequests ReturnRequest[]
   storeCredits   StoreCredit[]
@@ -86,6 +87,9 @@ model PortalBranding {
   headline     String   @default("Returns & Exchanges")
   subheadline  String   @default("Start a return or exchange in a few clicks")
   logoUrl      String?
+  /// Full-bleed image behind the portal. Merchant-set; when null the app
+  /// borrows a product photo from the store's own catalogue and caches it here.
+  heroImageUrl String?
   accentColor  String   @default("#111213")
   supportEmail String?
   policyUrl    String?
@@ -114,6 +118,7 @@ model ReturnPolicy {
   // Which resolutions the portal offers
   allowRefund       Boolean @default(true)
   allowStoreCredit  Boolean @default(true)
+  allowGiftCard     Boolean @default(false)
   allowExchange     Boolean @default(true)
   // Ship the replacement before the original comes back (Loop's instant exchange)
   allowInstantExchange Boolean @default(false)
@@ -147,12 +152,55 @@ enum WindowStart {
   DELIVERY
 }
 
-/// Reasons are per-merchant so stores can word them their own way, but each
-/// maps to a stable `code` for reporting.
+/// A set of reasons offered for a particular kind of product.
+///
+/// Merchants word returns differently for footwear than for homeware, so the
+/// portal picks a group per line item from the product's type. Exactly one
+/// group per merchant is the default, catching everything unclaimed.
+model ReturnReasonGroup {
+  id         String   @id @default(cuid())
+  merchantId String
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  /// Internal name; never shown to shoppers.
+  title      String
+  /// Shopify product types this group claims, matched case-insensitively.
+  productTypes String[] @default([])
+  /// Shuffle the order per shopper, so position stops biasing the answer —
+  /// merchants use this to stop "Too small" absorbing every ambiguous return.
+  randomizeOrder Boolean @default(false)
+  /// The fallback for products no other group claims.
+  isDefault  Boolean  @default(false)
+  sortOrder  Int      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reasons ReturnReason[]
+
+  @@index([merchantId])
+  @@map("return_reason_groups")
+}
+
+/// Reasons are per-merchant so stores can word them their own way.
+///
+/// Two levels: a parent is what the shopper picks first ("I received the wrong
+/// item"), a child narrows it ("Right item, but in the wrong size"). Only
+/// leaves are selectable, which is what makes the answers worth reporting on.
+///
+/// `code` is the mapping onto Shopify's fixed ReturnReason enum and is
+/// deliberately NOT unique — several differently-worded reasons legitimately
+/// report as WRONG_ITEM.
 model ReturnReason {
   id            String   @id @default(cuid())
   merchantId    String
   merchant      Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  groupId       String?
+  group         ReturnReasonGroup? @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  /// Null for a top-level reason.
+  parentId      String?
+  parent        ReturnReason?  @relation("ReasonTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children      ReturnReason[] @relation("ReasonTree")
+
   code          String
   label         String
   // Force the shopper to explain (e.g. "Other", "Damaged")
@@ -163,8 +211,9 @@ model ReturnReason {
 
   returnLineItems ReturnLineItem[]
 
-  @@unique([merchantId, code])
   @@index([merchantId])
+  @@index([groupId])
+  @@index([parentId])
   @@map("return_reasons")
 }
 
@@ -181,13 +230,24 @@ model Order {
 
   // Identifier on the source platform (Shopify order GID, etc.)
   externalId    String?
+  /// The Shopify Customer GID. Needed to credit a store credit account, which
+  /// is keyed on the customer rather than the order.
+  customerExternalId String?
   // Human-facing number the shopper types in, e.g. "1001"
   orderNumber   String
   email         String
   customerName  String?
+  /// Shop currency — the merchant's own books. All our line-item maths uses this.
   currency      String   @default("USD")
   subtotal      Decimal  @default(0) @db.Decimal(12, 2)
   total         Decimal  @default(0) @db.Decimal(12, 2)
+  /// The currency the customer was actually charged in. Differs from `currency`
+  /// on multi-currency stores, and is what store credit must be denominated in
+  /// for the customer to be able to spend it.
+  presentmentCurrency String?
+  /// Order total in the presentment currency, used to derive the rate that
+  /// converts a payout from shop currency into what the customer paid.
+  presentmentTotal    Decimal? @db.Decimal(12, 2)
   placedAt      DateTime
   fulfilledAt   DateTime?
   deliveredAt   DateTime?
@@ -213,6 +273,8 @@ model OrderLineItem {
   productId    String?
   variantId    String?
   sku          String?
+  /// Shopify's product type, used to pick which reason group applies.
+  productType  String?
   title        String
   variantTitle String?
   imageUrl     String?
@@ -268,6 +330,24 @@ model ReturnRequest {
   /// What was actually paid out once resolved
   settledTotal    Decimal? @db.Decimal(12, 2)
 
+  /// The Return object created on the Shopify order (gid://shopify/Return/...).
+  /// Set when the return is approved; null until then, or if Shopify rejected it.
+  externalReturnId String?
+  /// Shopify's own status for that Return (OPEN, CLOSED, DECLINED...), which
+  /// moves independently of our internal status.
+  externalStatus   String?
+  /// Populated when returnProcess issues the refund, for reconciliation.
+  externalRefundId String?
+
+  /**
+   * Merchant flag for a return that needs a second look.
+   *
+   * Deliberately orthogonal to status: flagging is a note to the team, not a
+   * decision, so a flagged return keeps moving through the same states.
+   */
+  flaggedAt    DateTime?
+  flagReason   String?
+
   reviewedById String?
   reviewedBy   User?     @relation("ReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
   reviewedAt   DateTime?
@@ -284,6 +364,8 @@ model ReturnRequest {
   shipment      ReturnShipment?
   storeCredit   StoreCredit?
   events        ReturnEvent[]
+  feedback      ReturnFeedback?
+  exchangeDraft ExchangeDraftOrder?
 
   @@index([merchantId, status])
   @@index([merchantId, submittedAt])
@@ -313,6 +395,8 @@ enum ResolutionType {
   REFUND
   STORE_CREDIT
   EXCHANGE
+  /// A Shopify gift card, spendable by anyone holding the code
+  GIFT_CARD
   /// Replacement ships immediately, before the return is received
   INSTANT_EXCHANGE
   WARRANTY
@@ -327,8 +411,21 @@ model ReturnLineItem {
   reasonId        String?
   reason          ReturnReason? @relation(fields: [reasonId], references: [id], onDelete: SetNull)
 
+  /// How *this item* is being compensated.
+  ///
+  /// Resolution lives per line, not per return: a shopper can exchange one item
+  /// for a different size, refund a second and take credit on a third, all in
+  /// one request. ReturnRequest.resolution remains as a summary of the mix, for
+  /// list views and reporting.
+  resolution ResolutionType @default(REFUND)
+
   quantity   Int     @default(1)
   reasonNote String?
+  /// Shopify's FulfillmentLineItem id, resolved from returnableFulfillments at
+  /// approval time. This — not the LineItem id — is what returnCreate needs.
+  fulfillmentLineItemId String?
+  /// The ReturnLineItem Shopify created, needed later by returnProcess.
+  externalReturnLineItemId String?
   /// URLs of shopper-uploaded condition photos
   photoUrls  String[] @default([])
   unitPrice  Decimal @default(0) @db.Decimal(12, 2)
@@ -336,6 +433,32 @@ model ReturnLineItem {
   lineTotal  Decimal @default(0) @db.Decimal(12, 2)
   /// Set by the warehouse when the item is inspected
   inspection InspectionResult?
+
+  /**
+   * How many of the requested units the merchant actually accepted.
+   *
+   * Null until someone inspects the line. Once set, this — not `quantity` —
+   * drives what gets refunded and what gets restocked, so a shopper who sends
+   * back six and has four accepted is paid for four.
+   */
+  acceptedQuantity Int?
+  /// Whether accepted units go back on the shelf or are written off. Maps to
+  /// Shopify's RESTOCKED / NOT_RESTOCKED disposition, which is one-shot per
+  /// unit and can't be changed afterwards.
+  restock          Boolean @default(true)
+  /// Shown to nobody but the merchant; explains a partial or full rejection.
+  rejectionNote    String?
+  /**
+   * "Change to keep": the shopper is credited but keeps the goods.
+   *
+   * Used when return shipping costs more than the item is worth, or the item
+   * is unsellable anyway. Nothing physically comes back, so these lines are
+   * never disposed in Shopify — but they still pay out.
+   */
+  keepItem         Boolean @default(false)
+
+  /// What the shopper chose instead, when this line is an exchange.
+  exchangeItems ExchangeItem[]
 
   @@index([returnRequestId])
   @@map("return_line_items")
@@ -354,6 +477,10 @@ model ExchangeItem {
   id              String        @id @default(cuid())
   returnRequestId String
   returnRequest   ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+  /// The returned line this replaces. Nullable only for exchanges created
+  /// before resolutions moved per-line.
+  returnLineItemId String?
+  returnLineItem   ReturnLineItem? @relation(fields: [returnLineItemId], references: [id], onDelete: Cascade)
 
   productId    String?
   variantId    String?
@@ -405,7 +532,15 @@ model StoreCredit {
   returnRequestId String?       @unique
   returnRequest   ReturnRequest? @relation(fields: [returnRequestId], references: [id], onDelete: SetNull)
 
+  /// Distinguishes a store credit balance from a gift card.
+  kind            CreditKind @default(STORE_CREDIT)
+  /// For gift cards this is the real, redeemable Shopify code. For store credit
+  /// it is a legacy internal reference with no meaning at checkout.
   code            String   @unique
+  /// The Shopify StoreCreditAccount this was credited to, when applicable.
+  externalAccountId     String?
+  /// The Shopify credit transaction, for reconciliation.
+  externalTransactionId String?
   customerEmail   String
   amount          Decimal  @db.Decimal(12, 2)
   balance         Decimal  @db.Decimal(12, 2)
@@ -415,6 +550,11 @@ model StoreCredit {
 
   @@index([merchantId, customerEmail])
   @@map("store_credits")
+}
+
+enum CreditKind {
+  STORE_CREDIT
+  GIFT_CARD
 }
 
 /// Append-only timeline shown on the return detail page.
@@ -433,6 +573,83 @@ model ReturnEvent {
 
   @@index([returnRequestId, createdAt])
   @@map("return_events")
+}
+
+/// The survey on the shopper's confirmation page.
+///
+/// One row per return rather than one per submission: a shopper who changes a
+/// score and submits again should correct their answer, not be counted twice.
+model ReturnFeedback {
+  id              String        @id @default(cuid())
+  returnRequestId String        @unique
+  returnRequest   ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+
+  /// "How was your returns experience?" — 1 very difficult, 5 very easy.
+  easeScore   Int?
+  /// "How likely are you to buy from us again?" — 1 not likely, 5 very likely.
+  repeatScore Int?
+  comment     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("return_feedback")
+}
+
+/// The Shopify draft order that carries a return's exchange.
+///
+/// One draft per return, not per item: everything the shopper is swapping into
+/// goes on the same draft so they get a single invoice for whatever they still
+/// owe, and a single replacement order to fulfil.
+///
+/// Creating it early is the point of using draft orders at all — it reserves
+/// the replacement stock while the returned parcel is still in transit, which
+/// Shopify's native exchange path can't do (it only commits at returnProcess).
+model ExchangeDraftOrder {
+  id              String        @id @default(cuid())
+  returnRequestId String        @unique
+  returnRequest   ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+
+  /// gid://shopify/DraftOrder/...
+  externalId String
+  /// Merchant-facing name Shopify assigns, e.g. "#D12".
+  name       String?
+  /// Secure checkout link the shopper pays through.
+  invoiceUrl String?
+  /// Mirrors Shopify's own DraftOrderStatus so the admin doesn't need a round
+  /// trip to render the return.
+  status     ExchangeDraftStatus @default(OPEN)
+
+  /// Shop currency. The draft is deliberately not opened in the customer's
+  /// presentment currency — see the note on issueShopifyGiftCard for why
+  /// converting money we compute ourselves is a trap.
+  currency      String
+  /// Catalogue value of the replacement items, before the return credit.
+  itemsTotal    Decimal @default(0) @db.Decimal(12, 2)
+  /// The returned items' value, applied to the draft as an order discount.
+  creditApplied Decimal @default(0) @db.Decimal(12, 2)
+  /// What the shopper still owes. Zero for an even or trade-down exchange.
+  balanceDue    Decimal @default(0) @db.Decimal(12, 2)
+
+  /// When Shopify releases the reserved stock if the exchange never completes.
+  reservedUntil   DateTime?
+  invoiceSentAt   DateTime?
+  /// gid://shopify/Order/... once the draft becomes a real order.
+  externalOrderId String?
+  completedAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([externalId])
+  @@map("exchange_draft_orders")
+}
+
+enum ExchangeDraftStatus {
+  OPEN
+  INVOICE_SENT
+  COMPLETED
+  CANCELLED
 }
 
 enum ReturnEventType {

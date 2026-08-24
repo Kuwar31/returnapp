@@ -57,6 +57,7 @@ export const allowedResolutions = (
   const allowed: ResolutionType[] = [];
   if (policy.allowRefund) allowed.push("REFUND");
   if (policy.allowStoreCredit) allowed.push("STORE_CREDIT");
+  if (policy.allowGiftCard) allowed.push("GIFT_CARD");
   if (policy.allowExchange) allowed.push("EXCHANGE");
   if (policy.allowInstantExchange) allowed.push("INSTANT_EXCHANGE");
   return allowed;
@@ -71,6 +72,19 @@ export const evaluateOrder = (
   order: Order & { lineItems: OrderLineItem[] },
   policy: ReturnPolicy,
   now: Date = new Date(),
+  /**
+   * What Shopify says is still returnable, keyed by line-item external id.
+   *
+   * Shopify is the authority here, not our mirror: a return raised in the
+   * Shopify admin, by another app, or a cancelled/restocked line all change
+   * returnability without touching our `returnedQuantity`. When supplied, this
+   * caps what the shopper is offered — so they are never shown an item that
+   * would be rejected later, at approval, after we've already promised it.
+   *
+   * Omitted (undefined) means "not consulted", and our own bookkeeping is used
+   * alone — the correct behaviour for orders that never came from Shopify.
+   */
+  shopifyReturnable?: Map<string, number>,
 ): OrderEligibility => {
   const anchor = windowAnchor(order, policy);
   const windowClosesAt = anchor
@@ -85,7 +99,17 @@ export const evaluateOrder = (
     : null;
 
   const items: EligibleLineItem[] = order.lineItems.map((line) => {
-    const returnable = Math.max(0, line.quantity - line.returnedQuantity);
+    const ours = Math.max(0, line.quantity - line.returnedQuantity);
+
+    // Take the lower of our count and Shopify's. Shopify can only ever know
+    // about less being returnable than we think (returns raised elsewhere), and
+    // offering more than it will accept is what produces a failure at approval.
+    const fromShopify =
+      shopifyReturnable && line.externalId
+        ? (shopifyReturnable.get(line.externalId) ?? 0)
+        : undefined;
+    const returnable =
+      fromShopify === undefined ? ours : Math.min(ours, fromShopify);
 
     let ineligibleReason: string | null = null;
     if (!anchor) {
@@ -95,7 +119,10 @@ export const evaluateOrder = (
     } else if (line.finalSale && !policy.allowFinalSale) {
       ineligibleReason = "Final sale items can't be returned.";
     } else if (returnable <= 0) {
-      ineligibleReason = "This item has already been returned.";
+      ineligibleReason =
+        fromShopify === 0 && ours > 0
+          ? "This item already has a return open in Shopify."
+          : "This item has already been returned.";
     }
 
     return {

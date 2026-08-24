@@ -17,6 +17,22 @@ export interface PortalTokenPayload {
   email: string;
 }
 
+/**
+ * Carried through the Shopify OAuth round trip in the `state` parameter so the
+ * callback knows which merchant account started the install. Signed because it
+ * travels via Shopify and comes back as untrusted input.
+ */
+export interface InstallTokenPayload {
+  merchantId: string;
+  shop: string;
+  nonce: string;
+}
+
+export const signInstallToken = (payload: InstallTokenPayload): string =>
+  jwt.sign({ ...payload, kind: "install" }, env.JWT_SECRET, {
+    expiresIn: "10m",
+  });
+
 export const signAdminToken = (payload: AdminTokenPayload): string =>
   jwt.sign({ ...payload, kind: "admin" }, env.JWT_SECRET, {
     expiresIn: "12h",
@@ -27,7 +43,10 @@ export const signPortalToken = (payload: PortalTokenPayload): string =>
     expiresIn: `${env.PORTAL_TOKEN_TTL_MINUTES}m`,
   });
 
-const verify = <T>(token: string, kind: "admin" | "portal"): T | null => {
+const verify = <T>(
+  token: string,
+  kind: "admin" | "portal" | "install",
+): T | null => {
   try {
     const decoded = jwt.verify(token, env.JWT_SECRET) as Record<
       string,
@@ -45,3 +64,6 @@ export const verifyAdminToken = (token: string) =>
 
 export const verifyPortalToken = (token: string) =>
   verify<PortalTokenPayload>(token, "portal");
+
+export const verifyInstallToken = (token: string) =>
+  verify<InstallTokenPayload>(token, "install");

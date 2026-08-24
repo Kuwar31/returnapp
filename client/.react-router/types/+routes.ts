@@ -24,6 +24,11 @@ type Pages = {
       "slug": string;
     };
   };
+  "/r/:slug/review": {
+    params: {
+      "slug": string;
+    };
+  };
   "/r/:slug/status/:reference": {
     params: {
       "slug": string;
@@ -47,6 +52,9 @@ type Pages = {
   "/admin/settings": {
     params: {};
   };
+  "/admin/settings/reasons": {
+    params: {};
+  };
   "/*": {
     params: {
       "*": string;
@@ -57,11 +65,11 @@ type Pages = {
 type RouteFiles = {
   "root.tsx": {
     id: "root";
-    page: "/" | "/r/:slug" | "/r/:slug/items" | "/r/:slug/status/:reference" | "/admin/login" | "/admin" | "/admin/returns" | "/admin/returns/:id" | "/admin/settings" | "/*";
+    page: "/" | "/r/:slug" | "/r/:slug/items" | "/r/:slug/review" | "/r/:slug/status/:reference" | "/admin/login" | "/admin" | "/admin/returns" | "/admin/returns/:id" | "/admin/settings" | "/admin/settings/reasons" | "/*";
   };
   "portal/PortalLayout.tsx": {
     id: "portal/PortalLayout";
-    page: "/r/:slug" | "/r/:slug/items" | "/r/:slug/status/:reference";
+    page: "/r/:slug" | "/r/:slug/items" | "/r/:slug/review" | "/r/:slug/status/:reference";
   };
   "portal/LookupPage.tsx": {
     id: "portal/LookupPage";
@@ -71,13 +79,17 @@ type RouteFiles = {
     id: "portal/SelectItemsPage";
     page: "/r/:slug/items";
   };
+  "portal/ReviewPage.tsx": {
+    id: "portal/ReviewPage";
+    page: "/r/:slug/review";
+  };
   "portal/StatusPage.tsx": {
     id: "portal/StatusPage";
     page: "/r/:slug/status/:reference";
   };
   "admin/AuthLayout.tsx": {
     id: "admin/AuthLayout";
-    page: "/admin/login" | "/admin" | "/admin/returns" | "/admin/returns/:id" | "/admin/settings";
+    page: "/admin/login" | "/admin" | "/admin/returns" | "/admin/returns/:id" | "/admin/settings" | "/admin/settings/reasons";
   };
   "admin/LoginPage.tsx": {
     id: "admin/LoginPage";
@@ -85,7 +97,7 @@ type RouteFiles = {
   };
   "admin/AdminLayout.tsx": {
     id: "admin/AdminLayout";
-    page: "/admin" | "/admin/returns" | "/admin/returns/:id" | "/admin/settings";
+    page: "/admin" | "/admin/returns" | "/admin/returns/:id" | "/admin/settings" | "/admin/settings/reasons";
   };
   "admin/DashboardPage.tsx": {
     id: "admin/DashboardPage";
@@ -103,6 +115,10 @@ type RouteFiles = {
     id: "admin/SettingsPage";
     page: "/admin/settings";
   };
+  "admin/ReasonsPage.tsx": {
+    id: "admin/ReasonsPage";
+    page: "/admin/settings/reasons";
+  };
   "NotFound.tsx": {
     id: "NotFound";
     page: "/*";
@@ -114,6 +130,7 @@ type RouteModules = {
   "portal/PortalLayout": typeof import("./src/portal/PortalLayout.tsx");
   "portal/LookupPage": typeof import("./src/portal/LookupPage.tsx");
   "portal/SelectItemsPage": typeof import("./src/portal/SelectItemsPage.tsx");
+  "portal/ReviewPage": typeof import("./src/portal/ReviewPage.tsx");
   "portal/StatusPage": typeof import("./src/portal/StatusPage.tsx");
   "admin/AuthLayout": typeof import("./src/admin/AuthLayout.tsx");
   "admin/LoginPage": typeof import("./src/admin/LoginPage.tsx");
@@ -122,5 +139,6 @@ type RouteModules = {
   "admin/ReturnsListPage": typeof import("./src/admin/ReturnsListPage.tsx");
   "admin/ReturnDetailPage": typeof import("./src/admin/ReturnDetailPage.tsx");
   "admin/SettingsPage": typeof import("./src/admin/SettingsPage.tsx");
+  "admin/ReasonsPage": typeof import("./src/admin/ReasonsPage.tsx");
   "NotFound": typeof import("./src/NotFound.tsx");
 };

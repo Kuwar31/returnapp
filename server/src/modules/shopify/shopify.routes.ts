@@ -1,6 +1,7 @@
 import express, { Router } from "express";
 import { z } from "zod";
 import { env } from "../../config/env.js";
+import { decrypt } from "../../lib/crypto.js";
 import { badRequest, unauthorized } from "../../lib/errors.js";
 import { logger } from "../../lib/logger.js";
 import { prisma } from "../../lib/prisma.js";
@@ -8,7 +9,8 @@ import { asyncHandler } from "../../middleware/asyncHandler.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { rateLimit } from "../../middleware/rateLimit.js";
 import { validate } from "../../middleware/validate.js";
-import { isValidShopDomain } from "./shopify.client.js";
+import { signInstallToken, verifyInstallToken } from "../../lib/tokens.js";
+import { getShopCredentials, isValidShopDomain } from "./shopify.client.js";
 import { verifyOAuthHmac, verifyWebhookHmac } from "./shopify.hmac.js";
 import {
   authorizeUrl,
@@ -37,21 +39,44 @@ const requireConfigured = () => {
 // ---------------------------------------------------------------------------
 
 const installSchema = z.object({
-  shop: z.string().refine(isValidShopDomain, "Enter a valid .myshopify.com domain"),
+  shop: z
+    .string()
+    .trim()
+    .toLowerCase()
+    // Accept "acme" as shorthand for "acme.myshopify.com".
+    .transform((v) =>
+      v.endsWith(".myshopify.com") ? v : `${v.replace(/\..*$/, "")}.myshopify.com`,
+    )
+    .refine(isValidShopDomain, "Enter a valid .myshopify.com domain"),
 });
 
-/** Entry point for installing the app on a store. */
-shopifyRouter.get(
-  "/install",
+/**
+ * Begins an install for the signed-in merchant account. Returns the URL rather
+ * than redirecting, because the browser must navigate at the top level and a
+ * fetch can't carry the admin token through a redirect chain.
+ *
+ * The merchant id rides along in the signed `state` so the callback links the
+ * store to this account instead of creating an orphan one with no users.
+ */
+shopifyRouter.post(
+  "/install-url",
+  requireAuth,
+  requireRole("OWNER", "ADMIN"),
   rateLimit({ windowMs: 60_000, max: 20 }),
-  validate(installSchema, "query"),
+  validate(installSchema),
   asyncHandler(async (req, res) => {
     requireConfigured();
-    const { shop } = req.query as unknown as z.infer<typeof installSchema>;
+    const { shop } = req.body as z.infer<typeof installSchema>;
 
     const nonce = newNonce();
-    // The nonce lives in a cookie so the callback can prove this redirect
-    // started here, not on an attacker's page.
+    const state = signInstallToken({
+      merchantId: req.admin!.merchantId,
+      shop,
+      nonce,
+    });
+
+    // The nonce cookie proves the callback belongs to a flow that started here,
+    // not on a page an attacker sent the merchant to.
     res.cookie(NONCE_COOKIE, nonce, {
       httpOnly: true,
       sameSite: "lax",
@@ -59,7 +84,7 @@ shopifyRouter.get(
       maxAge: 10 * 60_000,
     });
 
-    res.redirect(authorizeUrl(shop, nonce));
+    res.json({ url: authorizeUrl(shop, state) });
   }),
 );
 
@@ -77,14 +102,44 @@ shopifyRouter.get(
     if (!verifyOAuthHmac(req.query as Record<string, unknown>)) {
       throw unauthorized("Could not verify this request came from Shopify.");
     }
-    const expected = req.cookies?.[NONCE_COOKIE];
-    if (!expected || expected !== state) {
+
+    // `state` came back via Shopify, so it is untrusted until the signature
+    // checks out — and the nonce inside it must match the cookie we set.
+    const install = state ? verifyInstallToken(state) : null;
+    if (!install) {
+      throw unauthorized(
+        "This authorization link is invalid or has expired. Start again.",
+      );
+    }
+    if (install.shop !== shop) {
+      throw unauthorized("Authorization was started for a different store.");
+    }
+    /**
+     * The nonce cookie is a secondary check, not the primary one.
+     *
+     * It is set on the origin the browser called to start the install, but
+     * Shopify returns to APP_URL — a different host whenever a tunnel or a
+     * separate API domain is in play, so the browser rightly withholds it.
+     * Requiring it would make OAuth impossible in exactly those setups.
+     *
+     * CSRF protection comes from `state` itself: it is signed with our own
+     * secret, expires in ten minutes, and names both the merchant and the
+     * shop, all of which were verified above. An attacker cannot mint one.
+     * When the cookie does arrive it must still match.
+     */
+    const cookieNonce = req.cookies?.[NONCE_COOKIE];
+    if (cookieNonce && cookieNonce !== install.nonce) {
       throw unauthorized("Authorization state didn't match. Start again.");
     }
     res.clearCookie(NONCE_COOKIE);
 
     const { access_token, scope } = await exchangeCodeForToken(shop, code);
-    const merchant = await provisionMerchant(shop, access_token, scope);
+    const merchant = await provisionMerchant(
+      shop,
+      access_token,
+      scope,
+      install.merchantId,
+    );
 
     await registerWebhooks(shop, access_token);
 
@@ -163,9 +218,21 @@ shopifyRouter.get(
       where: { merchantId: req.admin!.merchantId },
     });
 
+    // Distinguish "never connected" from "connected but credentials are no
+    // longer readable", so the UI can explain what happened.
+    let needsReconnect = false;
+    if (integration?.accessToken) {
+      try {
+        decrypt(integration.accessToken);
+      } catch {
+        needsReconnect = true;
+      }
+    }
+
     res.json({
       configured: env.shopifyConfigured,
-      connected: Boolean(integration?.active),
+      connected: Boolean(integration?.active) && !needsReconnect,
+      needsReconnect,
       shop: integration?.externalShopId ?? null,
       scopes: integration?.scopes ?? null,
       connectedAt: integration?.connectedAt ?? null,
@@ -179,7 +246,14 @@ const backfillSchema = z.object({
   days: z.number().int().positive().max(365).default(90),
 });
 
-/** Lets a merchant re-pull orders without reinstalling. */
+/**
+ * Re-pulls orders without reinstalling, and re-registers webhooks first.
+ *
+ * Registration happens at install, so anything that failed then — most often
+ * because protected customer data access hadn't been granted yet — would stay
+ * broken forever otherwise. Re-registering is idempotent, so it is safe to
+ * repeat on every sync.
+ */
 shopifyRouter.post(
   "/sync",
   requireAuth,
@@ -187,9 +261,12 @@ shopifyRouter.post(
   validate(backfillSchema),
   asyncHandler(async (req, res) => {
     requireConfigured();
-    const result = await backfillOrders(req.admin!.merchantId, {
-      days: req.body.days,
-    });
+    const merchantId = req.admin!.merchantId;
+
+    const { shop, accessToken } = await getShopCredentials(merchantId);
+    await registerWebhooks(shop, accessToken);
+
+    const result = await backfillOrders(merchantId, { days: req.body.days });
     res.json(result);
   }),
 );

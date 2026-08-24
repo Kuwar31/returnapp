@@ -111,6 +111,12 @@ export const provisionMerchant = async (
   shop: string,
   accessToken: string,
   scope: string,
+  /**
+   * The merchant account that started the install. Passing it links the store
+   * to an existing account with staff users; without it a fresh merchant is
+   * created, which has no way to sign in until an invite flow exists.
+   */
+  linkToMerchantId?: string,
 ) => {
   if (!isValidShopDomain(shop)) throw badRequest("Invalid shop domain.");
 
@@ -120,16 +126,34 @@ export const provisionMerchant = async (
     SHOP_QUERY,
   );
 
-  const existing = await prisma.merchant.findFirst({
-    where: { domain: shop },
-  });
+  // Prefer the signed-in account, then any account already holding this
+  // domain, before falling back to creating one.
+  const claimed = linkToMerchantId
+    ? await prisma.merchant.findUnique({ where: { id: linkToMerchantId } })
+    : null;
+
+  if (claimed) {
+    const conflict = await prisma.merchant.findFirst({
+      where: { domain: shop, id: { not: claimed.id } },
+    });
+    if (conflict) {
+      throw badRequest(
+        `${shop} is already connected to another account on this server.`,
+      );
+    }
+  }
+
+  const existing =
+    claimed ?? (await prisma.merchant.findFirst({ where: { domain: shop } }));
 
   const merchant = existing
     ? await prisma.merchant.update({
         where: { id: existing.id },
         data: {
-          name: details.name,
-          email: details.email,
+          // Claim the domain, but keep the account's own name — an existing
+          // account may have been set up before the store was connected.
+          domain: shop,
+          email: existing.email ?? details.email,
           currency: details.currencyCode,
           timezone: details.ianaTimezone,
           status: "ACTIVE",
@@ -176,8 +200,44 @@ export const provisionMerchant = async (
     },
   });
 
+  // A linked account may predate this code (or have been created by a bare
+  // install), so make sure the portal has a policy and reasons to work with.
+  await ensurePortalDefaults(merchant.id);
+
   logger.info({ shop, merchantId: merchant.id }, "Shopify store connected");
   return merchant;
+};
+
+/** Guarantees the rows the shopper portal cannot function without. */
+const ensurePortalDefaults = async (merchantId: string) => {
+  const hasPolicy = await prisma.returnPolicy.findFirst({
+    where: { merchantId, isDefault: true },
+    select: { id: true },
+  });
+  if (!hasPolicy) {
+    await prisma.returnPolicy.create({
+      data: {
+        merchantId,
+        name: "Standard policy",
+        isDefault: true,
+        returnWindowDays: 30,
+        windowStartsFrom: "DELIVERY",
+      },
+    });
+  }
+
+  const reasonCount = await prisma.returnReason.count({ where: { merchantId } });
+  if (reasonCount === 0) {
+    await prisma.returnReason.createMany({
+      data: DEFAULT_REASONS.map((r) => ({ merchantId, ...r })),
+    });
+  }
+
+  await prisma.portalBranding.upsert({
+    where: { merchantId },
+    update: {},
+    create: { merchantId },
+  });
 };
 
 const WEBHOOK_CREATE = `#graphql

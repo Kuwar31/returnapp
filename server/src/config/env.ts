@@ -37,6 +37,22 @@ const schema = z.object({
     .string()
     .regex(/^[0-9a-fA-F]{64}$/, "ENCRYPTION_KEY must be 64 hex characters")
     .optional(),
+
+  // --- Email ---
+  // Leave SMTP_HOST unset in development: mail is then written to
+  // server/.mail/ for inspection instead of being sent.
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  // True for port 465 (implicit TLS); false for 587 (STARTTLS).
+  SMTP_SECURE: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
+  MAIL_FROM: z.string().default("Returns <returns@example.com>"),
+  // Where shopper-facing links point. Defaults to the first CORS origin.
+  PORTAL_BASE_URL: z.string().url().optional(),
 });
 
 const parsed = schema.safeParse(process.env);
@@ -64,14 +80,29 @@ if (!shopifyConfigured) {
   );
 }
 
+const corsOrigins = raw.CORS_ORIGINS.split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+const smtpConfigured = Boolean(raw.SMTP_HOST);
+
+if (!smtpConfigured) {
+  console.warn(
+    "[config] SMTP is not configured — emails will be written to " +
+      "server/.mail/ instead of sent. Set SMTP_HOST to send for real.",
+  );
+}
+
 export const env = {
   ...raw,
   isProduction: raw.NODE_ENV === "production",
   isDevelopment: raw.NODE_ENV === "development",
-  corsOrigins: raw.CORS_ORIGINS.split(",")
-    .map((o) => o.trim())
-    .filter(Boolean),
+  corsOrigins,
   shopifyConfigured,
+  smtpConfigured,
+  // Shopper links must resolve in a browser, so fall back to the client origin.
+  portalBaseUrl:
+    raw.PORTAL_BASE_URL ?? corsOrigins[0] ?? "http://localhost:5173",
 };
 
 export type Env = typeof env;

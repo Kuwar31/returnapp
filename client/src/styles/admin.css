@@ -308,3 +308,910 @@ table.data tbody tr:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------- return detail: header ---------- */
+
+.rhead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin: 6px 0 18px;
+}
+
+.rhead__title {
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.rhead__title span {
+  color: var(--accent);
+}
+
+.rhead__meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.chip {
+  padding: 2px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.rhead__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rbanner {
+  margin-bottom: 18px;
+}
+
+/* ---------- return detail: item rows ---------- */
+
+.panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.panel__head h2 {
+  margin-bottom: 0;
+}
+
+.restock-all {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.panel--link {
+  display: block;
+  font-weight: 600;
+  font-size: 14px;
+  text-decoration: none;
+  color: var(--accent);
+}
+
+.ritem {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.ritem:last-of-type {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+/* A rejected or partly-rejected line is the one that will be questioned later,
+   so it stays visually distinct from the ones that passed untouched. */
+.ritem--rejected,
+.ritem--partial {
+  border-radius: var(--radius);
+  padding: 16px 14px;
+  margin: 8px -14px;
+  border-bottom: none;
+}
+
+.ritem--rejected {
+  background: var(--danger-bg);
+}
+
+.ritem--partial {
+  background: var(--warn-bg);
+}
+
+.ritem__head {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.ritem__thumb {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: #f0f0f1;
+  flex-shrink: 0;
+}
+
+.ritem__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.ritem__title {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+.ritem__meta {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.ritem__right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.ritem__price {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.ritem__restock {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.ritem__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.ritem__action {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.ritem__action:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.ritem__action:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.ritem__action--danger {
+  color: var(--danger-fg);
+}
+
+/* "Change to keep" sits at the far right of the row, as in Loop. */
+.ritem__action--right {
+  margin-left: auto;
+}
+
+.ritem__action--right.is-active {
+  color: var(--success-fg);
+}
+
+.ritem__units {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.unit-picker {
+  display: inline-flex;
+  gap: 4px;
+}
+
+/* One button per unit, including zero — for a line holding several of the same
+   item, where "how many of these six" is a real question. */
+.unit {
+  min-width: 30px;
+  height: 28px;
+  padding: 0 7px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.unit:hover:not(:disabled) {
+  border-color: var(--text-subtle);
+}
+
+.unit:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.unit.is-selected {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.ritem__reason {
+  margin-top: 14px;
+  font-size: 13px;
+}
+
+.ritem__reason-label {
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.ritem__note {
+  margin-top: 12px;
+}
+
+.ritem__note input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 13px;
+}
+
+/* ---------- return detail: sidebar ---------- */
+
+.shopper__name {
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.shopper__email {
+  font-size: 14px;
+  color: var(--accent);
+}
+
+.shopper__stats {
+  margin-top: 10px;
+  font-size: 14px;
+}
+
+.shopper__rate {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+@media (max-width: 720px) {
+  .ritem__actions {
+    gap: 12px;
+  }
+
+  .ritem__action--right {
+    margin-left: 0;
+  }
+}
+
+/* ==========================================================================
+   Visual pass
+   --------------------------------------------------------------------------
+   The structure was right but the surface read as a dense internal tool. What
+   separates that from a product like Loop is mostly restraint: a warmer ground,
+   fewer competing greys, a bigger type scale and considerably more air.
+
+   Scoped to `.admin` on purpose — the shopper portal carries the merchant's own
+   brand colour, and none of this should leak into it.
+   ========================================================================== */
+
+.admin {
+  /* Warm off-white rather than cool grey; white cards sit on it without the
+     blue-ish cast that makes an interface feel like a spreadsheet. */
+  --bg: #faf9f7;
+  --surface: #ffffff;
+  /* Sidebar cards recede against the main column instead of competing. */
+  --surface-muted: #f6f5f2;
+  --border: #e9e7e2;
+  --border-strong: #d6d3cc;
+
+  --text: #1a1a1c;
+  --text-muted: #5f6368;
+  --text-subtle: #8a8d93;
+
+  /* One accent, used for primary actions and links only. */
+  --accent: #1f5fd0;
+  --accent-contrast: #ffffff;
+  --accent-soft: #eef3fd;
+
+  --radius-sm: 8px;
+  --radius: 14px;
+
+  background: var(--bg);
+}
+
+.admin__sidebar {
+  background: var(--surface);
+  padding: 24px 14px;
+}
+
+.admin__nav a.is-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.admin__nav a:hover {
+  background: #f2f1ee;
+}
+
+.admin__main {
+  padding: 32px 40px 80px;
+  max-width: 1360px;
+}
+
+/* ---------- surfaces ---------- */
+
+.panel {
+  border-radius: var(--radius);
+  padding: 26px 28px;
+  box-shadow: none;
+}
+
+.panel + .panel {
+  margin-top: 20px;
+}
+
+.panel h2 {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-bottom: 16px;
+}
+
+/* The right rail is context, not workspace — tinting it says so without
+   needing a heading or a rule to separate the columns. */
+.detail-grid > div:last-child .panel {
+  background: var(--surface-muted);
+  border-color: transparent;
+}
+
+.detail-grid {
+  gap: 24px;
+}
+
+/* ---------- header ---------- */
+
+.rhead {
+  margin: 10px 0 24px;
+}
+
+.rhead__title {
+  font-size: 32px;
+  letter-spacing: -0.025em;
+}
+
+.rhead__meta {
+  margin-top: 10px;
+  font-size: 13.5px;
+}
+
+.chip {
+  background: var(--surface);
+  border-color: var(--border-strong);
+  color: var(--text-muted);
+}
+
+/* ---------- item rows ---------- */
+
+.ritem {
+  padding: 22px 0;
+}
+
+.ritem__thumb {
+  width: 76px;
+  height: 76px;
+  border: 1px solid var(--border);
+  background: #f4f3f0;
+}
+
+.ritem__head {
+  gap: 18px;
+}
+
+.ritem__title {
+  font-size: 15.5px;
+  line-height: 1.35;
+  margin-bottom: 6px;
+}
+
+.ritem__meta {
+  font-size: 13.5px;
+}
+
+.ritem__price {
+  font-size: 16px;
+  letter-spacing: -0.01em;
+}
+
+.ritem__actions {
+  gap: 22px;
+  margin-top: 18px;
+  padding-top: 16px;
+}
+
+.ritem__action {
+  font-size: 14px;
+}
+
+.ritem--rejected,
+.ritem--partial {
+  padding: 22px 20px;
+  margin: 10px -20px;
+}
+
+.ritem__reason {
+  margin-top: 16px;
+  padding-left: 94px;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+/* ---------- summary rows ---------- */
+
+/* Zebra striping does the work a border grid would, with less ink — the eye
+   tracks label to figure across the row without a rule to guide it. */
+.panel dl .kv {
+  padding: 10px 12px;
+  margin: 0 -12px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.panel dl .kv:nth-child(odd) {
+  background: rgba(0, 0, 0, 0.025);
+}
+
+.detail-grid > div:last-child .panel dl .kv:nth-child(odd) {
+  background: rgba(255, 255, 255, 0.6);
+}
+
+/* ---------- sidebar detail ---------- */
+
+.panel--link {
+  padding: 18px 22px;
+}
+
+.shopper__name {
+  font-size: 15px;
+}
+
+.shopper__stats {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-strong);
+  color: var(--text-muted);
+}
+
+.shopper__stats strong {
+  color: var(--text);
+}
+
+/* ---------- badges & buttons ---------- */
+
+.admin .badge {
+  padding: 5px 11px;
+  font-size: 12px;
+  letter-spacing: 0.01em;
+}
+
+.admin .badge--neutral {
+  background: #efeeea;
+}
+
+.admin .btn--sm {
+  padding: 9px 16px;
+  font-size: 13.5px;
+}
+
+.admin .btn--secondary:hover:not(:disabled) {
+  background: #f6f5f2;
+  opacity: 1;
+}
+
+.admin .alert {
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+}
+
+@media (max-width: 1000px) {
+  .admin__main {
+    padding: 24px 20px 60px;
+  }
+
+  .ritem__reason {
+    padding-left: 0;
+  }
+}
+
+/* Small status dot before a section heading — Loop's device for showing at a
+   glance which stage of the return each block belongs to. */
+.dot-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dot--open {
+  background: #16a34a;
+}
+
+.dot--done {
+  background: var(--border-strong);
+}
+
+/* Signals the title refers to a catalogue product, matching Loop. Decorative
+   until there's a storefront URL to point it at, so it stays out of the a11y
+   tree rather than announcing a link that doesn't exist. */
+.ritem__ext {
+  margin-left: 6px;
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+/* ==========================================================================
+   Second pass — matching Loop's surface more literally
+   --------------------------------------------------------------------------
+   The first pass fixed spacing and type but kept bordered cards on an almost
+   white ground, so nothing separated. Loop's trick is the opposite: a clearly
+   warm page, and cards that carry no border at all. The contrast does the work
+   a border was doing, and the page stops looking ruled.
+   ========================================================================== */
+
+.admin {
+  --bg: #fdfbf6;
+  --surface: #ffffff;
+  --surface-muted: #f4f3ef;
+  --border: #eae7df;
+}
+
+.admin__sidebar {
+  border-right: 1px solid var(--border);
+}
+
+.panel {
+  border: none;
+  border-radius: 12px;
+}
+
+/* The rail is reference material; grey keeps it quiet next to the white
+   workspace without needing a rule between the columns. */
+.detail-grid > div:last-child .panel {
+  background: var(--surface-muted);
+}
+
+/* ---------- header ---------- */
+
+.rhead {
+  margin: 12px 0 18px;
+}
+
+.rhead__title {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.rbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.rbar__left,
+.rbar__right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ---------- notice banner ---------- */
+
+.notice {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  background: #f5f1da;
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-bottom: 22px;
+  font-size: 14px;
+}
+
+.notice__icon {
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.notice__body {
+  margin-top: 3px;
+  color: var(--text-muted);
+}
+
+/* ---------- item rows ---------- */
+
+/* Five columns: picture, description, state, money, and the restock decision.
+   Keeping the checkbox in its own column — rather than tucked under the price —
+   is what lets a merchant run down the list ticking without re-reading rows. */
+.ritem__head {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto auto 24px;
+  gap: 16px;
+  align-items: start;
+}
+
+.ritem__thumb {
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+}
+
+.ritem__right {
+  display: contents;
+}
+
+.ritem__price {
+  font-size: 15px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.ritem__restock {
+  gap: 0;
+  font-size: 0;
+}
+
+.ritem__restock input {
+  width: 17px;
+  height: 17px;
+}
+
+.ritem__actions {
+  border-top: 1px solid var(--border);
+  margin-top: 16px;
+  padding-top: 16px;
+  gap: 26px;
+}
+
+.ritem__reason {
+  padding-left: 0;
+  margin-top: 18px;
+}
+
+.ritem__reason-label {
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.ritem {
+  border-bottom: 1px solid var(--border);
+  padding: 24px 0;
+}
+
+/* ---------- totals block ---------- */
+
+.tot {
+  font-size: 14px;
+}
+
+.tot__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-weight: 700;
+  padding: 6px 0 10px;
+}
+
+.tot__head--spaced {
+  margin-top: 18px;
+  border-top: 1px solid var(--border);
+  padding-top: 18px;
+}
+
+/* Tinted bands rather than ruled rows: the figure lines up with its label
+   across the width without a grid of borders competing with the numbers. */
+.tot__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 40px auto;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 14px;
+  margin-bottom: 3px;
+  background: #f4f3ef;
+  border-radius: 6px;
+  color: var(--text-muted);
+}
+
+.tot__count {
+  text-align: center;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.tot__grand {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* `.rhead` no longer holds the action buttons — they moved to their own bar —
+   so it stops being a two-column flex and lets the meta sit under the title. */
+.rhead {
+  display: block;
+}
+
+/* ---------- payout destinations ---------- */
+
+.payout {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--border);
+}
+
+.payout__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  font-size: 14px;
+}
+
+.payout__label {
+  color: var(--text-muted);
+}
+
+.payout__amount {
+  font-weight: 600;
+}
+
+.payout__note {
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: var(--text-subtle);
+}
+
+/* A raised flag should be visible in the toolbar without reading the label. */
+.btn--secondary.is-flagged {
+  background: var(--warn-bg);
+  border-color: #d8c48a;
+  color: var(--warn-fg);
+}
+
+/* ---------- return reasons editor ---------- */
+
+.rz__heading {
+  margin: 24px 0 4px;
+  font-size: 15px;
+}
+
+.rz__legend {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 190px;
+  gap: 12px;
+  padding: 0 0 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-subtle);
+}
+
+/* Label and Shopify code share the first two columns with the legend above,
+   so it stays obvious which field reports where. */
+.rz {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 190px auto auto auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Sub-reasons are indented and rendered with a rule, so the two levels read as
+   a hierarchy rather than as a flat list with odd padding. */
+.rz--d1 {
+  padding-left: 22px;
+  border-left: 2px solid var(--border);
+  margin-left: 8px;
+}
+
+/* A retired reason is still shown: it is what past returns point at, and
+   hiding it would make the merchant think it had been deleted. */
+.rz--off .rz__label,
+.rz--off .rz__code {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+
+.rz__label,
+.rz__code {
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 14px;
+  background: var(--surface);
+  min-width: 0;
+}
+
+.rz__code {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+.rz__flag {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.rz__actions {
+  display: flex;
+  gap: 12px;
+  white-space: nowrap;
+}
+
+.rz__del {
+  color: var(--danger-fg);
+}
+
+.rz__chip {
+  margin-left: 10px;
+  vertical-align: middle;
+}
+
+@media (max-width: 900px) {
+  .rz,
+  .rz__legend {
+    grid-template-columns: 1fr;
+  }
+}

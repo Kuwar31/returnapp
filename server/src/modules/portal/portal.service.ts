@@ -1,9 +1,28 @@
 import { Prisma, type ResolutionType } from "@prisma/client";
 import { badRequest, notFound, unprocessable } from "../../lib/errors.js";
+import { logger } from "../../lib/logger.js";
 import { prisma } from "../../lib/prisma.js";
 import { round2, toDecimal, ZERO } from "../../lib/money.js";
 import { evaluateOrder } from "../policy/eligibility.service.js";
-import { qualifiesForAutoApproval, quoteReturn } from "../policy/quote.service.js";
+import {
+  getReasonTree,
+  resolveGroupForProductType,
+} from "../settings/reasons.service.js";
+import {
+  qualifiesForAutoApproval,
+  quoteReturn,
+  summaryResolution,
+} from "../policy/quote.service.js";
+import { notifyInBackground } from "../email/notifications.js";
+import {
+  browseProducts,
+  getProductVariants,
+  resolveVariants,
+} from "../shopify/catalogue.service.js";
+import {
+  ensureShopifyReturn,
+  getShopifyReturnableQuantities,
+} from "../shopify/returns.service.js";
 import { generateReference } from "../returns/reference.js";
 import type { QuoteInput, SubmitInput } from "./portal.schemas.js";
 
@@ -55,6 +74,46 @@ export const lookupOrder = async (
   return order;
 };
 
+/**
+ * The image shown behind the portal.
+ *
+ * A merchant-set `heroImageUrl` always wins. Otherwise one is borrowed from the
+ * store's own catalogue — brand-appropriate by construction, needs no stock
+ * photography, and raises no licensing question. The result is written back so
+ * this costs one Shopify call per store, not one per page view.
+ *
+ * Returns null rather than throwing: the portal renders perfectly well on a
+ * plain background, so a catalogue that can't be read is not an error.
+ */
+export const resolveHeroImage = async (
+  merchantId: string,
+): Promise<string | null> => {
+  const branding = await prisma.portalBranding.findUnique({
+    where: { merchantId },
+    select: { heroImageUrl: true },
+  });
+  if (branding?.heroImageUrl) return branding.heroImageUrl;
+
+  try {
+    const { products } = await browseProducts(merchantId, { limit: 10 });
+    // Prefer a product with several variants: those tend to be real catalogue
+    // photography rather than a gift card or a placeholder.
+    const best =
+      products.find((p) => p.imageUrl && p.variants.length > 1) ??
+      products.find((p) => p.imageUrl);
+    if (!best?.imageUrl) return null;
+
+    await prisma.portalBranding.updateMany({
+      where: { merchantId },
+      data: { heroImageUrl: best.imageUrl },
+    });
+    return best.imageUrl;
+  } catch (error) {
+    logger.debug({ merchantId, error }, "No catalogue image for the portal hero");
+    return null;
+  }
+};
+
 export const getOrderEligibility = async (
   merchantId: string,
   orderId: string,
@@ -66,16 +125,93 @@ export const getOrderEligibility = async (
   if (!order) throw notFound("Order not found.");
 
   const policy = await resolvePolicy(merchantId, order.policyId);
-  const reasons = await prisma.returnReason.findMany({
-    where: { merchantId, active: true },
-    orderBy: { sortOrder: "asc" },
-  });
+
+  /**
+   * Reasons are resolved per line, not per order.
+   *
+   * A merchant words returns differently for footwear than for homeware, so
+   * each item's product type picks its group. Groups are returned once and
+   * referenced by id rather than inlined on every item — an order of six
+   * shoes would otherwise repeat the same tree six times.
+   */
+  const groupByLine = new Map<string, string>();
+  const groupsById = new Map<string, { id: string; randomizeOrder: boolean }>();
+  for (const line of order.lineItems) {
+    const group = await resolveGroupForProductType(merchantId, line.productType);
+    if (!group) continue;
+    groupByLine.set(line.id, group.id);
+    groupsById.set(group.id, {
+      id: group.id,
+      randomizeOrder: group.randomizeOrder,
+    });
+  }
+
+  const reasonGroups = await Promise.all(
+    [...groupsById.values()].map(async (g) => ({
+      id: g.id,
+      reasons: await getReasonTree(g.id, g.randomizeOrder),
+    })),
+  );
+
+  /**
+   * Ask Shopify what it will actually accept, rather than trusting our mirror.
+   *
+   * This runs here — at lookup, before the shopper picks anything — so the only
+   * items ever offered are ones Shopify will take. Consulting it later, at
+   * approval, meant discovering conflicts after the customer had been promised
+   * a return and emailed about it.
+   *
+   * Best-effort: if Shopify is unreachable we fall back to our own counts rather
+   * than blocking the portal outright. A stale offer is recoverable; an
+   * unusable returns page is not.
+   */
+  let shopifyReturnable: Map<string, number> | undefined;
+  if (order.externalId) {
+    try {
+      const fromShopify = await getShopifyReturnableQuantities(
+        merchantId,
+        order.externalId,
+      );
+      /**
+       * An empty result is ambiguous — it means either "nothing is returnable"
+       * or "Shopify has never heard of this order" (a locally seeded order, or
+       * one whose external id is stale). Treating it as zero would make every
+       * item unreturnable and take the whole portal down for that order, so an
+       * empty map is treated as *unknown* and our own counts stand.
+       *
+       * The risk this leaves is narrow: an order whose items are genuinely all
+       * returned elsewhere would still be offered, and then fail at approval —
+       * which is the behaviour we had before consulting Shopify at all.
+       */
+      if (fromShopify.size > 0) {
+        shopifyReturnable = fromShopify;
+      } else {
+        logger.debug(
+          { merchantId, orderId: order.id },
+          "Shopify reported no returnable fulfillments; using local counts",
+        );
+      }
+    } catch (error) {
+      logger.warn(
+        { merchantId, orderId: order.id, error },
+        "Could not read returnable quantities from Shopify; using local counts",
+      );
+    }
+  }
+
+  const eligibility = evaluateOrder(order, policy, new Date(), shopifyReturnable);
 
   return {
     order,
     policy,
-    reasons,
-    eligibility: evaluateOrder(order, policy),
+    reasonGroups,
+    eligibility: {
+      ...eligibility,
+      items: eligibility.items.map((item) => ({
+        ...item,
+        reasonGroupId: groupByLine.get(item.id) ?? null,
+      })),
+    },
   };
 };
 
@@ -99,12 +235,21 @@ const resolveSelections = async (
       `This order is outside the ${policy.returnWindowDays}-day return window.`,
     );
   }
-  if (!eligibility.allowedResolutions.includes(input.resolution)) {
-    throw badRequest("That resolution isn't offered for this order.");
-  }
-
   const linesById = new Map(order.lineItems.map((l) => [l.id, l]));
   const eligibleById = new Map(eligibility.items.map((i) => [i.id, i]));
+
+  /**
+   * Selections are articles, so the same line legitimately appears several
+   * times. The returnable limit therefore has to be checked against how many
+   * articles were chosen in total, not against each one on its own.
+   */
+  const chosenPerLine = new Map<string, number>();
+  for (const selection of input.items) {
+    chosenPerLine.set(
+      selection.orderLineItemId,
+      (chosenPerLine.get(selection.orderLineItemId) ?? 0) + 1,
+    );
+  }
 
   const resolved = input.items.map((selection) => {
     const line = linesById.get(selection.orderLineItemId);
@@ -117,24 +262,99 @@ const resolveSelections = async (
         evaluated.ineligibleReason ?? `${line.title} can't be returned.`,
       );
     }
-    if (selection.quantity > evaluated.returnableQuantity) {
+    if ((chosenPerLine.get(line.id) ?? 0) > evaluated.returnableQuantity) {
       throw unprocessable(
         `You can only return ${evaluated.returnableQuantity} of ${line.title}.`,
+      );
+    }
+    // Each line carries its own resolution now, so each is checked against the
+    // policy separately — a shopper can't smuggle in an option this store
+    // doesn't offer by attaching it to one item out of several.
+    if (!eligibility.allowedResolutions.includes(selection.resolution)) {
+      throw badRequest(
+        `"${line.title}" can't be resolved that way for this order.`,
       );
     }
     return { line, selection };
   });
 
-  return { order, policy, resolved };
+  /**
+   * Price every chosen replacement from Shopify, never from the request.
+   * One round trip for all of them, and it doubles as an availability check.
+   */
+  const variantIds = input.items
+    .map((i) => i.exchange?.variantId)
+    .filter((v): v is string => Boolean(v));
+  const variants = variantIds.length
+    ? await resolveVariants(merchantId, variantIds)
+    : new Map();
+
+  for (const item of input.items) {
+    if (item.exchange && !variants.has(item.exchange.variantId)) {
+      throw badRequest("One of the exchange options is no longer available.");
+    }
+  }
+
+  return { order, policy, resolved, variants };
 };
 
-const exchangeValueOf = (input: SubmitInput): Prisma.Decimal =>
-  round2(
-    input.exchangeItems.reduce(
-      (sum, item) => sum.add(toDecimal(item.unitPrice).mul(item.quantity)),
-      ZERO,
-    ),
-  );
+/**
+ * Exchange options for one returned item: the other variants of the same
+ * product, which covers the "wrong size" case that dominates real exchanges.
+ */
+export const getExchangeOptions = async (
+  merchantId: string,
+  orderId: string,
+  orderLineItemId: string,
+) => {
+  const line = await prisma.orderLineItem.findFirst({
+    where: { id: orderLineItemId, orderId },
+  });
+  if (!line) throw notFound("That item isn't part of this order.");
+
+  if (!line.productId) {
+    // Nothing to swap for — the item didn't come from Shopify, or predates
+    // product ids being captured during sync.
+    return { product: null, variants: [], currentVariantId: line.variantId };
+  }
+
+  const product = await getProductVariants(merchantId, line.productId);
+  return {
+    product: product ? { id: product.id, title: product.title } : null,
+    variants: product?.variants ?? [],
+    // Lets the picker mark the size they already have.
+    currentVariantId: line.variantId,
+  };
+};
+
+export const browseExchangeProducts = (
+  merchantId: string,
+  { search, cursor }: { search?: string; cursor?: string },
+) => browseProducts(merchantId, { search, cursor });
+
+/**
+ * Turns validated selections into priced quote lines.
+ *
+ * Shared by the live estimate and by submit, so the figures a shopper is shown
+ * are computed by exactly the same code that persists them.
+ */
+const toQuoteLines = (
+  resolved: Array<{ line: { unitPrice: Prisma.Decimal }; selection: QuoteInput["items"][number] }>,
+  variants: Map<string, { price: number }>,
+) =>
+  resolved.map(({ line, selection }) => {
+    const chosen = selection.exchange
+      ? variants.get(selection.exchange.variantId)
+      : undefined;
+    return {
+      unitPrice: toDecimal(line.unitPrice),
+      quantity: 1,
+      resolution: selection.resolution as ResolutionType,
+      exchangeValue: chosen
+        ? round2(toDecimal(chosen.price).mul(selection.exchange!.quantity))
+        : ZERO,
+    };
+  });
 
 /** Live estimate shown as the shopper picks items — nothing is persisted. */
 export const quoteSelection = async (
@@ -142,29 +362,34 @@ export const quoteSelection = async (
   orderId: string,
   input: QuoteInput,
 ) => {
-  const { policy, resolved } = await resolveSelections(
+  const { policy, resolved, variants } = await resolveSelections(
     merchantId,
     orderId,
     input,
   );
 
   const quote = quoteReturn({
-    lines: resolved.map(({ line, selection }) => ({
-      unitPrice: toDecimal(line.unitPrice),
-      quantity: selection.quantity,
-    })),
+    lines: toQuoteLines(resolved, variants),
     policy,
-    resolution: input.resolution as ResolutionType,
   });
 
   return {
-    currency: policy ? resolved[0].line.currency : "USD",
+    currency: resolved[0]?.line.currency ?? "USD",
     itemsSubtotal: quote.itemsSubtotal.toNumber(),
     bonusCredit: quote.bonusCredit.toNumber(),
     restockingFee: quote.restockingFee.toNumber(),
-    shippingFee: quote.shippingFee.toNumber(),
     estimatedTotal: quote.estimatedTotal.toNumber(),
     amountDue: quote.amountDue.toNumber(),
+    // Per-item breakdown so the portal can show each line's own outcome.
+    lines: quote.lines.map((l, i) => ({
+      orderLineItemId: resolved[i].selection.orderLineItemId,
+      resolution: l.resolution,
+      itemsSubtotal: l.itemsSubtotal.toNumber(),
+      bonusCredit: l.bonusCredit.toNumber(),
+      exchangeValue: l.exchangeValue.toNumber(),
+      credited: l.credited.toNumber(),
+      due: l.due.toNumber(),
+    })),
   };
 };
 
@@ -173,30 +398,26 @@ export const submitReturn = async (
   orderId: string,
   input: SubmitInput,
 ) => {
-  const { order, policy, resolved } = await resolveSelections(
+  const { order, policy, resolved, variants } = await resolveSelections(
     merchantId,
     orderId,
     input,
   );
 
-  const exchangeValue = exchangeValueOf(input);
   const quote = quoteReturn({
-    lines: resolved.map(({ line, selection }) => ({
-      unitPrice: toDecimal(line.unitPrice),
-      quantity: selection.quantity,
-    })),
+    lines: toQuoteLines(resolved, variants),
     policy,
-    resolution: input.resolution as ResolutionType,
-    exchangeValue,
   });
 
   const reasons = await prisma.returnReason.findMany({
     where: { merchantId, active: true },
   });
-  const reasonByCode = new Map(reasons.map((r) => [r.code, r]));
+  // Keyed by id, not code: several reasons legitimately share a Shopify code,
+  // so a code no longer identifies which one the shopper actually chose.
+  const reasonById = new Map(reasons.map((r) => [r.id, r]));
 
   for (const { selection } of resolved) {
-    const reason = reasonByCode.get(selection.reasonCode);
+    const reason = reasonById.get(selection.reasonId);
     if (!reason) throw badRequest("Choose a valid reason for each item.");
     if (reason.requiresNote && !selection.reasonNote) {
       throw badRequest(`Add a note explaining "${reason.label}".`);
@@ -210,7 +431,7 @@ export const submitReturn = async (
 
   // One transaction so a partial write can't leave an order's returned
   // quantities out of step with the request that caused them.
-  return prisma.$transaction(async (tx) => {
+  const created = await prisma.$transaction(async (tx) => {
     const created = await tx.returnRequest.create({
       data: {
         merchantId,
@@ -218,7 +439,14 @@ export const submitReturn = async (
         policyId: policy.id,
         reference: generateReference(),
         status: autoApproved ? "APPROVED" : "SUBMITTED",
-        resolution: input.resolution as ResolutionType,
+        // A single label for lists and reporting; the per-line resolutions
+        // below are what actually drive payouts.
+        resolution: summaryResolution(
+          quote.lines.map((l) => ({
+            resolution: l.resolution,
+            itemsSubtotal: l.itemsSubtotal,
+          })),
+        ),
         customerEmail: order.email,
         customerName: order.customerName,
         customerNote: input.customerNote ?? null,
@@ -226,31 +454,18 @@ export const submitReturn = async (
         itemsSubtotal: quote.itemsSubtotal,
         bonusCredit: quote.bonusCredit,
         restockingFee: quote.restockingFee,
-        shippingFee: quote.shippingFee,
         estimatedTotal: quote.estimatedTotal,
         ...(autoApproved ? { reviewedAt: new Date() } : {}),
         lineItems: {
           create: resolved.map(({ line, selection }) => ({
             orderLineItemId: line.id,
-            reasonId: reasonByCode.get(selection.reasonCode)!.id,
-            quantity: selection.quantity,
+            reasonId: selection.reasonId,
+            quantity: 1,
             reasonNote: selection.reasonNote ?? null,
             photoUrls: selection.photoUrls,
+            resolution: selection.resolution as ResolutionType,
             unitPrice: toDecimal(line.unitPrice),
-            lineTotal: round2(toDecimal(line.unitPrice).mul(selection.quantity)),
-          })),
-        },
-        exchangeItems: {
-          create: input.exchangeItems.map((item) => ({
-            productId: item.productId ?? null,
-            variantId: item.variantId,
-            sku: item.sku ?? null,
-            title: item.title,
-            variantTitle: item.variantTitle ?? null,
-            imageUrl: item.imageUrl ?? null,
-            quantity: item.quantity,
-            unitPrice: toDecimal(item.unitPrice),
-            priceDifference: ZERO,
+            lineTotal: round2(toDecimal(line.unitPrice)),
           })),
         },
         events: {
@@ -278,17 +493,90 @@ export const submitReturn = async (
       },
     });
 
-    // Reserve the units so a second request can't return the same item twice.
-    for (const { line, selection } of resolved) {
-      await tx.orderLineItem.update({
-        where: { id: line.id },
-        data: { returnedQuantity: { increment: selection.quantity } },
+    /**
+     * Exchanges are created after the lines exist, because each one points at
+     * the specific line it replaces. Prices come from `variants` — resolved
+     * from Shopify — never from the request body.
+     */
+    const lineByOrderLineItemId = new Map(
+      created.lineItems.map((li) => [li.orderLineItemId, li]),
+    );
+    for (const { selection } of resolved) {
+      if (!selection.exchange) continue;
+      const variant = variants.get(selection.exchange.variantId)!;
+      const line = lineByOrderLineItemId.get(selection.orderLineItemId)!;
+      await tx.exchangeItem.create({
+        data: {
+          returnRequestId: created.id,
+          returnLineItemId: line.id,
+          productId: variant.productId,
+          variantId: variant.id,
+          sku: variant.sku,
+          title: variant.title,
+          variantTitle: variant.variantTitle,
+          imageUrl: variant.imageUrl,
+          quantity: selection.exchange.quantity,
+          unitPrice: toDecimal(variant.price),
+          /**
+           * What swapping this line costs, per unit: positive means the shopper
+           * upgraded and owes the difference, negative means they traded down.
+           * Recorded here because the confirmation page and the admin both need
+           * to state the balance after the quote object is gone.
+           */
+          priceDifference: round2(
+            toDecimal(variant.price).sub(line.unitPrice),
+          ),
+        },
       });
     }
 
-    return created;
+    // Reserve the units so a second request can't return the same item twice.
+    // One increment per article, so three units of a line reserve three.
+    for (const { line } of resolved) {
+      await tx.orderLineItem.update({
+        where: { id: line.id },
+        data: { returnedQuantity: { increment: 1 } },
+      });
+    }
+
+    return tx.returnRequest.findUniqueOrThrow({
+      where: { id: created.id },
+      include: {
+        lineItems: { include: { reason: true, orderLineItem: true } },
+        exchangeItems: true,
+        shipment: true,
+        events: { orderBy: { createdAt: "asc" } },
+      },
+    });
   });
+
+  // An auto-approved request never passes through the admin approve endpoint,
+  // so it has to mirror itself into Shopify here — otherwise every return under
+  // the auto-approve threshold would exist only in our database.
+  if (created.status === "APPROVED") {
+    await ensureShopifyReturn(merchantId, created.id);
+  }
+
+  // Only once the transaction has committed — otherwise a rollback would still
+  // have emailed the shopper about a return that doesn't exist. Auto-approved
+  // requests skip straight to the approval email.
+  notifyInBackground(
+    created.id,
+    created.status === "APPROVED" ? "APPROVED" : "SUBMITTED",
+  );
+
+  return created;
 };
+
+/** Everything the shopper's confirmation page renders. */
+const confirmationInclude = {
+  order: true,
+  lineItems: { include: { reason: true, orderLineItem: true } },
+  exchangeItems: true,
+  shipment: true,
+  events: { orderBy: { createdAt: "asc" } },
+  feedback: true,
+} satisfies Prisma.ReturnRequestInclude;
 
 export const getReturnByReference = async (
   merchantId: string,
@@ -297,14 +585,85 @@ export const getReturnByReference = async (
 ) => {
   const request = await prisma.returnRequest.findFirst({
     where: { merchantId, reference },
-    include: {
-      lineItems: { include: { reason: true, orderLineItem: true } },
-      exchangeItems: true,
-      shipment: true,
-      events: { orderBy: { createdAt: "asc" } },
-    },
+    include: confirmationInclude,
   });
   if (!request) return null;
   if (request.customerEmail.toLowerCase() !== email.toLowerCase()) return null;
   return request;
+};
+
+/**
+ * Shopper-initiated cancellation.
+ *
+ * Deliberately limited to returns the store hasn't approved yet. Once approved
+ * a Shopify Return object exists, the label may already be out, and unwinding
+ * that is a merchant decision — so past that point this refuses and points the
+ * shopper at support rather than leaving the two systems disagreeing.
+ */
+export const cancelReturnByReference = async (
+  merchantId: string,
+  reference: string,
+  email: string,
+) => {
+  const request = await getReturnByReference(merchantId, reference, email);
+  if (!request) return null;
+
+  if (request.status === "CANCELLED") return request;
+
+  if (request.status !== "SUBMITTED") {
+    throw unprocessable(
+      "This return has already been reviewed, so it can no longer be cancelled here. Please contact the store.",
+    );
+  }
+
+  return prisma.$transaction(async (tx) => {
+    // Written before the final read so the response already carries the event.
+    await tx.returnEvent.create({
+      data: {
+        returnRequestId: request.id,
+        type: "STATUS_CHANGED",
+        message: "Cancelled by the customer from the returns portal",
+        metadata: { from: request.status, to: "CANCELLED", source: "portal" },
+      },
+    });
+
+    return tx.returnRequest.update({
+      where: { id: request.id },
+      data: { status: "CANCELLED" },
+      include: confirmationInclude,
+    });
+  });
+};
+
+/**
+ * Stores the confirmation-page survey.
+ *
+ * Upserted rather than appended: a shopper who revises a score is correcting
+ * one answer, and counting both would skew the averages the merchant reads.
+ */
+export const saveReturnFeedback = async (
+  merchantId: string,
+  reference: string,
+  email: string,
+  input: { easeScore?: number; repeatScore?: number; comment?: string },
+) => {
+  const request = await getReturnByReference(merchantId, reference, email);
+  if (!request) return null;
+
+  const data = {
+    easeScore: input.easeScore ?? null,
+    repeatScore: input.repeatScore ?? null,
+    comment: input.comment?.trim() || null,
+  };
+
+  await prisma.returnFeedback.upsert({
+    where: { returnRequestId: request.id },
+    create: { returnRequestId: request.id, ...data },
+    update: data,
+  });
+
+  return prisma.returnRequest.findUniqueOrThrow({
+    where: { id: request.id },
+    include: confirmationInclude,
+  });
 };

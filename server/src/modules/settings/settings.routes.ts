@@ -5,6 +5,8 @@ import { prisma } from "../../lib/prisma.js";
 import { asyncHandler } from "../../middleware/asyncHandler.js";
 import { requireRole } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
+import { SHOPIFY_RETURN_REASONS } from "../shopify/returns.graphql.js";
+import * as reasonsService from "./reasons.service.js";
 
 export const settingsRouter = Router();
 
@@ -22,19 +24,17 @@ const serializePolicy = (policy: {
   requirePhotoProof: boolean;
   allowRefund: boolean;
   allowStoreCredit: boolean;
+  allowGiftCard: boolean;
   allowExchange: boolean;
   allowInstantExchange: boolean;
   bonusCreditPercent: unknown;
   restockingFeePercent: unknown;
-  returnShippingFee: unknown;
-  waiveShippingOnCredit: boolean;
   autoApprove: boolean;
   autoApproveUnder: unknown;
 }) => ({
   ...policy,
   bonusCreditPercent: Number(policy.bonusCreditPercent),
   restockingFeePercent: Number(policy.restockingFeePercent),
-  returnShippingFee: Number(policy.returnShippingFee),
   autoApproveUnder:
     policy.autoApproveUnder === null ? null : Number(policy.autoApproveUnder),
 });
@@ -58,12 +58,11 @@ const policySchema = z.object({
   requirePhotoProof: z.boolean(),
   allowRefund: z.boolean(),
   allowStoreCredit: z.boolean(),
+  allowGiftCard: z.boolean(),
   allowExchange: z.boolean(),
   allowInstantExchange: z.boolean(),
   bonusCreditPercent: z.number().min(0).max(100),
   restockingFeePercent: z.number().min(0).max(100),
-  returnShippingFee: z.number().min(0),
-  waiveShippingOnCredit: z.boolean(),
   autoApprove: z.boolean(),
   autoApproveUnder: z.number().min(0).nullable(),
 });
@@ -85,14 +84,119 @@ settingsRouter.patch(
   }),
 );
 
+/**
+ * Reason groups with their full trees — what the settings screen renders.
+ *
+ * Returned whole rather than paged: a merchant has a handful of groups and a
+ * few dozen reasons, and editing them is much easier against one payload than
+ * against a lazily-loaded tree.
+ */
 settingsRouter.get(
-  "/reasons",
+  "/reason-groups",
   asyncHandler(async (req, res) => {
-    const reasons = await prisma.returnReason.findMany({
-      where: { merchantId: req.admin!.merchantId },
-      orderBy: { sortOrder: "asc" },
+    res.json({
+      groups: await reasonsService.listGroups(req.admin!.merchantId),
+      /** The only codes Shopify accepts; the editor offers exactly these. */
+      shopifyCodes: [...SHOPIFY_RETURN_REASONS].sort(),
     });
-    res.json(reasons);
+  }),
+);
+
+const groupSchema = z.object({
+  title: z.string().trim().min(1).max(80),
+  productTypes: z.array(z.string().trim().min(1).max(80)).max(50).optional(),
+  randomizeOrder: z.boolean().optional(),
+});
+
+settingsRouter.post(
+  "/reason-groups",
+  requireRole("OWNER", "ADMIN"),
+  validate(groupSchema),
+  asyncHandler(async (req, res) => {
+    const group = await reasonsService.createGroup(
+      req.admin!.merchantId,
+      req.body,
+    );
+    res.status(201).json(group);
+  }),
+);
+
+settingsRouter.patch(
+  "/reason-groups/:id",
+  requireRole("OWNER", "ADMIN"),
+  validate(groupSchema.partial()),
+  asyncHandler(async (req, res) => {
+    res.json(
+      await reasonsService.updateGroup(
+        req.admin!.merchantId,
+        req.params.id,
+        req.body,
+      ),
+    );
+  }),
+);
+
+settingsRouter.delete(
+  "/reason-groups/:id",
+  requireRole("OWNER", "ADMIN"),
+  asyncHandler(async (req, res) => {
+    await reasonsService.deleteGroup(req.admin!.merchantId, req.params.id);
+    res.status(204).end();
+  }),
+);
+
+const reasonSchema = z.object({
+  groupId: z.string().min(1),
+  parentId: z.string().min(1).nullable().optional(),
+  code: z.string().trim().min(1).max(40),
+  label: z.string().trim().min(1).max(120),
+  requiresNote: z.boolean().optional(),
+  requiresPhoto: z.boolean().optional(),
+});
+
+settingsRouter.post(
+  "/reasons",
+  requireRole("OWNER", "ADMIN"),
+  validate(reasonSchema),
+  asyncHandler(async (req, res) => {
+    const reason = await reasonsService.createReason(
+      req.admin!.merchantId,
+      req.body,
+    );
+    res.status(201).json(reason);
+  }),
+);
+
+settingsRouter.patch(
+  "/reasons/:id",
+  requireRole("OWNER", "ADMIN"),
+  validate(
+    reasonSchema
+      .omit({ groupId: true, parentId: true })
+      .partial()
+      .extend({
+        active: z.boolean().optional(),
+        sortOrder: z.number().int().min(0).max(999).optional(),
+      }),
+  ),
+  asyncHandler(async (req, res) => {
+    res.json(
+      await reasonsService.updateReason(
+        req.admin!.merchantId,
+        req.params.id,
+        req.body,
+      ),
+    );
+  }),
+);
+
+settingsRouter.delete(
+  "/reasons/:id",
+  requireRole("OWNER", "ADMIN"),
+  asyncHandler(async (req, res) => {
+    res.json(
+      await reasonsService.deleteReason(req.admin!.merchantId, req.params.id),
+    );
   }),
 );
 

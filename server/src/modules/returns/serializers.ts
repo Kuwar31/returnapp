@@ -1,7 +1,10 @@
 import type {
+  ExchangeDraftOrder,
   ExchangeItem,
+  Order,
   OrderLineItem,
   ReturnEvent,
+  ReturnFeedback,
   ReturnLineItem,
   ReturnReason,
   ReturnRequest,
@@ -17,9 +20,64 @@ type FullReturn = ReturnRequest & {
       orderLineItem: OrderLineItem | null;
     }
   >;
+  order?: Order | null;
   exchangeItems?: ExchangeItem[];
   shipment?: ReturnShipment | null;
   events?: ReturnEvent[];
+  feedback?: ReturnFeedback | null;
+  exchangeDraft?: ExchangeDraftOrder | null;
+};
+
+/** The normalized postal address the confirmation page prints. */
+export interface SerializedAddress {
+  name: string | null;
+  phone: string | null;
+  /** Street through country, already ordered for display. */
+  lines: string[];
+}
+
+/**
+ * Flattens a stored shipping address into printable lines.
+ *
+ * Orders arrive from two places with two shapes — webhooks give REST's
+ * snake_case (`address1`, `province_code`), the GraphQL backfill gives
+ * camelCase — and rows predating either normalization are still in the table.
+ * Reading both here keeps that mess out of the client.
+ */
+const serializeAddress = (value: unknown): SerializedAddress | null => {
+  if (!value || typeof value !== "object") return null;
+  const a = value as Record<string, unknown>;
+  const str = (...keys: string[]): string | null => {
+    for (const key of keys) {
+      const found = a[key];
+      if (typeof found === "string" && found.trim()) return found.trim();
+    }
+    return null;
+  };
+
+  const street = [str("address1"), str("address2")].filter(Boolean);
+  const region = [
+    str("city"),
+    str("provinceCode", "province_code", "province"),
+    str("zip", "postalCode", "postal_code"),
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const lines = [...street, region, str("country", "countryCode", "country_code")]
+    .filter((line): line is string => Boolean(line));
+
+  if (lines.length === 0) return null;
+
+  const fullName = [str("firstName", "first_name"), str("lastName", "last_name")]
+    .filter(Boolean)
+    .join(" ");
+
+  return {
+    name: str("name") ?? (fullName || null),
+    phone: str("phone"),
+    lines,
+  };
 };
 
 /**
@@ -42,17 +100,27 @@ export const serializeReturn = (request: FullReturn) => ({
     itemsSubtotal: serializeMoney(request.itemsSubtotal),
     bonusCredit: serializeMoney(request.bonusCredit),
     restockingFee: serializeMoney(request.restockingFee),
-    shippingFee: serializeMoney(request.shippingFee),
     estimatedTotal: serializeMoney(request.estimatedTotal),
     settledTotal: serializeMoney(request.settledTotal),
   },
+  flaggedAt: request.flaggedAt,
+  flagReason: request.flagReason,
   submittedAt: request.submittedAt,
   reviewedAt: request.reviewedAt,
   receivedAt: request.receivedAt,
   resolvedAt: request.resolvedAt,
+  order: request.order
+    ? {
+        orderNumber: request.order.orderNumber,
+        placedAt: request.order.placedAt,
+        shippingAddress: serializeAddress(request.order.shippingAddress),
+      }
+    : null,
   lineItems: request.lineItems.map((item) => ({
     id: item.id,
     orderLineItemId: item.orderLineItemId,
+    /** Per-line, since one return can mix exchanges, refunds and credit. */
+    resolution: item.resolution,
     title: item.orderLineItem?.title ?? "",
     variantTitle: item.orderLineItem?.variantTitle ?? null,
     imageUrl: item.orderLineItem?.imageUrl ?? null,
@@ -65,6 +133,11 @@ export const serializeReturn = (request: FullReturn) => ({
     reasonNote: item.reasonNote,
     photoUrls: item.photoUrls,
     inspection: item.inspection,
+    /** Null until inspected; drives the refund and the restock once set. */
+    acceptedQuantity: item.acceptedQuantity,
+    restock: item.restock,
+    rejectionNote: item.rejectionNote,
+    keepItem: item.keepItem,
   })),
   exchangeItems:
     request.exchangeItems?.map((item) => ({
@@ -95,6 +168,32 @@ export const serializeReturn = (request: FullReturn) => ({
       message: event.message,
       createdAt: event.createdAt,
     })) ?? [],
+  feedback: request.feedback
+    ? {
+        easeScore: request.feedback.easeScore,
+        repeatScore: request.feedback.repeatScore,
+        comment: request.feedback.comment,
+      }
+    : null,
+  exchangeDraft: request.exchangeDraft
+    ? {
+        name: request.exchangeDraft.name,
+        status: request.exchangeDraft.status,
+        /**
+         * The checkout link is a bearer URL — anyone holding it can pay and
+         * claim the order — so it is only ever serialized for the admin, never
+         * on the shopper-facing portal responses.
+         */
+        invoiceUrl: request.exchangeDraft.invoiceUrl,
+        currency: request.exchangeDraft.currency,
+        itemsTotal: serializeMoney(request.exchangeDraft.itemsTotal),
+        creditApplied: serializeMoney(request.exchangeDraft.creditApplied),
+        balanceDue: serializeMoney(request.exchangeDraft.balanceDue),
+        reservedUntil: request.exchangeDraft.reservedUntil,
+        invoiceSentAt: request.exchangeDraft.invoiceSentAt,
+        completedAt: request.exchangeDraft.completedAt,
+      }
+    : null,
 });
 
 /** Trimmed shape for the admin list view. */

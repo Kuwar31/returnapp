@@ -1,8 +1,29 @@
-import type { Prisma, ReturnStatus } from "@prisma/client";
-import { notFound } from "../../lib/errors.js";
+import type { Prisma, ResolutionType, ReturnStatus } from "@prisma/client";
+import { conflict, notFound, unprocessable } from "../../lib/errors.js";
 import { prisma } from "../../lib/prisma.js";
 import { toDecimal } from "../../lib/money.js";
+import { logger } from "../../lib/logger.js";
+import { notifyInBackground } from "../email/notifications.js";
+import {
+  issueShopifyGiftCard,
+  issueShopifyStoreCredit,
+  type CreditResult,
+  type GiftCardResult,
+} from "../shopify/credit.service.js";
+import {
+  closeShopifyReturn,
+  ensureShopifyReturn,
+  getSuggestedOutcome,
+  processShopifyReturn,
+  receiveShopifyReturn,
+} from "../shopify/returns.service.js";
+import {
+  completeExchangeDraftOrder,
+  ensureExchangeDraftOrder,
+  sendExchangeInvoice,
+} from "../shopify/exchange.service.js";
 import { generateCreditCode } from "./reference.js";
+import { quoteReturn } from "../policy/quote.service.js";
 import { assertTransition, STATUS_LABELS } from "./status.js";
 
 const detailInclude = {
@@ -10,6 +31,8 @@ const detailInclude = {
   exchangeItems: true,
   shipment: true,
   events: { orderBy: { createdAt: "asc" as const } },
+  exchangeDraft: true,
+  policy: true,
 } satisfies Prisma.ReturnRequestInclude;
 
 export const listReturns = async (
@@ -47,6 +70,28 @@ export const listReturns = async (
   ]);
 
   return { total, items, page: filters.page, pageSize: filters.pageSize };
+};
+
+/**
+ * The customer's history with this store, for the sidebar.
+ *
+ * Real counts rather than a score: how much they buy and how much they send
+ * back is the signal a merchant actually reasons about when deciding whether a
+ * return smells wrong, and it needs no model behind it.
+ */
+export const getShopperStats = async (merchantId: string, email: string) => {
+  const [orderCount, returnCount] = await Promise.all([
+    prisma.order.count({
+      where: { merchantId, email: { equals: email, mode: "insensitive" } },
+    }),
+    prisma.returnRequest.count({
+      where: {
+        merchantId,
+        customerEmail: { equals: email, mode: "insensitive" },
+      },
+    }),
+  ]);
+  return { orderCount, returnCount };
 };
 
 export const getReturn = async (merchantId: string, id: string) => {
@@ -101,12 +146,12 @@ export const changeStatus = async ({
   });
 };
 
-export const approveReturn = (
+export const approveReturn = async (
   merchantId: string,
   id: string,
   actorId: string,
-) =>
-  changeStatus({
+) => {
+  await changeStatus({
     merchantId,
     id,
     to: "APPROVED",
@@ -115,13 +160,36 @@ export const approveReturn = (
     extraData: { reviewedAt: new Date(), reviewedBy: { connect: { id: actorId } } },
   });
 
-export const rejectReturn = (
+  /**
+   * Mirror the approval into Shopify so the return appears on the order.
+   *
+   * Deliberately non-fatal: the approval is already committed and the customer
+   * has been emailed, so throwing here would leave our state and the merchant's
+   * expectations at odds. The failure lands on the timeline to be retried.
+   */
+  await ensureShopifyReturn(merchantId, id);
+
+  /**
+   * Approval is when the exchange's draft order opens, and the reason it opens
+   * this early is inventory: the reservation holds the replacement while the
+   * returned parcel is in transit. Waiting until resolution would leave the
+   * shopper's chosen size sellable for the whole journey back.
+   *
+   * Also non-fatal — see ensureShopifyReturn above.
+   */
+  await ensureExchangeDraftOrder(merchantId, id);
+
+  notifyInBackground(id, "APPROVED");
+  return getReturn(merchantId, id);
+};
+
+export const rejectReturn = async (
   merchantId: string,
   id: string,
   actorId: string,
   reason: string,
-) =>
-  changeStatus({
+) => {
+  const updated = await changeStatus({
     merchantId,
     id,
     to: "REJECTED",
@@ -133,13 +201,138 @@ export const rejectReturn = (
       rejectionReason: reason,
     },
   });
+  notifyInBackground(id, "DECLINED");
+  return updated;
+};
 
-export const markReceived = (
+/**
+ * Records the merchant's inspection of one line, unit by unit.
+ *
+ * The whole point of tracking an accepted quantity separately from the
+ * requested one is that a shopper who sends back six items doesn't force an
+ * all-or-nothing decision: four can be accepted and two turned down, and every
+ * downstream figure follows the four.
+ *
+ * Only editable up to the point money moves. Once resolved the customer has
+ * already been paid against these numbers, and quietly changing them would put
+ * our books and their bank statement at odds.
+ */
+export const inspectLineItem = async (
+  merchantId: string,
+  id: string,
+  lineItemId: string,
+  actorId: string,
+  input: {
+    acceptedQuantity?: number | null;
+    restock?: boolean;
+    rejectionNote?: string | null;
+    keepItem?: boolean;
+  },
+) => {
+  const request = await getReturn(merchantId, id);
+  if (["RESOLVED", "CANCELLED", "REJECTED", "EXPIRED"].includes(request.status)) {
+    throw conflict(
+      "This return is closed, so its items can no longer be inspected.",
+    );
+  }
+
+  const line = request.lineItems.find((li) => li.id === lineItemId);
+  if (!line) throw notFound("That item isn't part of this return.");
+
+  if (
+    input.acceptedQuantity !== undefined &&
+    input.acceptedQuantity !== null &&
+    (input.acceptedQuantity < 0 || input.acceptedQuantity > line.quantity)
+  ) {
+    throw unprocessable(
+      `You can accept between 0 and ${line.quantity} of "${line.orderLineItem?.title ?? "this item"}".`,
+    );
+  }
+
+  await prisma.returnLineItem.update({
+    where: { id: lineItemId },
+    data: {
+      ...(input.acceptedQuantity !== undefined
+        ? { acceptedQuantity: input.acceptedQuantity }
+        : {}),
+      ...(input.restock !== undefined ? { restock: input.restock } : {}),
+      ...(input.rejectionNote !== undefined
+        ? { rejectionNote: input.rejectionNote }
+        : {}),
+      ...(input.keepItem !== undefined ? { keepItem: input.keepItem } : {}),
+    },
+  });
+
+  // Totals are stored, not derived on read, so they have to be rewritten
+  // whenever an accepted quantity changes — otherwise the refund button would
+  // still offer the pre-inspection figure.
+  await recalculateTotals(merchantId, id);
+
+  if (input.acceptedQuantity !== undefined) {
+    const accepted = input.acceptedQuantity;
+    await prisma.returnEvent.create({
+      data: {
+        returnRequestId: id,
+        actorId,
+        type: "ITEM_INSPECTED",
+        message:
+          accepted === null
+            ? `Inspection cleared for "${line.orderLineItem?.title ?? "item"}"`
+            : `Accepted ${accepted} of ${line.quantity} × "${line.orderLineItem?.title ?? "item"}"${
+                accepted < line.quantity && input.rejectionNote
+                  ? ` — ${input.rejectionNote}`
+                  : ""
+              }`,
+      },
+    });
+  }
+
+  return getReturn(merchantId, id);
+};
+
+/**
+ * Rewrites the stored money figures from the current accepted quantities.
+ *
+ * Lines nobody has inspected yet count at their requested quantity, so the
+ * totals before inspection match what the shopper was quoted.
+ */
+const recalculateTotals = async (merchantId: string, id: string) => {
+  const request = await prisma.returnRequest.findFirstOrThrow({
+    where: { id, merchantId },
+    include: { lineItems: { include: { exchangeItems: true } }, policy: true },
+  });
+  if (!request.policy) return;
+
+  const quote = quoteReturn({
+    policy: request.policy,
+    lines: request.lineItems.map((li) => ({
+      unitPrice: toDecimal(li.unitPrice),
+      quantity: li.acceptedQuantity ?? li.quantity,
+      resolution: li.resolution,
+      exchangeValue: li.exchangeItems.reduce(
+        (sum, ex) => sum.add(toDecimal(ex.unitPrice).mul(ex.quantity)),
+        toDecimal(0),
+      ),
+    })),
+  });
+
+  await prisma.returnRequest.update({
+    where: { id },
+    data: {
+      itemsSubtotal: quote.itemsSubtotal,
+      bonusCredit: quote.bonusCredit,
+      restockingFee: quote.restockingFee,
+      estimatedTotal: quote.estimatedTotal,
+    },
+  });
+};
+
+export const markReceived = async (
   merchantId: string,
   id: string,
   actorId: string,
-) =>
-  changeStatus({
+) => {
+  await changeStatus({
     merchantId,
     id,
     to: "RECEIVED",
@@ -148,11 +341,146 @@ export const markReceived = (
     extraData: { receivedAt: new Date() },
   });
 
+  // Tell Shopify the goods are physically back and restock them. This has to
+  // happen before any refund: Shopify tracks its own returned quantity and
+  // won't refund against items it hasn't seen come back.
+  try {
+    await receiveShopifyReturn(merchantId, id);
+  } catch (error) {
+    logger.error({ merchantId, id, error }, "Could not dispose items in Shopify");
+    await prisma.returnEvent.create({
+      data: {
+        returnRequestId: id,
+        actorId,
+        type: "STATUS_CHANGED",
+        message: `Shopify restock did not complete: ${
+          error instanceof Error ? error.message : "unknown error"
+        }`,
+      },
+    });
+  }
+
+  notifyInBackground(id, "RECEIVED");
+  return getReturn(merchantId, id);
+};
+
 /**
- * Closes out a return. Store-credit resolutions mint a credit code here;
- * refunds and exchanges will hand off to the payment/commerce integration
- * once those are wired up.
+ * Closes out a return: moves the money, then records it.
+ *
+ * For cash refunds the Shopify call happens *first* and a failure aborts the
+ * whole resolution. Doing it the other way round meant a rejected refund still
+ * marked the return RESOLVED and emailed the customer that their money was on
+ * its way — the worst possible failure mode for a returns app.
  */
+/**
+ * How much of a return goes to each destination.
+ *
+ * Recomputed from the persisted lines rather than stored, so it stays in step
+ * with the same quoting rules the shopper was shown. Without this, a mixed
+ * return would credit or gift-card the *entire* value at each destination —
+ * paying the customer several times over.
+ */
+const payoutSplit = async (merchantId: string, id: string) => {
+  const request = await prisma.returnRequest.findFirstOrThrow({
+    where: { id, merchantId },
+    include: { lineItems: { include: { exchangeItems: true } }, policy: true },
+  });
+  if (!request.policy) return new Map<ResolutionType, Prisma.Decimal>();
+
+  const quote = quoteReturn({
+    policy: request.policy,
+    lines: request.lineItems.map((li) => ({
+      unitPrice: toDecimal(li.unitPrice),
+      // Pay for what was accepted. An uninspected line falls back to what the
+      // shopper asked for, which is what they were quoted.
+      quantity: li.acceptedQuantity ?? li.quantity,
+      resolution: li.resolution,
+      exchangeValue: li.exchangeItems.reduce(
+        (sum, ex) => sum.add(toDecimal(ex.unitPrice).mul(ex.quantity)),
+        toDecimal(0),
+      ),
+    })),
+  });
+  return quote.byResolution;
+};
+
+/**
+ * Where the payout is destined, as a list the admin can render.
+ *
+ * A return can pay several ways at once now that resolution is per line —
+ * refund one item, credit another, gift-card a third — so this is a breakdown
+ * rather than a single destination.
+ */
+export const getPayoutBreakdown = async (merchantId: string, id: string) => {
+  const split = await payoutSplit(merchantId, id);
+  return [...split.entries()]
+    .filter(([, amount]) => amount.greaterThan(0))
+    .map(([resolution, amount]) => ({
+      resolution,
+      amount: amount.toNumber(),
+    }));
+};
+
+/**
+ * Merchant-side cancellation.
+ *
+ * Distinct from rejecting: a rejection is a judgement the customer is told
+ * about, a cancellation just withdraws the request — used when it was raised
+ * in error or superseded.
+ */
+export const cancelReturn = async (
+  merchantId: string,
+  id: string,
+  actorId: string,
+  reason?: string,
+) => {
+  const updated = await changeStatus({
+    merchantId,
+    id,
+    to: "CANCELLED",
+    actorId,
+    message: reason ? `Return cancelled: ${reason}` : "Return cancelled",
+  });
+  return updated;
+};
+
+/**
+ * Toggles the "needs a second look" flag.
+ *
+ * Deliberately not a status: flagging is a note between colleagues, and a
+ * flagged return should keep moving through review like any other.
+ */
+export const flagReturn = async (
+  merchantId: string,
+  id: string,
+  actorId: string,
+  reason?: string,
+) => {
+  const current = await getReturn(merchantId, id);
+  const clearing = current.flaggedAt !== null;
+
+  await prisma.returnRequest.update({
+    where: { id },
+    data: {
+      flaggedAt: clearing ? null : new Date(),
+      flagReason: clearing ? null : (reason ?? null),
+    },
+  });
+
+  await prisma.returnEvent.create({
+    data: {
+      returnRequestId: id,
+      actorId,
+      type: "NOTE_ADDED",
+      message: clearing
+        ? "Flag cleared"
+        : `Flagged for review${reason ? `: ${reason}` : ""}`,
+    },
+  });
+
+  return getReturn(merchantId, id);
+};
+
 export const resolveReturn = async (
   merchantId: string,
   id: string,
@@ -161,11 +489,65 @@ export const resolveReturn = async (
   const current = await getReturn(merchantId, id);
   assertTransition(current.status, "RESOLVED");
 
-  const amount = toDecimal(current.estimatedTotal);
+  const split = await payoutSplit(merchantId, id);
+
+  /**
+   * A return can now pay out to several destinations at once — refund one item,
+   * credit another, exchange a third — so each destination is driven by whether
+   * *any* line chose it, not by a single resolution on the request.
+   *
+   * Exchanges pay out through their own draft order rather than through a
+   * refund or a credit — see completeExchangeDraftOrder below.
+   */
+  const resolutions = new Set(current.lineItems.map((li) => li.resolution));
+
+  if (resolutions.has("REFUND")) {
+    // Throws on failure, leaving the return at RECEIVED so the merchant can
+    // fix the cause and retry rather than silently under-paying a customer.
+    await processShopifyReturn(merchantId, id);
+  }
+
+  /**
+   * Store credit goes onto the customer's real Shopify store credit account, so
+   * it is spendable at checkout. Like a refund this runs before the resolution
+   * commits — a customer must never be told they have credit that isn't there.
+   */
+  let credit: CreditResult | null = null;
+  if (resolutions.has("STORE_CREDIT")) {
+    credit = await issueShopifyStoreCredit(
+      merchantId,
+      id,
+      split.get("STORE_CREDIT"),
+    );
+  }
+
+  /**
+   * Gift cards are bearer value rather than an account balance, and the code is
+   * returned exactly once by Shopify — so it is captured here and persisted
+   * immediately, before anything else can fail and lose it.
+   */
+  let giftCard: GiftCardResult | null = null;
+  if (resolutions.has("GIFT_CARD")) {
+    giftCard = await issueShopifyGiftCard(merchantId, id, split.get("GIFT_CARD"));
+  }
+
+  /**
+   * An exchange the return credit covers in full becomes a real order now that
+   * the items are back. One with a balance stays a draft until the shopper pays
+   * their invoice — completing it here would ship an upgrade for free.
+   */
+  if (resolutions.has("EXCHANGE") || resolutions.has("INSTANT_EXCHANGE")) {
+    await completeExchangeDraftOrder(merchantId, id);
+  }
+
+  const refreshed = await getReturn(merchantId, id);
+  // Prefer what Shopify actually paid; fall back to our estimate for store
+  // credit and exchanges, where no cash moves.
+  const amount = toDecimal(refreshed.settledTotal ?? current.estimatedTotal);
 
   // Issuing the credit and closing the return must succeed or fail together,
   // otherwise a resolved return could exist with no credit behind it.
-  return prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx) => {
     await tx.returnEvent.create({
       data: {
         returnRequestId: id,
@@ -176,16 +558,22 @@ export const resolveReturn = async (
       },
     });
 
-    if (current.resolution === "STORE_CREDIT") {
+    if (giftCard) {
       await tx.storeCredit.create({
         data: {
           merchantId,
           returnRequestId: id,
-          code: generateCreditCode(),
+          kind: "GIFT_CARD",
+          // The real redeemable code — this is the only copy we will ever have.
+          code: giftCard.code,
+          externalAccountId: giftCard.giftCardId,
           customerEmail: current.customerEmail,
-          amount,
-          balance: amount,
-          currency: current.currency,
+          amount: toDecimal(giftCard.amount),
+          balance: toDecimal(giftCard.amount),
+          currency: giftCard.currency,
+          ...(giftCard.expiresOn
+            ? { expiresAt: new Date(giftCard.expiresOn) }
+            : {}),
         },
       });
       await tx.returnEvent.create({
@@ -193,7 +581,43 @@ export const resolveReturn = async (
           returnRequestId: id,
           actorId,
           type: "CREDIT_ISSUED",
-          message: `Store credit issued for ${current.currency} ${amount.toFixed(2)}`,
+          message: `Gift card for ${giftCard.currency} ${giftCard.amount.toFixed(2)} issued${
+            giftCard.maskedCode ? ` (${giftCard.maskedCode})` : ""
+          }`,
+          metadata: { giftCardId: giftCard.giftCardId },
+        },
+      });
+    }
+
+    if (current.resolution === "STORE_CREDIT") {
+      // Mirrors the Shopify credit issued above. `code` stays populated for
+      // continuity with credits created before Shopify accounts were used, but
+      // the spendable balance now lives on the customer's Shopify account.
+      await tx.storeCredit.create({
+        data: {
+          merchantId,
+          returnRequestId: id,
+          code: generateCreditCode(),
+          externalAccountId: credit?.accountId ?? null,
+          externalTransactionId: credit?.transactionId ?? null,
+          customerEmail: current.customerEmail,
+          amount,
+          balance: amount,
+          currency: credit?.currency ?? current.currency,
+        },
+      });
+      await tx.returnEvent.create({
+        data: {
+          returnRequestId: id,
+          actorId,
+          type: "CREDIT_ISSUED",
+          message: credit
+            ? `Store credit of ${credit.currency} ${credit.amount.toFixed(2)} added to the customer's Shopify account` +
+              (credit.balanceAfter !== null
+                ? ` (balance now ${credit.currency} ${credit.balanceAfter.toFixed(2)})`
+                : "")
+            : `Store credit issued for ${current.currency} ${amount.toFixed(2)}`,
+          metadata: credit ? { accountId: credit.accountId } : undefined,
         },
       });
     }
@@ -204,6 +628,168 @@ export const resolveReturn = async (
       include: detailInclude,
     });
   });
+
+  /**
+   * Store credit and exchanges are compensated outside the return, so the
+   * Shopify return just needs closing — no refund to process. Leaving it open
+   * would keep Shopify's own "Process and refund" button on the order, from
+   * which a merchant could accidentally pay the customer twice.
+   */
+  if (current.resolution !== "REFUND") {
+    try {
+      await closeShopifyReturn(merchantId, id);
+    } catch (error) {
+      logger.error({ merchantId, id, error }, "Could not close return in Shopify");
+      await prisma.returnEvent.create({
+        data: {
+          returnRequestId: id,
+          actorId,
+          type: "STATUS_CHANGED",
+          message: `Shopify close-out did not complete: ${
+            error instanceof Error ? error.message : "unknown error"
+          }`,
+        },
+      });
+    }
+  }
+
+  // After the commit, so a store-credit email can read the code that was just
+  // minted inside the transaction.
+  notifyInBackground(id, "RESOLVED");
+
+  return getReturn(merchantId, id);
+};
+
+/**
+ * What resolving this return will actually pay out, according to Shopify.
+ *
+ * Falls back to our own estimate when Shopify can't be asked — before the
+ * return has been mirrored, or for store credit and exchanges where no cash
+ * moves and Shopify has no opinion.
+ */
+export const previewRefund = async (merchantId: string, id: string) => {
+  const request = await getReturn(merchantId, id);
+
+  const ourEstimate = toDecimal(request.estimatedTotal).toNumber();
+  const base = {
+    reference: request.reference,
+    resolution: request.resolution,
+    currency: request.currency,
+    ourEstimate,
+    alreadyRefunded: Boolean(request.externalRefundId),
+    inShopify: Boolean(request.externalReturnId),
+  };
+
+  if (request.resolution !== "REFUND" || !request.externalReturnId) {
+    return { ...base, shopifyRefund: null };
+  }
+
+  try {
+    const outcome = await getSuggestedOutcome(merchantId, id);
+    return {
+      ...base,
+      shopifyRefund: outcome
+        ? { amount: outcome.totalRefund, currency: outcome.currency }
+        : null,
+    };
+  } catch (error) {
+    logger.warn({ merchantId, id, error }, "Could not preview refund");
+    return { ...base, shopifyRefund: null };
+  }
+};
+
+/**
+ * One action for "the parcel arrived, pay the customer" — receives then
+ * resolves, so a merchant never has to finish a return in Shopify's admin.
+ *
+ * Tolerates being called from either APPROVED or RECEIVED: the receive step is
+ * skipped when it has already happened, which makes the button safe to retry.
+ */
+export const processAndRefund = async (
+  merchantId: string,
+  id: string,
+  actorId: string,
+) => {
+  const current = await getReturn(merchantId, id);
+
+  if (current.status === "APPROVED" || current.status === "IN_TRANSIT") {
+    await markReceived(merchantId, id, actorId);
+  }
+
+  const afterReceive = await getReturn(merchantId, id);
+  if (afterReceive.status === "RECEIVED") {
+    return resolveReturn(merchantId, id, actorId);
+  }
+
+  // Already resolved, or in a state where resolving makes no sense — let the
+  // status machine produce the explanatory error rather than guessing.
+  return resolveReturn(merchantId, id, actorId);
+};
+
+/**
+ * Opens the exchange's draft order after the automatic attempt failed.
+ *
+ * The automatic one runs at approval, so a return approved while the app was
+ * missing a scope — or while Shopify was down — has no draft and no way to get
+ * one, since it can't be approved twice. This is that way.
+ */
+export const retryExchangeDraftOrder = async (
+  merchantId: string,
+  id: string,
+  actorId: string,
+) => {
+  const request = await getReturn(merchantId, id);
+  if (request.exchangeItems.length === 0) {
+    throw unprocessable("Nothing on this return is an exchange.");
+  }
+  if (request.exchangeDraft) {
+    throw conflict("This exchange already has a draft order.");
+  }
+
+  await ensureExchangeDraftOrder(merchantId, id);
+
+  const refreshed = await getReturn(merchantId, id);
+  if (!refreshed.exchangeDraft) {
+    // ensureExchangeDraftOrder swallows failures onto the timeline by design,
+    // so the absence of a draft is how we know it failed again.
+    throw unprocessable(
+      "Shopify wouldn't create the exchange order. Check the activity log for why.",
+    );
+  }
+
+  await prisma.returnEvent.create({
+    data: {
+      returnRequestId: id,
+      actorId,
+      type: "NOTE_ADDED",
+      message: "Exchange draft order created manually by the merchant",
+    },
+  });
+  return refreshed;
+};
+
+/**
+ * Re-sends the exchange invoice from the admin.
+ *
+ * Exists because the automatic send at approval can land in spam, or the
+ * shopper can simply lose it, and the alternative is the merchant rebuilding
+ * the exchange by hand in Shopify.
+ */
+export const resendExchangeInvoice = async (
+  merchantId: string,
+  id: string,
+  actorId: string,
+) => {
+  await sendExchangeInvoice(merchantId, id);
+  await prisma.returnEvent.create({
+    data: {
+      returnRequestId: id,
+      actorId,
+      type: "NOTE_ADDED",
+      message: "Exchange invoice re-sent by the merchant",
+    },
+  });
+  return getReturn(merchantId, id);
 };
 
 export const addNote = async (

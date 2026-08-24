@@ -8,8 +8,10 @@ import { rateLimit } from "../../middleware/rateLimit.js";
 import { validate } from "../../middleware/validate.js";
 import { serializeReturn } from "../returns/serializers.js";
 import {
+  feedbackSchema,
   lookupSchema,
   quoteSchema,
+  referenceAuthSchema,
   submitSchema,
 } from "./portal.schemas.js";
 import * as portalService from "./portal.service.js";
@@ -21,6 +23,8 @@ portalRouter.get(
   "/:slug/config",
   asyncHandler(async (req, res) => {
     const merchant = await portalService.getMerchantBySlug(req.params.slug);
+    const heroImageUrl = await portalService.resolveHeroImage(merchant.id);
+
     res.json({
       merchant: {
         slug: merchant.slug,
@@ -33,6 +37,7 @@ portalRouter.get(
           merchant.branding?.subheadline ??
           "Start a return or exchange in a few clicks",
         logoUrl: merchant.branding?.logoUrl ?? null,
+        heroImageUrl,
         accentColor: merchant.branding?.accentColor ?? "#111213",
         supportEmail: merchant.branding?.supportEmail ?? null,
         policyUrl: merchant.branding?.policyUrl ?? null,
@@ -82,7 +87,7 @@ portalRouter.get(
   "/session/order",
   asyncHandler(async (req, res) => {
     const { merchantId, orderId } = req.portal!;
-    const { order, policy, reasons, eligibility } =
+    const { order, policy, reasonGroups, eligibility } =
       await portalService.getOrderEligibility(merchantId, orderId);
 
     res.json({
@@ -98,17 +103,69 @@ portalRouter.get(
         windowDays: policy.returnWindowDays,
         bonusCreditPercent: Number(policy.bonusCreditPercent),
         restockingFeePercent: Number(policy.restockingFeePercent),
-        returnShippingFee: Number(policy.returnShippingFee),
-        waiveShippingOnCredit: policy.waiveShippingOnCredit,
       },
-      reasons: reasons.map((r) => ({
-        code: r.code,
-        label: r.label,
-        requiresNote: r.requiresNote,
-        requiresPhoto: r.requiresPhoto,
+      /**
+       * Reason trees, one per group in play on this order. Each eligible item
+       * carries the id of the group that applies to it.
+       *
+       * `code` is deliberately not sent — it's the Shopify mapping, internal to
+       * the merchant, and the shopper picks by id.
+       */
+      reasonGroups: reasonGroups.map((g) => ({
+        id: g.id,
+        reasons: g.reasons.map((r) => ({
+          id: r.id,
+          label: r.label,
+          requiresNote: r.requiresNote,
+          requiresPhoto: r.requiresPhoto,
+          children: r.children.map((c) => ({
+            id: c.id,
+            label: c.label,
+            requiresNote: c.requiresNote,
+            requiresPhoto: c.requiresPhoto,
+          })),
+        })),
       })),
       eligibility,
     });
+  }),
+);
+
+/**
+ * Sibling variants of an item the shopper already has — "exchange for a new
+ * size". Scoped to the portal session, so it only ever exposes products the
+ * merchant sells, and only to someone who proved they own an order.
+ */
+portalRouter.get(
+  "/session/exchange/variants",
+  validate(z.object({ orderLineItemId: z.string().min(1) }), "query"),
+  asyncHandler(async (req, res) => {
+    const { merchantId, orderId } = req.portal!;
+    const options = await portalService.getExchangeOptions(
+      merchantId,
+      orderId,
+      String(req.query.orderLineItemId),
+    );
+    res.json(options);
+  }),
+);
+
+/** Browsable catalogue for "exchange for another product". */
+portalRouter.get(
+  "/session/exchange/products",
+  rateLimit({ windowMs: 60_000, max: 60 }),
+  validate(
+    z.object({
+      search: z.string().trim().max(100).optional(),
+      cursor: z.string().optional(),
+    }),
+    "query",
+  ),
+  asyncHandler(async (req, res) => {
+    const { merchantId } = req.portal!;
+    const query = req.query as { search?: string; cursor?: string };
+    const result = await portalService.browseExchangeProducts(merchantId, query);
+    res.json(result);
   }),
 );
 
@@ -141,23 +198,68 @@ portalRouter.post(
   }),
 );
 
-const statusQuerySchema = z.object({
-  slug: z.string().min(1),
-  email: z.string().trim().toLowerCase().email(),
-});
+type ReferenceAuth = z.infer<typeof referenceAuthSchema>;
 
 /** Status page — reachable from the confirmation email without a session. */
 portalRouter.get(
   "/returns/:reference",
   rateLimit({ windowMs: 15 * 60_000, max: 30 }),
-  validate(statusQuerySchema, "query"),
+  validate(referenceAuthSchema, "query"),
   asyncHandler(async (req, res) => {
-    const { slug, email } = req.query as z.infer<typeof statusQuerySchema>;
+    const { slug, email } = req.query as ReferenceAuth;
     const merchant = await portalService.getMerchantBySlug(slug);
     const request = await portalService.getReturnByReference(
       merchant.id,
       req.params.reference,
       email,
+    );
+    if (!request) {
+      throw unauthorized("That return reference and email don't match.");
+    }
+    res.json(serializeReturn(request));
+  }),
+);
+
+/**
+ * "Cancel return" on the confirmation page.
+ *
+ * Same reference + email proof as the status read, and rate limited on top:
+ * cancellation is destructive enough that a leaked link shouldn't also make it
+ * cheap to guess references.
+ */
+portalRouter.post(
+  "/returns/:reference/cancel",
+  rateLimit({ windowMs: 15 * 60_000, max: 10 }),
+  validate(referenceAuthSchema, "query"),
+  asyncHandler(async (req, res) => {
+    const { slug, email } = req.query as ReferenceAuth;
+    const merchant = await portalService.getMerchantBySlug(slug);
+    const request = await portalService.cancelReturnByReference(
+      merchant.id,
+      req.params.reference,
+      email,
+    );
+    if (!request) {
+      throw unauthorized("That return reference and email don't match.");
+    }
+    res.json(serializeReturn(request));
+  }),
+);
+
+/** The post-submission survey in the confirmation page's sidebar. */
+portalRouter.post(
+  "/returns/:reference/feedback",
+  rateLimit({ windowMs: 15 * 60_000, max: 20 }),
+  validate(referenceAuthSchema, "query"),
+  validate(feedbackSchema),
+  asyncHandler(async (req, res) => {
+    const { slug, email } = req.query as ReferenceAuth;
+    const merchant = await portalService.getMerchantBySlug(slug);
+    const request = await portalService.saveReturnFeedback(
+      merchant.id,
+      req.params.reference,
+      email,
+      req.body,
     );
     if (!request) {
       throw unauthorized("That return reference and email don't match.");

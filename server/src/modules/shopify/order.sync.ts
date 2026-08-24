@@ -1,6 +1,7 @@
 import { logger } from "../../lib/logger.js";
 import { prisma } from "../../lib/prisma.js";
 import { toDecimal } from "../../lib/money.js";
+import { fetchVariantImages } from "./catalogue.service.js";
 import { getShopCredentials, shopifyGraphQL } from "./shopify.client.js";
 import {
   mapGraphQLOrder,
@@ -26,11 +27,23 @@ export const upsertOrder = async (
 
   const scalars = {
     orderNumber: order.orderNumber,
+    // Guest checkouts have no customer, so never overwrite a known id with null.
+    ...(order.customerExternalId
+      ? { customerExternalId: order.customerExternalId }
+      : {}),
     email: order.email,
     customerName: order.customerName,
     currency: order.currency,
     subtotal: toDecimal(order.subtotal),
     total: toDecimal(order.total),
+    // Never regress to null: a payload without presentment data shouldn't erase
+    // what an earlier sync already established.
+    ...(order.presentmentCurrency
+      ? { presentmentCurrency: order.presentmentCurrency }
+      : {}),
+    ...(order.presentmentTotal !== null
+      ? { presentmentTotal: toDecimal(order.presentmentTotal) }
+      : {}),
     placedAt: order.placedAt,
     shippingAddress: (order.shippingAddress ?? undefined) as never,
   };
@@ -68,6 +81,7 @@ export const upsertOrder = async (
         productId: line.productId,
         variantId: line.variantId,
         sku: line.sku,
+        productType: line.productType,
         title: line.title,
         variantTitle: line.variantTitle,
         quantity: line.quantity,
@@ -83,7 +97,7 @@ export const upsertOrder = async (
           },
         },
         // Webhooks carry no image, so only overwrite it when we actually have
-        // one — otherwise an order update would wipe images the backfill set.
+        // one — otherwise an order update would wipe images we fetched earlier.
         update: {
           ...lineScalars,
           ...(line.imageUrl ? { imageUrl: line.imageUrl } : {}),
@@ -97,6 +111,54 @@ export const upsertOrder = async (
       });
     }
   });
+
+  await backfillLineItemImages(merchantId, order.externalId);
+};
+
+/**
+ * Fills in product images for an order's line items.
+ *
+ * Shopify's *webhook* payloads carry no image data at all, so an order that
+ * arrives the normal way has none — and since the 90-day backfill only runs on
+ * install or a manual re-sync, those orders would show grey placeholders in the
+ * portal forever. One extra query per import fixes that at the source.
+ *
+ * Best-effort and idempotent: only lines that are still missing an image are
+ * fetched, so a re-synced order costs nothing.
+ */
+export const backfillLineItemImages = async (
+  merchantId: string,
+  orderExternalId: string,
+): Promise<number> => {
+  const missing = await prisma.orderLineItem.findMany({
+    where: {
+      order: { merchantId, externalId: orderExternalId },
+      imageUrl: null,
+      variantId: { not: null },
+    },
+    select: { id: true, variantId: true },
+  });
+  if (missing.length === 0) return 0;
+
+  const images = await fetchVariantImages(
+    merchantId,
+    missing.map((l) => l.variantId!),
+  );
+  if (images.size === 0) return 0;
+
+  let updated = 0;
+  for (const line of missing) {
+    const url = images.get(line.variantId!);
+    if (!url) continue;
+    await prisma.orderLineItem.update({
+      where: { id: line.id },
+      data: { imageUrl: url },
+    });
+    updated++;
+  }
+
+  logger.debug({ merchantId, orderExternalId, updated }, "Line item images filled in");
+  return updated;
 };
 
 const SYNC_ORDERS_QUERY = `#graphql
@@ -109,10 +171,23 @@ const SYNC_ORDERS_QUERY = `#graphql
         email
         processedAt
         currencyCode
-        customer { displayName }
+        customer { id displayName }
         subtotalPriceSet { shopMoney { amount } }
-        totalPriceSet { shopMoney { amount } }
+        totalPriceSet {
+          shopMoney { amount }
+          presentmentMoney { amount currencyCode }
+        }
         fulfillments(first: 10) { createdAt deliveredAt displayStatus }
+        shippingAddress {
+          name
+          address1
+          address2
+          city
+          provinceCode
+          zip
+          country
+          phone
+        }
         lineItems(first: 250) {
           nodes {
             id
@@ -122,7 +197,7 @@ const SYNC_ORDERS_QUERY = `#graphql
             quantity
             image { url }
             discountedUnitPriceSet { shopMoney { amount } }
-            product { id }
+            product { id productType }
             variant { id }
           }
         }
