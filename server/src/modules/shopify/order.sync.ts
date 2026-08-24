@@ -119,7 +119,7 @@ export const upsertOrder = async (
  * Fills in product images for an order's line items.
  *
  * Shopify's *webhook* payloads carry no image data at all, so an order that
- * arrives the normal way has none — and since the 90-day backfill only runs on
+ * arrives the normal way has none — and since the backfill only runs on
  * install or a manual re-sync, those orders would show grey placeholders in the
  * portal forever. One extra query per import fixes that at the source.
  *
@@ -223,7 +223,15 @@ interface SyncOrdersResult {
  */
 export const backfillOrders = async (
   merchantId: string,
-  { days = 90, pageSize = 50, maxPages = 40 } = {},
+  /**
+   * 60 days, not 90.
+   *
+   * `read_orders` only reaches back 60 days; a query whose range extends past
+   * that is rejected outright with ACCESS_DENIED rather than being trimmed, so
+   * asking for 90 loses the recent orders too. Reaching further needs
+   * `read_all_orders`, which Shopify grants by application.
+   */
+  { days = 60, pageSize = 50, maxPages = 40 } = {},
 ): Promise<{ imported: number; skipped: number }> => {
   const { shop, accessToken } = await getShopCredentials(merchantId);
 
