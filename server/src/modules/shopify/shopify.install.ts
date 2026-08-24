@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { env } from "../../config/env.js";
 import { badRequest, unauthorized } from "../../lib/errors.js";
 import { encrypt } from "../../lib/crypto.js";
+import { seedDefaultReasonGroup } from "../settings/reason-defaults.js";
 import { logger } from "../../lib/logger.js";
 import { prisma } from "../../lib/prisma.js";
 import { isValidShopDomain, shopifyGraphQL } from "./shopify.client.js";
@@ -85,23 +86,6 @@ const slugFor = async (shop: string): Promise<string> => {
   return slug;
 };
 
-const DEFAULT_REASONS = [
-  { code: "SIZE_TOO_SMALL", label: "Too small", sortOrder: 1 },
-  { code: "SIZE_TOO_LARGE", label: "Too large", sortOrder: 2 },
-  { code: "COLOR", label: "Color not as expected", sortOrder: 3 },
-  {
-    code: "DEFECTIVE",
-    label: "Damaged or defective",
-    requiresPhoto: true,
-    requiresNote: true,
-    sortOrder: 4,
-  },
-  { code: "NOT_AS_DESCRIBED", label: "Not as described", sortOrder: 5 },
-  { code: "WRONG_ITEM", label: "Received the wrong item", sortOrder: 6 },
-  { code: "STYLE", label: "Didn't like the style", sortOrder: 7 },
-  { code: "UNWANTED", label: "Changed my mind", sortOrder: 8 },
-  { code: "OTHER", label: "Other", requiresNote: true, sortOrder: 9 },
-];
 
 /**
  * Creates or updates the merchant record for a freshly authorized shop, and
@@ -176,9 +160,17 @@ export const provisionMerchant = async (
               windowStartsFrom: "DELIVERY",
             },
           },
-          reasons: { create: DEFAULT_REASONS },
         },
       });
+
+  /**
+   * Runs for linked merchants too, not just newly created ones.
+   *
+   * The update branch above deliberately preserves an existing account's own
+   * setup — but an account created by the bootstrap script has none, and the
+   * portal can't offer a return without a policy and a reason group.
+   */
+  await ensurePortalDefaults(merchant.id);
 
   await prisma.integration.upsert({
     where: {
@@ -226,12 +218,7 @@ const ensurePortalDefaults = async (merchantId: string) => {
     });
   }
 
-  const reasonCount = await prisma.returnReason.count({ where: { merchantId } });
-  if (reasonCount === 0) {
-    await prisma.returnReason.createMany({
-      data: DEFAULT_REASONS.map((r) => ({ merchantId, ...r })),
-    });
-  }
+  await seedDefaultReasonGroup(prisma, merchantId);
 
   await prisma.portalBranding.upsert({
     where: { merchantId },

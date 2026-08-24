@@ -146,16 +146,27 @@ when the Partner Dashboard is correct.
 
 ## 6. Create your admin account
 
-**This is the step that's easy to miss.** Installing the app creates the
-merchant, its policy, reason groups and branding — but no staff account,
-because Shopify never gives us a password. Until you run this, `/admin/login`
-has nothing to accept.
+**Do this before installing the Shopify app, not after.** The install URL is
+minted by an endpoint behind the admin login, and the OAuth callback rejects a
+request without that signed state — so an install needs an account, and an
+account needs a merchant. This creates both, breaking the cycle. Your store
+attaches to this merchant when you install.
 
-From Render's **Shell** tab on the API service:
+Shell needs a paid instance, so run it locally against the production database
+instead. Copy the **External Database URL** from Render (your Postgres →
+Connect → External) — it needs `?sslmode=require`, which the copied URL
+already has:
 
 ```bash
-ADMIN_EMAIL=you@yourstore.com ADMIN_PASSWORD='choose-a-long-one' npm run create-admin --workspace server
+DATABASE_URL='<external-url>' \
+  ADMIN_EMAIL=you@yourstore.com \
+  ADMIN_PASSWORD='choose-a-long-one' \
+  MERCHANT_SLUG=your-store-slug \
+  MERCHANT_NAME='Your Store' \
+  npm run create-admin --workspace server
 ```
+
+`MERCHANT_SLUG` becomes your portal URL: `/r/<slug>`.
 
 Pick the password yourself; nothing is defaulted and it must be at least 12
 characters. Re-running with the same email resets that password, which is also

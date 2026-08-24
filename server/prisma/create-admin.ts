@@ -1,10 +1,11 @@
 /**
  * Creates the first admin user for a merchant.
  *
- * Installing the Shopify app creates the merchant, its policy, reasons and
- * branding — but no staff account, because Shopify never tells us a password.
- * Without this there is no way to sign into the dashboard on a fresh
- * deployment.
+ * On a fresh deployment this creates the merchant too, not just the user.
+ * It has to: the Shopify install URL is minted behind the admin login and the
+ * OAuth callback rejects a request without that signed state, so an install
+ * needs an account that only an install could have created. This breaks the
+ * cycle from outside; the store attaches to this merchant when you install.
  *
  * Run it once from the host's shell after the app is installed:
  *
@@ -18,6 +19,7 @@ import bcrypt from "bcryptjs";
 // does — through config/env, which loads .env locally and reads the real
 // environment on the host.
 import { prisma } from "../src/lib/prisma.js";
+import { seedDefaultReasonGroup } from "../src/modules/settings/reason-defaults.js";
 
 const email = process.env.ADMIN_EMAIL?.trim().toLowerCase();
 const password = process.env.ADMIN_PASSWORD;
@@ -35,14 +37,47 @@ if (password!.length < 12) {
   fail("ADMIN_PASSWORD must be at least 12 characters.");
 }
 
-const merchants = await prisma.merchant.findMany({
+let merchants = await prisma.merchant.findMany({
   select: { id: true, slug: true, name: true },
   orderBy: { createdAt: "asc" },
 });
 
+/**
+ * Bootstrap the first merchant.
+ *
+ * Installing the Shopify app can't do this on a fresh database: the install
+ * URL is minted by an endpoint behind the admin login, and the OAuth callback
+ * rejects a request without that signed state. So an install needs an account,
+ * an account needs a merchant, and a merchant needed the install — a cycle
+ * that has to be broken from outside.
+ *
+ * The store connects to this merchant later, at install: provisionMerchant
+ * prefers the signed-in account over creating one.
+ */
 if (merchants.length === 0) {
-  fail(
-    "No merchant exists yet. Install the app on your Shopify store first — that's what creates it.",
+  const slug = (merchantSlug || "store").toLowerCase().replace(/[^a-z0-9-]/g, "-");
+  const created = await prisma.merchant.create({
+    data: {
+      slug,
+      name: process.env.MERCHANT_NAME?.trim() || "My Store",
+      email,
+      branding: { create: { supportEmail: email } },
+      policies: {
+        create: {
+          name: "Standard policy",
+          isDefault: true,
+          returnWindowDays: 30,
+          windowStartsFrom: "DELIVERY",
+        },
+      },
+    },
+    select: { id: true, slug: true, name: true },
+  });
+  await seedDefaultReasonGroup(prisma, created.id);
+  merchants = [created];
+  console.log(
+    `\n  Created merchant "${created.name}" (portal at /r/${created.slug})` +
+      `\n  with a standard 30-day policy and the default reason group.`,
   );
 }
 
