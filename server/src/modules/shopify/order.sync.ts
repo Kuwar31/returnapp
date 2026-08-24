@@ -217,9 +217,10 @@ interface SyncOrdersResult {
  * Pulls recent orders from Shopify into Postgres so the portal works for
  * customers who ordered before the app was installed.
  *
- * Only fulfilled orders inside the return window are worth importing — an
- * unfulfilled order has nothing returnable, and one older than the window
- * can't be actioned anyway.
+ * Everything inside the window is imported, including archived and unfulfilled
+ * orders. Whether an item can actually be returned is decided later by
+ * evaluateOrder — importing more here just means the portal can explain why
+ * something isn't returnable instead of failing to find the order at all.
  */
 export const backfillOrders = async (
   merchantId: string,
@@ -238,7 +239,19 @@ export const backfillOrders = async (
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
     .toISOString()
     .split("T")[0];
-  const searchQuery = `processed_at:>=${since} AND fulfillment_status:shipped`;
+  /**
+   * Date only — no status or fulfillment constraint.
+   *
+   * `status` isn't filtered because archived orders map to `closed`, and
+   * excluding them hides exactly the orders a test store accumulates. There is
+   * no `status:any` value; omitting the term is how you ask for all of them.
+   *
+   * The fulfillment filter went too: an unfulfilled order has nothing
+   * returnable, but importing it means the portal can say so, rather than
+   * claiming the order doesn't exist. Returnability is decided by
+   * evaluateOrder, which reads fulfillment dates directly.
+   */
+  const searchQuery = `processed_at:>=${since}`;
 
   let cursor: string | null = null;
   let imported = 0;
