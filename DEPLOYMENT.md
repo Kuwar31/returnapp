@@ -120,21 +120,27 @@ curl https://returns-manager-api.onrender.com/api/health
 
 ## 5. Repoint Shopify
 
-The app currently points at your ngrok tunnel. In `shopify.app.toml`, replace
-the tunnel origin with the Render URL:
+`shopify.app.toml` holds the origin Shopify redirects to and posts webhooks at.
+Both URLs must share a host, or OAuth fails with "redirect_uri and application
+url must have matching hosts":
 
 ```toml
-application_url = "https://returns-manager-api.onrender.com"
+application_url = "https://<your-service>.onrender.com"
 
 [auth]
 redirect_urls = [
-  "https://returns-manager-api.onrender.com/api/shopify/callback"
+  "https://<your-service>.onrender.com/api/shopify/callback"
 ]
 ```
 
 Then `shopify app deploy` to push the config, and reinstall the app on your
 store. Reinstalling re-registers the webhooks against the new URL — without it
-Shopify keeps posting to a tunnel that no longer exists.
+Shopify keeps posting wherever it was pointed before, usually a dev tunnel
+that no longer exists.
+
+Set `APP_URL` on Render to the same origin. The app signs its own OAuth state
+and builds callback URLs from it, so a mismatch here fails the install even
+when the Partner Dashboard is correct.
 
 ---
 
