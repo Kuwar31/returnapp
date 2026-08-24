@@ -67,6 +67,10 @@ type RouteFiles = {
     id: "root";
     page: "/" | "/r/:slug" | "/r/:slug/items" | "/r/:slug/review" | "/r/:slug/status/:reference" | "/admin/login" | "/admin" | "/admin/returns" | "/admin/returns/:id" | "/admin/settings" | "/admin/settings/reasons" | "/*";
   };
+  "Home.tsx": {
+    id: "Home";
+    page: "/";
+  };
   "portal/PortalLayout.tsx": {
     id: "portal/PortalLayout";
     page: "/r/:slug" | "/r/:slug/items" | "/r/:slug/review" | "/r/:slug/status/:reference";
@@ -127,6 +131,7 @@ type RouteFiles = {
 
 type RouteModules = {
   "root": typeof import("./src/root.tsx");
+  "Home": typeof import("./src/Home.tsx");
   "portal/PortalLayout": typeof import("./src/portal/PortalLayout.tsx");
   "portal/LookupPage": typeof import("./src/portal/LookupPage.tsx");
   "portal/SelectItemsPage": typeof import("./src/portal/SelectItemsPage.tsx");

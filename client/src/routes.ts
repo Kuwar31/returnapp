@@ -14,6 +14,9 @@ import {
  * screen and the dashboard without adding a URL segment.
  */
 export default [
+  // `*` does not match `/`, so the root path needs its own entry.
+  index("Home.tsx"),
+
   route("r/:slug", "portal/PortalLayout.tsx", [
     index("portal/LookupPage.tsx"),
     route("items", "portal/SelectItemsPage.tsx"),
