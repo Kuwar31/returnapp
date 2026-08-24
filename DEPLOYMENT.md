@@ -77,9 +77,12 @@ Set **`APP_URL`** to exactly that and redeploy.
 
 ## 3. Vercel: the SPA
 
-**Add New → Project**, import the same repo. `vercel.json` at the root already
-sets the build command, output directory and the SPA rewrite — leave Vercel's
-framework preset as **Other** and don't override them.
+**Add New → Project**, import the same repo and set **Root Directory** to
+`client`. `client/vercel.json` supplies the build command, output directory and
+the SPA rewrite — don't override them in the UI.
+
+Paths in that file are relative to the Root Directory, which is why it lives
+beside the client rather than at the repo root.
 
 Add one environment variable, for **all** environments:
 

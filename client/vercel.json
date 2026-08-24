@@ -1,9 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "installCommand": "npm install",
-  "buildCommand": "npm run build --workspace client",
-  "outputDirectory": "client/build/client",
+  "buildCommand": "npm run build",
+  "outputDirectory": "build/client",
+
   "framework": null,
+
   "rewrites": [
     {
       "source": "/((?!assets/).*)",
