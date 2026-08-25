@@ -6,7 +6,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "NODE_OPTIONS=--max-http-header-size=65536 tsx watch src/index.ts",
-    "build": "prisma generate && tsc -p tsconfig.json",
+    "build": "prisma generate && tsc -p tsconfig.json && node --input-type=module -e \"await import('./dist/app.js')\"",
     "start": "node --max-http-header-size=65536 dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "db:generate": "prisma generate",

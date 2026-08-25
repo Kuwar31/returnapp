@@ -1,4 +1,3 @@
-//@ts-nocheck
 import { Prisma } from "@prisma/client";
 import { AppError } from "../../lib/errors.js";
 import { logger } from "../../lib/logger.js";
