@@ -296,6 +296,8 @@ export interface AdminSession {
 }
 
 export interface DashboardStats {
+  /** What openValue is denominated in — follows the display setting. */
+  currency: string;
   counts: {
     submitted: number;
     approved: number;

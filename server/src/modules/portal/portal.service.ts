@@ -204,7 +204,11 @@ export const getOrderEligibility = async (
 
   // Item prices are converted here too, so the picker and the running total
   // never disagree about which currency they're in.
-  const fx = displayConverter(order, await resolveDisplayMode(merchantId));
+  const fx = displayConverter(
+    order,
+    await resolveDisplayMode(merchantId),
+    order.currency,
+  );
 
   return {
     order,
@@ -385,7 +389,7 @@ export const quoteSelection = async (
    * sees what they were charged when the merchant has chosen presentment.
    */
   const display = await resolveDisplayMode(merchantId);
-  const fx = displayConverter(order, display);
+  const fx = displayConverter(order, display, order.currency);
 
   return {
     currency: fx.currency,

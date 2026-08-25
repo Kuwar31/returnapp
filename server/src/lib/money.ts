@@ -62,8 +62,14 @@ export const forDisplay = (
   amount: Prisma.Decimal | null,
   order: OrderRateSource | null | undefined,
   mode: "SHOP" | "PRESENTMENT",
+  /**
+   * Used when the order isn't loaded. Required rather than defaulted: a
+   * hardcoded fallback silently rendered a EUR store's figures as USD when a
+   * caller forgot to include the order, and nothing failed loudly.
+   */
+  fallbackCurrency: string,
 ): { amount: number | null; currency: string } => {
-  const shopCurrency = order?.currency ?? "USD";
+  const shopCurrency = order?.currency ?? fallbackCurrency;
   if (amount === null || amount === undefined) {
     return { amount: null, currency: shopCurrency };
   }
@@ -92,10 +98,12 @@ export const forDisplay = (
 export const displayConverter = (
   order: OrderRateSource | null | undefined,
   mode: "SHOP" | "PRESENTMENT",
+  fallbackCurrency: string,
 ) => {
-  const currency = forDisplay(ZERO, order, mode).currency;
+  const currency = forDisplay(ZERO, order, mode, fallbackCurrency).currency;
   return {
     currency,
-    money: (value: Prisma.Decimal | null) => forDisplay(value, order, mode).amount,
+    money: (value: Prisma.Decimal | null) =>
+      forDisplay(value, order, mode, fallbackCurrency).amount,
   };
 };

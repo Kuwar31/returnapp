@@ -92,7 +92,7 @@ export const serializeReturn = (
    */
   display: "SHOP" | "PRESENTMENT" = "SHOP",
 ) => {
-  const fx = displayConverter(request.order, display);
+  const fx = displayConverter(request.order, display, request.currency);
   return {
   id: request.id,
   reference: request.reference,
@@ -213,7 +213,7 @@ export const serializeReturnSummary = (
   request: ReturnRequest & { lineItems: ReturnLineItem[]; order?: Order | null },
   display: "SHOP" | "PRESENTMENT" = "SHOP",
 ) => {
-  const fx = displayConverter(request.order, display);
+  const fx = displayConverter(request.order, display, request.currency);
   return {
   id: request.id,
   reference: request.reference,
