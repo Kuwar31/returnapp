@@ -10,7 +10,7 @@ import type {
   ReturnRequest,
   ReturnShipment,
 } from "@prisma/client";
-import { displayConverter } from "../../lib/money.js";
+import { displayConverter, serializeMoney } from "../../lib/money.js";
 import { STATUS_LABELS } from "./status.js";
 
 type FullReturn = ReturnRequest & {
@@ -196,10 +196,15 @@ export const serializeReturn = (
          * on the shopper-facing portal responses.
          */
         invoiceUrl: request.exchangeDraft.invoiceUrl,
-        currency: fx.currency,
-        itemsTotal: fx.money(request.exchangeDraft.itemsTotal),
-        creditApplied: fx.money(request.exchangeDraft.creditApplied),
-        balanceDue: fx.money(request.exchangeDraft.balanceDue),
+        /**
+         * Not run through `fx` — these are stored in whatever currency the
+         * customer was actually billed, which is what Shopify's invoice says.
+         * Converting again would double-apply the rate.
+         */
+        currency: request.exchangeDraft.currency,
+        itemsTotal: serializeMoney(request.exchangeDraft.itemsTotal),
+        creditApplied: serializeMoney(request.exchangeDraft.creditApplied),
+        balanceDue: serializeMoney(request.exchangeDraft.balanceDue),
         reservedUntil: request.exchangeDraft.reservedUntil,
         invoiceSentAt: request.exchangeDraft.invoiceSentAt,
         completedAt: request.exchangeDraft.completedAt,

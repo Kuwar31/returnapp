@@ -3,7 +3,13 @@ import { Prisma } from "@prisma/client";
 import { AppError } from "../../lib/errors.js";
 import { logger } from "../../lib/logger.js";
 import { prisma } from "../../lib/prisma.js";
-import { round2, toDecimal, ZERO } from "../../lib/money.js";
+import {
+  forDisplay,
+  round2,
+  toDecimal,
+  ZERO,
+  type OrderRateSource,
+} from "../../lib/money.js";
 import { quoteReturn } from "../policy/quote.service.js";
 import { queryShop } from "./shopify.client.js";
 import { resolveCustomerId } from "./credit.service.js";
@@ -119,6 +125,8 @@ const buildDraftInput = (
     reference: string;
     orderNumber: string;
     reserveUntil: Date | null;
+    /** The order being returned against — supplies the presentment rate. */
+    order: OrderRateSource;
   },
 ): Record<string, unknown> => {
   const input: Record<string, unknown> = {
@@ -145,19 +153,42 @@ const buildDraftInput = (
   }
 
   /**
+   * Bill the customer in the currency they originally paid in.
+   *
+   * This is not the merchant's display preference — it's what the shopper is
+   * actually charged. Invoicing someone in India in EUR because that's the
+   * shop's bookkeeping currency is wrong regardless of what the dashboard is
+   * set to show.
+   */
+  const charge = forDisplay(
+    totals.creditApplied,
+    opts.order,
+    "PRESENTMENT",
+    opts.order.currency,
+  );
+  if (charge.currency !== opts.order.currency) {
+    input.presentmentCurrencyCode = charge.currency;
+  }
+
+  /**
    * The return credit rides as an order-level discount rather than as adjusted
    * line prices, so the merchant can see on the draft what the goods are worth
    * and what the return paid for.
    *
-   * FIXED_AMOUNT is in shop currency, which is why the draft is never opened in
-   * the customer's presentment currency — every figure here comes from our own
-   * shop-currency maths, and converting it is exactly the mistake that nearly
-   * issued a 110x gift card.
+   * `amountWithCurrency` rather than `value`: the docs are explicit that a
+   * FIXED_AMOUNT `value` is "a fixed amount in your shop currency", so passing
+   * a converted figure there would be read as EUR and under-discount by ~110x.
+   * Stating the currency outright removes the ambiguity — the same trap that
+   * nearly issued a 110x gift card, avoided by naming the unit instead of
+   * assuming it.
    */
-  if (totals.creditApplied.greaterThan(0)) {
+  if (totals.creditApplied.greaterThan(0) && charge.amount !== null) {
     input.appliedDiscount = {
       valueType: "FIXED_AMOUNT",
-      value: Number(totals.creditApplied.toFixed(2)),
+      amountWithCurrency: {
+        amount: charge.amount.toFixed(2),
+        currencyCode: charge.currency,
+      },
       title: "Return credit",
       description: `Credit from return ${opts.reference}`,
     };
@@ -217,12 +248,28 @@ export const ensureExchangeDraftOrder = async (
       Date.now() + RESERVATION_DAYS * 24 * 60 * 60 * 1000,
     );
 
+    /** The same figures as the draft carries, for our own record. */
+    const billed = {
+      currency: forDisplay(ZERO, request.order, "PRESENTMENT", request.currency)
+        .currency,
+      itemsTotal:
+        forDisplay(totals.itemsTotal, request.order, "PRESENTMENT", request.currency)
+          .amount ?? 0,
+      creditApplied:
+        forDisplay(totals.creditApplied, request.order, "PRESENTMENT", request.currency)
+          .amount ?? 0,
+      balanceDue:
+        forDisplay(totals.balanceDue, request.order, "PRESENTMENT", request.currency)
+          .amount ?? 0,
+    };
+
     const input = buildDraftInput(totals, {
       customerId,
       email: request.customerEmail,
       reference: request.reference,
       orderNumber: request.order.orderNumber,
       reserveUntil,
+      order: request.order,
     });
 
     const data = await queryShop<{
@@ -250,10 +297,14 @@ export const ensureExchangeDraftOrder = async (
         name: draft.name ?? null,
         invoiceUrl: draft.invoiceUrl ?? null,
         status: "OPEN",
-        currency: request.currency,
-        itemsTotal: totals.itemsTotal,
-        creditApplied: totals.creditApplied,
-        balanceDue: totals.balanceDue,
+        /**
+         * Stored in the currency the customer is billed in, so the admin panel
+         * and Shopify's invoice can't disagree about the balance.
+         */
+        currency: billed.currency,
+        itemsTotal: toDecimal(billed.itemsTotal),
+        creditApplied: toDecimal(billed.creditApplied),
+        balanceDue: toDecimal(billed.balanceDue),
         reservedUntil: reserveUntil,
       },
     });
@@ -335,6 +386,7 @@ export const syncExchangeDraftOrder = async (
     // Reservation is set at creation; re-sending it here would silently extend
     // the hold every time the merchant edits the exchange.
     reserveUntil: null,
+    order: request.order,
   });
 
   const data = await queryShop<{
