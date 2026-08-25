@@ -9,13 +9,11 @@ import { useAuth } from "./AuthContext";
 
 export default function DashboardPage() {
   const { session } = useAuth();
+  const currency = session?.merchant.currency ?? "USD";
+
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recent, setRecent] = useState<ReturnSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
-
-  // The stats endpoint reports the currency it converted to, which may not be
-  // the shop's own — the merchant can choose to see presentment instead.
-  const currency = stats?.currency ?? session?.merchant.currency ?? "USD";
 
   useEffect(() => {
     let active = true;

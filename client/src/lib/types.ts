@@ -296,8 +296,6 @@ export interface AdminSession {
 }
 
 export interface DashboardStats {
-  /** What openValue is denominated in — follows the display setting. */
-  currency: string;
   counts: {
     submitted: number;
     approved: number;
@@ -307,17 +305,4 @@ export interface DashboardStats {
     rejected: number;
   };
   openValue: number;
-}
-
-/** How the admin and portal render money. Storage is always shop currency. */
-export type DisplayCurrency = "SHOP" | "PRESENTMENT";
-
-export interface StoreSettings {
-  name: string;
-  slug: string;
-  /** The merchant's own books — what every figure is stored in. */
-  currency: string;
-  displayCurrency: DisplayCurrency;
-  /** What PRESENTMENT resolves to, from the most recent order that has one. */
-  presentmentCurrency: string | null;
 }

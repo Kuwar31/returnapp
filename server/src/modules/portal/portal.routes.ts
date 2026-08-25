@@ -15,7 +15,6 @@ import {
   submitSchema,
 } from "./portal.schemas.js";
 import * as portalService from "./portal.service.js";
-import { resolveDisplayMode } from "../settings/display-currency.js";
 
 export const portalRouter = Router();
 
@@ -195,9 +194,7 @@ portalRouter.post(
       orderId,
       req.body,
     );
-    res.status(201).json(
-      serializeReturn(created, await resolveDisplayMode(merchantId)),
-    );
+    res.status(201).json(serializeReturn(created));
   }),
 );
 
@@ -219,7 +216,7 @@ portalRouter.get(
     if (!request) {
       throw unauthorized("That return reference and email don't match.");
     }
-    res.json(serializeReturn(request, await resolveDisplayMode(merchant.id)));
+    res.json(serializeReturn(request));
   }),
 );
 
@@ -245,7 +242,7 @@ portalRouter.post(
     if (!request) {
       throw unauthorized("That return reference and email don't match.");
     }
-    res.json(serializeReturn(request, await resolveDisplayMode(merchant.id)));
+    res.json(serializeReturn(request));
   }),
 );
 
@@ -267,6 +264,6 @@ portalRouter.post(
     if (!request) {
       throw unauthorized("That return reference and email don't match.");
     }
-    res.json(serializeReturn(request, await resolveDisplayMode(merchant.id)));
+    res.json(serializeReturn(request));
   }),
 );

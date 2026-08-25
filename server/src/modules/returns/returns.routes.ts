@@ -6,7 +6,6 @@ import { requireRole } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
 import { serializeReturn, serializeReturnSummary } from "./serializers.js";
 import * as returnsService from "./returns.service.js";
-import { resolveDisplayMode } from "../settings/display-currency.js";
 
 export const returnsRouter = Router();
 
@@ -35,10 +34,9 @@ returnsRouter.get(
   asyncHandler(async (req, res) => {
     const query = req.query as unknown as z.infer<typeof listQuerySchema>;
     const result = await returnsService.listReturns(req.admin!.merchantId, query);
-    const display = await resolveDisplayMode(req.admin!.merchantId);
     res.json({
       ...result,
-      items: result.items.map((r) => serializeReturnSummary(r, display)),
+      items: result.items.map(serializeReturnSummary),
     });
   }),
 );
@@ -71,7 +69,7 @@ returnsRouter.get(
       returnsService.getPayoutBreakdown(req.admin!.merchantId, req.params.id),
     ]);
     res.json({
-      ...serializeReturn(request, await resolveDisplayMode(req.admin!.merchantId)),
+      ...serializeReturn(request),
       shopper,
       payout,
       policyName: request.policy?.name ?? null,
@@ -88,7 +86,7 @@ returnsRouter.post(
       req.params.id,
       req.admin!.sub,
     );
-    res.json(serializeReturn(updated, await resolveDisplayMode(req.admin!.merchantId)));
+    res.json(serializeReturn(updated));
   }),
 );
 
@@ -106,7 +104,7 @@ returnsRouter.post(
       req.admin!.sub,
       req.body.reason,
     );
-    res.json(serializeReturn(updated, await resolveDisplayMode(req.admin!.merchantId)));
+    res.json(serializeReturn(updated));
   }),
 );
 
@@ -118,7 +116,7 @@ returnsRouter.post(
       req.params.id,
       req.admin!.sub,
     );
-    res.json(serializeReturn(updated, await resolveDisplayMode(req.admin!.merchantId)));
+    res.json(serializeReturn(updated));
   }),
 );
 
@@ -132,7 +130,7 @@ returnsRouter.post(
       req.params.id,
       req.admin!.sub,
     );
-    res.json(serializeReturn(updated, await resolveDisplayMode(req.admin!.merchantId)));
+    res.json(serializeReturn(updated));
   }),
 );
 
@@ -167,7 +165,7 @@ returnsRouter.post(
       req.params.id,
       req.admin!.sub,
     );
-    res.json(serializeReturn(updated, await resolveDisplayMode(req.admin!.merchantId)));
+    res.json(serializeReturn(updated));
   }),
 );
 
@@ -193,7 +191,7 @@ returnsRouter.post(
       req.admin!.sub,
       req.body.reason,
     );
-    res.json(serializeReturn(updated, await resolveDisplayMode(req.admin!.merchantId)));
+    res.json(serializeReturn(updated));
   }),
 );
 
@@ -208,7 +206,7 @@ returnsRouter.post(
       req.admin!.sub,
       req.body.reason,
     );
-    res.json(serializeReturn(updated, await resolveDisplayMode(req.admin!.merchantId)));
+    res.json(serializeReturn(updated));
   }),
 );
 
@@ -238,7 +236,7 @@ returnsRouter.patch(
       req.admin!.sub,
       req.body,
     );
-    res.json(serializeReturn(updated, await resolveDisplayMode(req.admin!.merchantId)));
+    res.json(serializeReturn(updated));
   }),
 );
 
@@ -252,7 +250,7 @@ returnsRouter.post(
       req.params.id,
       req.admin!.sub,
     );
-    res.json(serializeReturn(updated, await resolveDisplayMode(req.admin!.merchantId)));
+    res.json(serializeReturn(updated));
   }),
 );
 
@@ -266,7 +264,7 @@ returnsRouter.post(
       req.params.id,
       req.admin!.sub,
     );
-    res.json(serializeReturn(updated, await resolveDisplayMode(req.admin!.merchantId)));
+    res.json(serializeReturn(updated));
   }),
 );
 

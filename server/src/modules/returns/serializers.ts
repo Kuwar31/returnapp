@@ -10,7 +10,7 @@ import type {
   ReturnRequest,
   ReturnShipment,
 } from "@prisma/client";
-import { displayConverter, serializeMoney } from "../../lib/money.js";
+import { serializeMoney } from "../../lib/money.js";
 import { STATUS_LABELS } from "./status.js";
 
 type FullReturn = ReturnRequest & {
@@ -84,16 +84,7 @@ const serializeAddress = (value: unknown): SerializedAddress | null => {
  * Prisma Decimals serialize to strings by default, which quietly breaks
  * arithmetic on the client. Every response goes through these.
  */
-export const serializeReturn = (
-  request: FullReturn,
-  /**
-   * Which currency to render in. Storage and arithmetic are always shop
-   * currency; this converts at the boundary using the order's own rate.
-   */
-  display: "SHOP" | "PRESENTMENT" = "SHOP",
-) => {
-  const fx = displayConverter(request.order, display, request.currency);
-  return {
+export const serializeReturn = (request: FullReturn) => ({
   id: request.id,
   reference: request.reference,
   status: request.status,
@@ -104,15 +95,13 @@ export const serializeReturn = (
   customerName: request.customerName,
   customerNote: request.customerNote,
   rejectionReason: request.rejectionReason,
-  currency: fx.currency,
-  /** Always the shop currency, so the admin can say what the books hold. */
-  shopCurrency: request.currency,
+  currency: request.currency,
   totals: {
-    itemsSubtotal: fx.money(request.itemsSubtotal),
-    bonusCredit: fx.money(request.bonusCredit),
-    restockingFee: fx.money(request.restockingFee),
-    estimatedTotal: fx.money(request.estimatedTotal),
-    settledTotal: fx.money(request.settledTotal),
+    itemsSubtotal: serializeMoney(request.itemsSubtotal),
+    bonusCredit: serializeMoney(request.bonusCredit),
+    restockingFee: serializeMoney(request.restockingFee),
+    estimatedTotal: serializeMoney(request.estimatedTotal),
+    settledTotal: serializeMoney(request.settledTotal),
   },
   flaggedAt: request.flaggedAt,
   flagReason: request.flagReason,
@@ -137,8 +126,8 @@ export const serializeReturn = (
     imageUrl: item.orderLineItem?.imageUrl ?? null,
     sku: item.orderLineItem?.sku ?? null,
     quantity: item.quantity,
-    unitPrice: fx.money(item.unitPrice),
-    lineTotal: fx.money(item.lineTotal),
+    unitPrice: serializeMoney(item.unitPrice),
+    lineTotal: serializeMoney(item.lineTotal),
     reasonCode: item.reason?.code ?? null,
     reasonLabel: item.reason?.label ?? null,
     reasonNote: item.reasonNote,
@@ -158,8 +147,8 @@ export const serializeReturn = (
       imageUrl: item.imageUrl,
       sku: item.sku,
       quantity: item.quantity,
-      unitPrice: fx.money(item.unitPrice),
-      priceDifference: fx.money(item.priceDifference),
+      unitPrice: serializeMoney(item.unitPrice),
+      priceDifference: serializeMoney(item.priceDifference),
     })) ?? [],
   shipment: request.shipment
     ? {
@@ -201,9 +190,9 @@ export const serializeReturn = (
          */
         invoiceUrl: request.exchangeDraft.invoiceUrl,
         /**
-         * Not run through `fx` — these are stored in whatever currency the
-         * customer was actually billed, which is what Shopify's invoice says.
-         * Converting again would double-apply the rate.
+         * Kept in whatever currency the customer was actually billed, which is
+         * what Shopify's invoice says — the draft can be denominated
+         * differently from the shop's own books.
          */
         currency: request.exchangeDraft.currency,
         itemsTotal: serializeMoney(request.exchangeDraft.itemsTotal),
@@ -214,16 +203,12 @@ export const serializeReturn = (
         completedAt: request.exchangeDraft.completedAt,
       }
     : null,
-  };
-};
+});
 
 /** Trimmed shape for the admin list view. */
 export const serializeReturnSummary = (
-  request: ReturnRequest & { lineItems: ReturnLineItem[]; order?: Order | null },
-  display: "SHOP" | "PRESENTMENT" = "SHOP",
-) => {
-  const fx = displayConverter(request.order, display, request.currency);
-  return {
+  request: ReturnRequest & { lineItems: ReturnLineItem[] },
+) => ({
   id: request.id,
   reference: request.reference,
   status: request.status,
@@ -231,9 +216,8 @@ export const serializeReturnSummary = (
   resolution: request.resolution,
   customerEmail: request.customerEmail,
   customerName: request.customerName,
-  currency: fx.currency,
-  estimatedTotal: fx.money(request.estimatedTotal),
+  currency: request.currency,
+  estimatedTotal: serializeMoney(request.estimatedTotal),
   itemCount: request.lineItems.reduce((sum, i) => sum + i.quantity, 0),
   submittedAt: request.submittedAt,
-  };
-};
+});
