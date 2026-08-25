@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { DisplayCurrency, StoreSettings } from "../lib/types";
 import { api } from "../lib/api";
 import { ErrorAlert, Loading } from "../components/Feedback";
 import { ShopifyPanel } from "./ShopifyPanel";
@@ -29,6 +30,7 @@ export default function SettingsPage() {
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [store, setStore] = useState<StoreSettings | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -40,10 +42,44 @@ export default function SettingsPage() {
       })
       .catch((e) => active && setError(e.message))
       .finally(() => active && setLoading(false));
+
+    api
+      .get<StoreSettings>("/admin/settings/store", { auth: "admin" })
+      .then((s) => active && setStore(s))
+      .catch(() => undefined);
+
     return () => {
       active = false;
     };
   }, []);
+
+  /**
+   * Saved on change rather than with the policy form.
+   *
+   * It's a view preference, not policy — batching it behind "Save changes"
+   * would make a toggle that only affects what you're looking at feel like a
+   * change to how returns are handled.
+   */
+  const setDisplayCurrency = async (displayCurrency: DisplayCurrency) => {
+    if (!store) return;
+    setStore({ ...store, displayCurrency });
+    setError(null);
+    try {
+      await api.patch(
+        "/admin/settings/store",
+        { displayCurrency },
+        { auth: "admin" },
+      );
+      setStatus(
+        displayCurrency === "SHOP"
+          ? `Now showing amounts in ${store.currency}.`
+          : `Now showing amounts as charged${store.presentmentCurrency ? ` (${store.presentmentCurrency})` : ""}.`,
+      );
+    } catch (e) {
+      setStore(store);
+      setError(e instanceof Error ? e.message : "Couldn't change the currency.");
+    }
+  };
 
   const update = <K extends keyof Policy>(key: K, value: Policy[K]) =>
     setPolicy((prev) => (prev ? { ...prev, [key]: value } : prev));
@@ -98,6 +134,44 @@ export default function SettingsPage() {
       <div className="settings-form">
         <ShopifyPanel />
       </div>
+
+      {store && (
+        <div className="settings-form">
+          <div className="panel">
+            <h2>Display currency</h2>
+            <div className="settings-row">
+              <div>
+                <div className="settings-row__label">Show amounts in</div>
+                <div className="settings-row__hint">
+                  Changes what's displayed, not what's stored — every figure is
+                  kept and calculated in {store.currency}. Converting uses each
+                  order's own rate, so amounts match what that customer was
+                  actually charged.
+                </div>
+              </div>
+              <select
+                value={store.displayCurrency}
+                onChange={(e) =>
+                  void setDisplayCurrency(e.target.value as DisplayCurrency)
+                }
+              >
+                <option value="SHOP">{store.currency} — shop currency</option>
+                <option value="PRESENTMENT">
+                  {store.presentmentCurrency
+                    ? `${store.presentmentCurrency} — as charged`
+                    : "As charged to the customer"}
+                </option>
+              </select>
+            </div>
+            {!store.presentmentCurrency && (
+              <p className="muted" style={{ fontSize: 13 }}>
+                No order has a second currency yet, so both options will look
+                the same until one does.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       <form className="settings-form" onSubmit={save}>
         <div className="panel">

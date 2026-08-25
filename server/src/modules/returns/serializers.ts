@@ -10,7 +10,7 @@ import type {
   ReturnRequest,
   ReturnShipment,
 } from "@prisma/client";
-import { serializeMoney } from "../../lib/money.js";
+import { displayConverter } from "../../lib/money.js";
 import { STATUS_LABELS } from "./status.js";
 
 type FullReturn = ReturnRequest & {
@@ -84,7 +84,16 @@ const serializeAddress = (value: unknown): SerializedAddress | null => {
  * Prisma Decimals serialize to strings by default, which quietly breaks
  * arithmetic on the client. Every response goes through these.
  */
-export const serializeReturn = (request: FullReturn) => ({
+export const serializeReturn = (
+  request: FullReturn,
+  /**
+   * Which currency to render in. Storage and arithmetic are always shop
+   * currency; this converts at the boundary using the order's own rate.
+   */
+  display: "SHOP" | "PRESENTMENT" = "SHOP",
+) => {
+  const fx = displayConverter(request.order, display);
+  return {
   id: request.id,
   reference: request.reference,
   status: request.status,
@@ -95,13 +104,15 @@ export const serializeReturn = (request: FullReturn) => ({
   customerName: request.customerName,
   customerNote: request.customerNote,
   rejectionReason: request.rejectionReason,
-  currency: request.currency,
+  currency: fx.currency,
+  /** Always the shop currency, so the admin can say what the books hold. */
+  shopCurrency: request.currency,
   totals: {
-    itemsSubtotal: serializeMoney(request.itemsSubtotal),
-    bonusCredit: serializeMoney(request.bonusCredit),
-    restockingFee: serializeMoney(request.restockingFee),
-    estimatedTotal: serializeMoney(request.estimatedTotal),
-    settledTotal: serializeMoney(request.settledTotal),
+    itemsSubtotal: fx.money(request.itemsSubtotal),
+    bonusCredit: fx.money(request.bonusCredit),
+    restockingFee: fx.money(request.restockingFee),
+    estimatedTotal: fx.money(request.estimatedTotal),
+    settledTotal: fx.money(request.settledTotal),
   },
   flaggedAt: request.flaggedAt,
   flagReason: request.flagReason,
@@ -126,8 +137,8 @@ export const serializeReturn = (request: FullReturn) => ({
     imageUrl: item.orderLineItem?.imageUrl ?? null,
     sku: item.orderLineItem?.sku ?? null,
     quantity: item.quantity,
-    unitPrice: serializeMoney(item.unitPrice),
-    lineTotal: serializeMoney(item.lineTotal),
+    unitPrice: fx.money(item.unitPrice),
+    lineTotal: fx.money(item.lineTotal),
     reasonCode: item.reason?.code ?? null,
     reasonLabel: item.reason?.label ?? null,
     reasonNote: item.reasonNote,
@@ -147,8 +158,8 @@ export const serializeReturn = (request: FullReturn) => ({
       imageUrl: item.imageUrl,
       sku: item.sku,
       quantity: item.quantity,
-      unitPrice: serializeMoney(item.unitPrice),
-      priceDifference: serializeMoney(item.priceDifference),
+      unitPrice: fx.money(item.unitPrice),
+      priceDifference: fx.money(item.priceDifference),
     })) ?? [],
   shipment: request.shipment
     ? {
@@ -185,21 +196,25 @@ export const serializeReturn = (request: FullReturn) => ({
          * on the shopper-facing portal responses.
          */
         invoiceUrl: request.exchangeDraft.invoiceUrl,
-        currency: request.exchangeDraft.currency,
-        itemsTotal: serializeMoney(request.exchangeDraft.itemsTotal),
-        creditApplied: serializeMoney(request.exchangeDraft.creditApplied),
-        balanceDue: serializeMoney(request.exchangeDraft.balanceDue),
+        currency: fx.currency,
+        itemsTotal: fx.money(request.exchangeDraft.itemsTotal),
+        creditApplied: fx.money(request.exchangeDraft.creditApplied),
+        balanceDue: fx.money(request.exchangeDraft.balanceDue),
         reservedUntil: request.exchangeDraft.reservedUntil,
         invoiceSentAt: request.exchangeDraft.invoiceSentAt,
         completedAt: request.exchangeDraft.completedAt,
       }
     : null,
-});
+  };
+};
 
 /** Trimmed shape for the admin list view. */
 export const serializeReturnSummary = (
-  request: ReturnRequest & { lineItems: ReturnLineItem[] },
-) => ({
+  request: ReturnRequest & { lineItems: ReturnLineItem[]; order?: Order | null },
+  display: "SHOP" | "PRESENTMENT" = "SHOP",
+) => {
+  const fx = displayConverter(request.order, display);
+  return {
   id: request.id,
   reference: request.reference,
   status: request.status,
@@ -207,8 +222,9 @@ export const serializeReturnSummary = (
   resolution: request.resolution,
   customerEmail: request.customerEmail,
   customerName: request.customerName,
-  currency: request.currency,
-  estimatedTotal: serializeMoney(request.estimatedTotal),
+  currency: fx.currency,
+  estimatedTotal: fx.money(request.estimatedTotal),
   itemCount: request.lineItems.reduce((sum, i) => sum + i.quantity, 0),
   submittedAt: request.submittedAt,
-});
+  };
+};

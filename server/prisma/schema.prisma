@@ -26,6 +26,15 @@ model Merchant {
   domain    String?  @unique
   email     String?
   currency  String   @default("USD")
+  /**
+   * Which currency the app *shows*, independent of what it stores.
+   *
+   * All arithmetic stays in shop currency; this only affects presentation.
+   * PRESENTMENT converts using each order's own rate — presentment total over
+   * shop total — so figures match what the customer was actually charged
+   * rather than a rate invented at display time.
+   */
+  displayCurrency DisplayCurrency @default(SHOP)
   timezone  String   @default("UTC")
   status    MerchantStatus @default(ACTIVE)
   createdAt DateTime @default(now())
@@ -42,6 +51,13 @@ model Merchant {
   integrations   Integration[]
 
   @@map("merchants")
+}
+
+enum DisplayCurrency {
+  /// The merchant's own books, e.g. EUR.
+  SHOP
+  /// What the customer was charged, e.g. INR. Per order.
+  PRESENTMENT
 }
 
 enum MerchantStatus {

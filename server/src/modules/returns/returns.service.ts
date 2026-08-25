@@ -62,7 +62,8 @@ export const listReturns = async (
     prisma.returnRequest.count({ where }),
     prisma.returnRequest.findMany({
       where,
-      include: { lineItems: true },
+      // The order carries the presentment rate the list converts with.
+      include: { lineItems: true, order: true },
       orderBy: { submittedAt: "desc" },
       skip: (filters.page - 1) * filters.pageSize,
       take: filters.pageSize,

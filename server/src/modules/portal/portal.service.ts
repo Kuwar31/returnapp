@@ -2,12 +2,13 @@ import { Prisma, type ResolutionType } from "@prisma/client";
 import { badRequest, notFound, unprocessable } from "../../lib/errors.js";
 import { logger } from "../../lib/logger.js";
 import { prisma } from "../../lib/prisma.js";
-import { round2, toDecimal, ZERO } from "../../lib/money.js";
+import { displayConverter, round2, toDecimal, ZERO } from "../../lib/money.js";
 import { evaluateOrder } from "../policy/eligibility.service.js";
 import {
   getReasonTree,
   resolveGroupForProductType,
 } from "../settings/reasons.service.js";
+import { resolveDisplayMode } from "../settings/display-currency.js";
 import {
   qualifiesForAutoApproval,
   quoteReturn,
@@ -201,6 +202,10 @@ export const getOrderEligibility = async (
 
   const eligibility = evaluateOrder(order, policy, new Date(), shopifyReturnable);
 
+  // Item prices are converted here too, so the picker and the running total
+  // never disagree about which currency they're in.
+  const fx = displayConverter(order, await resolveDisplayMode(merchantId));
+
   return {
     order,
     policy,
@@ -209,6 +214,8 @@ export const getOrderEligibility = async (
       ...eligibility,
       items: eligibility.items.map((item) => ({
         ...item,
+        unitPrice: fx.money(toDecimal(item.unitPrice)) ?? item.unitPrice,
+        currency: fx.currency,
         reasonGroupId: groupByLine.get(item.id) ?? null,
       })),
     },
@@ -362,7 +369,7 @@ export const quoteSelection = async (
   orderId: string,
   input: QuoteInput,
 ) => {
-  const { policy, resolved, variants } = await resolveSelections(
+  const { order, policy, resolved, variants } = await resolveSelections(
     merchantId,
     orderId,
     input,
@@ -373,22 +380,29 @@ export const quoteSelection = async (
     policy,
   });
 
+  /**
+   * Converted at the boundary, like every other money response. The shopper
+   * sees what they were charged when the merchant has chosen presentment.
+   */
+  const display = await resolveDisplayMode(merchantId);
+  const fx = displayConverter(order, display);
+
   return {
-    currency: resolved[0]?.line.currency ?? "USD",
-    itemsSubtotal: quote.itemsSubtotal.toNumber(),
-    bonusCredit: quote.bonusCredit.toNumber(),
-    restockingFee: quote.restockingFee.toNumber(),
-    estimatedTotal: quote.estimatedTotal.toNumber(),
-    amountDue: quote.amountDue.toNumber(),
+    currency: fx.currency,
+    itemsSubtotal: fx.money(quote.itemsSubtotal),
+    bonusCredit: fx.money(quote.bonusCredit),
+    restockingFee: fx.money(quote.restockingFee),
+    estimatedTotal: fx.money(quote.estimatedTotal),
+    amountDue: fx.money(quote.amountDue),
     // Per-item breakdown so the portal can show each line's own outcome.
     lines: quote.lines.map((l, i) => ({
       orderLineItemId: resolved[i].selection.orderLineItemId,
       resolution: l.resolution,
-      itemsSubtotal: l.itemsSubtotal.toNumber(),
-      bonusCredit: l.bonusCredit.toNumber(),
-      exchangeValue: l.exchangeValue.toNumber(),
-      credited: l.credited.toNumber(),
-      due: l.due.toNumber(),
+      itemsSubtotal: fx.money(l.itemsSubtotal),
+      bonusCredit: fx.money(l.bonusCredit),
+      exchangeValue: fx.money(l.exchangeValue),
+      credited: fx.money(l.credited),
+      due: fx.money(l.due),
     })),
   };
 };

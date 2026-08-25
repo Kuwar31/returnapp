@@ -7,6 +7,7 @@ import { requireRole } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
 import { SHOPIFY_RETURN_REASONS } from "../shopify/returns.graphql.js";
 import * as reasonsService from "./reasons.service.js";
+import { clearDisplayModeCache } from "./display-currency.js";
 
 export const settingsRouter = Router();
 
@@ -91,6 +92,58 @@ settingsRouter.patch(
  * few dozen reasons, and editing them is much easier against one payload than
  * against a lazily-loaded tree.
  */
+/**
+ * Store-level preferences that aren't part of a return policy.
+ *
+ * Display currency lives here rather than on the policy because it's about how
+ * the app presents money, not about what a shopper is entitled to.
+ */
+settingsRouter.get(
+  "/store",
+  asyncHandler(async (req, res) => {
+    const merchant = await prisma.merchant.findUniqueOrThrow({
+      where: { id: req.admin!.merchantId },
+      select: {
+        name: true,
+        slug: true,
+        currency: true,
+        displayCurrency: true,
+      },
+    });
+
+    // What PRESENTMENT would actually resolve to, so the UI can name the
+    // currency instead of saying "the customer's currency".
+    const sample = await prisma.order.findFirst({
+      where: {
+        merchantId: req.admin!.merchantId,
+        presentmentCurrency: { not: null },
+      },
+      select: { presentmentCurrency: true },
+      orderBy: { placedAt: "desc" },
+    });
+
+    res.json({
+      ...merchant,
+      presentmentCurrency: sample?.presentmentCurrency ?? null,
+    });
+  }),
+);
+
+settingsRouter.patch(
+  "/store",
+  validate(z.object({ displayCurrency: z.enum(["SHOP", "PRESENTMENT"]) })),
+  asyncHandler(async (req, res) => {
+    const merchant = await prisma.merchant.update({
+      where: { id: req.admin!.merchantId },
+      data: { displayCurrency: req.body.displayCurrency },
+      select: { currency: true, displayCurrency: true },
+    });
+    // The resolver caches for 30s; drop it so the change shows immediately.
+    clearDisplayModeCache(req.admin!.merchantId);
+    res.json(merchant);
+  }),
+);
+
 settingsRouter.get(
   "/reason-groups",
   asyncHandler(async (req, res) => {
