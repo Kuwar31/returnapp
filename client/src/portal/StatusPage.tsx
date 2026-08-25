@@ -221,20 +221,25 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
     (sum, item) => sum + item.unitPrice * item.quantity,
     0,
   );
-  // Upgrades are the only thing the shopper can still owe; a trade-down for
-  // something cheaper is already netted off the payout above.
-  const amountDue = detail.exchangeItems.reduce(
-    (sum, item) => sum + Math.max(0, item.priceDifference) * item.quantity,
-    0,
-  );
+  const draft = detail.exchangeDraft;
 
   /**
-   * The draft order is authoritative once it exists — it holds the figure
-   * Shopify will actually charge, in the currency it will charge it in.
-   * `amountDue` is our own estimate, used until the draft is created.
+   * What the shopper still owes, in the currency this page is showing.
+   *
+   * The draft order's balance is authoritative — it's what Shopify will
+   * actually charge — but only when the draft is denominated in the same
+   * currency the page is rendering. Taking its number regardless printed a
+   * EUR balance under a rupee sign, which is worse than an estimate.
+   *
+   * Otherwise it's derived from the rows immediately above it, so the panel
+   * adds up: purchases, less the credit and any bonus, plus fees withheld.
    */
-  const draft = detail.exchangeDraft;
-  const owed = draft ? draft.balanceDue : amountDue;
+  const creditTotal =
+    creditSubtotal + detail.totals.bonusCredit - detail.totals.restockingFee;
+  const owed =
+    draft && draft.currency === currency
+      ? draft.balanceDue
+      : Math.max(0, Math.round((purchaseSubtotal - creditTotal) * 100) / 100);
 
   const cancel = async () => {
     setBusy(true);
