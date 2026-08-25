@@ -191,9 +191,13 @@ export const serializeReturn = (
         name: request.exchangeDraft.name,
         status: request.exchangeDraft.status,
         /**
-         * The checkout link is a bearer URL — anyone holding it can pay and
-         * claim the order — so it is only ever serialized for the admin, never
-         * on the shopper-facing portal responses.
+         * Sent to the shopper as well as the merchant.
+         *
+         * It is a bearer link, but the confirmation page already requires the
+         * return reference plus the matching email — the same proof the
+         * emailed copy assumes — and it is the shopper's own purchase. Holding
+         * it back only meant someone reading "to pay: ₹5,480.86" had no way to
+         * act on it without going to find the email.
          */
         invoiceUrl: request.exchangeDraft.invoiceUrl,
         /**

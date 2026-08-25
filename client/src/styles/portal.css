@@ -1505,3 +1505,18 @@
   color: var(--text-muted);
   vertical-align: middle;
 }
+
+/* The exchange checkout link on the confirmation page. */
+.confirm__pay-note {
+  margin-top: 8px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-subtle);
+  text-align: center;
+}
+
+.confirm__pay-note--done {
+  margin-top: 14px;
+  color: var(--success-fg);
+  font-weight: 600;
+}

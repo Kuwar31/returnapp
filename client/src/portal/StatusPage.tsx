@@ -228,6 +228,14 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
     0,
   );
 
+  /**
+   * The draft order is authoritative once it exists — it holds the figure
+   * Shopify will actually charge, in the currency it will charge it in.
+   * `amountDue` is our own estimate, used until the draft is created.
+   */
+  const draft = detail.exchangeDraft;
+  const owed = draft ? draft.balanceDue : amountDue;
+
   const cancel = async () => {
     setBusy(true);
     setError(null);
@@ -527,11 +535,41 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
               <strong>{money(payout, currency)}</strong>
             </div>
 
-            {amountDue > 0 && (
+            {owed > 0 && (
               <div className="summary__total summary__total--due">
                 <span>To pay for your exchange</span>
-                <strong>{money(amountDue, currency)}</strong>
+                <strong>{money(owed, currency)}</strong>
               </div>
+            )}
+
+            {/*
+              The checkout link, rather than only in the email.
+              Someone reading "to pay" on this page should be able to act on it
+              here — sending them off to find an inbox is where exchanges get
+              abandoned.
+            */}
+            {draft?.invoiceUrl && draft.status !== "COMPLETED" && owed > 0 && (
+              <>
+                <a
+                  className="btn btn--block"
+                  style={{ marginTop: 14 }}
+                  href={draft.invoiceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Complete your purchase
+                </a>
+                <p className="confirm__pay-note">
+                  Secure checkout with {merchant.name}. We'll ship your
+                  replacement as soon as your return arrives.
+                </p>
+              </>
+            )}
+
+            {draft?.status === "COMPLETED" && (
+              <p className="confirm__pay-note confirm__pay-note--done">
+                Paid — your replacement is being prepared.
+              </p>
             )}
           </div>
 

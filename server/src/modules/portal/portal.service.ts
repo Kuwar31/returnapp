@@ -594,6 +594,8 @@ const confirmationInclude = {
   shipment: true,
   events: { orderBy: { createdAt: "asc" } },
   feedback: true,
+  // Carries the checkout link for an exchange the shopper still owes on.
+  exchangeDraft: true,
 } satisfies Prisma.ReturnRequestInclude;
 
 export const getReturnByReference = async (
