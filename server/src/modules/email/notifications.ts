@@ -114,7 +114,7 @@ export const notify = async (
       context.brand,
       context.creditCode,
     );
-    const delivered = await sendMail(mail);
+    const { delivered, reason } = await sendMail(mail);
 
     await prisma.returnEvent.create({
       data: {
@@ -122,8 +122,11 @@ export const notify = async (
         type: "EMAIL_SENT",
         message: delivered
           ? `Emailed ${mail.to}: ${mail.subject}`
-          : `Failed to email ${mail.to}: ${mail.subject}`,
-        metadata: { kind, delivered, subject: mail.subject },
+          // The reason goes on the timeline, not just the logs — a merchant
+          // shouldn't need host access to find out why a customer never heard
+          // from them.
+          : `Couldn't email ${mail.to}: ${reason ?? "delivery failed"}`,
+        metadata: { kind, delivered, subject: mail.subject, reason },
       },
     });
   } catch (error) {

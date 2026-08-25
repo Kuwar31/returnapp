@@ -56,15 +56,26 @@ const writeToDisk = async (mail: Mail): Promise<void> => {
   );
 };
 
+/** Why a message didn't go out, when it didn't. */
+export interface Delivery {
+  delivered: boolean;
+  /** SMTP's own words. Carried so the failure is visible without server logs. */
+  reason?: string;
+}
+
 /**
- * Delivers one message. Resolves false rather than throwing when delivery
- * fails — a bounced notification must never roll back the return it describes.
+ * Delivers one message. Resolves rather than throwing when delivery fails — a
+ * bounced notification must never roll back the return it describes.
+ *
+ * The reason comes back with it: a boolean alone meant every failure looked
+ * identical in the app, and the only way to tell an unverified sender from a
+ * bad password was to go and read the host's logs.
  */
-export const sendMail = async (mail: Mail): Promise<boolean> => {
+export const sendMail = async (mail: Mail): Promise<Delivery> => {
   try {
     if (!env.smtpConfigured) {
       await writeToDisk(mail);
-      return true;
+      return { delivered: true };
     }
 
     const info = await getTransporter().sendMail({
@@ -79,12 +90,24 @@ export const sendMail = async (mail: Mail): Promise<boolean> => {
       { to: mail.to, subject: mail.subject, messageId: info.messageId },
       "Email sent",
     );
-    return true;
+    return { delivered: true };
   } catch (error) {
+    /**
+     * SMTP errors carry the useful part in `response` — the server's actual
+     * reply, like "The domain is not verified". `message` alone is often just
+     * the status code.
+     */
+    const smtp = error as { response?: string; message?: string };
+    const reason = (smtp.response ?? smtp.message ?? "unknown error")
+      .toString()
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 300);
+
     logger.error(
-      { err: error, to: mail.to, subject: mail.subject },
+      { err: error, to: mail.to, subject: mail.subject, reason },
       "Email delivery failed",
     );
-    return false;
+    return { delivered: false, reason };
   }
 };

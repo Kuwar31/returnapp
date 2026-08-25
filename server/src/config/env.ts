@@ -91,6 +91,19 @@ if (!smtpConfigured) {
     "[config] SMTP is not configured — emails will be written to " +
       "server/.mail/ instead of sent. Set SMTP_HOST to send for real.",
   );
+} else if (raw.MAIL_FROM.includes("example.com")) {
+  /**
+   * The commonest way mail silently fails in production: SMTP credentials get
+   * set but MAIL_FROM keeps its placeholder, and providers reject a sender on
+   * a domain nobody has verified. Every notification then bounces while the
+   * config looks complete.
+   */
+  console.warn(
+    "[config] SMTP is configured but MAIL_FROM is still the placeholder " +
+      `(${raw.MAIL_FROM}). Providers reject unverified senders, so every ` +
+      "email will bounce. Set MAIL_FROM to an address on a domain you have " +
+      "verified with your provider.",
+  );
 }
 
 export const env = {

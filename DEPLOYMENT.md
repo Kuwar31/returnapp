@@ -195,8 +195,11 @@ development:
 
 - **GDPR webhooks.** Shopify requires `customers/data_request`,
   `customers/redact` and `shop/redact` for any public app. Not implemented.
-- **Email deliverability.** Verify a sending domain in Resend. Unverified
-  senders land in spam or are rejected outright.
+- **Email deliverability.** `MAIL_FROM` must be an address on a domain you
+  have verified with your provider — an unverified sender is rejected outright,
+  not spam-foldered. The server warns at startup if SMTP is configured while
+  `MAIL_FROM` is still the placeholder, and any delivery failure now shows its
+  reason on the return's timeline.
 - **`read_all_orders`.** `read_orders` only reaches back 60 days, and Shopify
   rejects an over-range query outright rather than trimming it — so the sync is
   capped at 60 days everywhere. Anything older is invisible to the portal until
