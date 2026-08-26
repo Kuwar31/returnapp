@@ -125,6 +125,12 @@ export interface ExchangeOptions {
   variants: ExchangeVariant[];
   /** The variant the shopper already owns, so the picker can mark it. */
   currentVariantId: string | null;
+  /**
+   * What `variants[].price` is denominated in. Catalogue prices are converted
+   * server-side so they match the quote they feed into — render with this, not
+   * with the order's currency.
+   */
+  currency: string;
 }
 
 export interface ExchangeProduct {

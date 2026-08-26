@@ -110,7 +110,14 @@ export function ItemDrawer({
         query: { orderLineItemId: item.id },
       })
       .then(setOptions)
-      .catch(() => setOptions({ product: null, variants: [], currentVariantId: null }))
+      .catch(() =>
+        setOptions({
+          product: null,
+          variants: [],
+          currentVariantId: null,
+          currency,
+        }),
+      )
       .finally(() => setLoading(false));
   }, [step, options, item.id]);
 
@@ -384,7 +391,7 @@ export function ItemDrawer({
                         {isCurrent
                           ? "Current"
                           : v.available
-                            ? money(v.price, currency)
+                            ? money(v.price, options?.currency ?? currency)
                             : "Sold out"}
                       </span>
                     </button>

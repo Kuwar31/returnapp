@@ -310,6 +310,33 @@ const resolveSelections = async (
 };
 
 /**
+ * Converts catalogue prices into the display currency, keyed to this order.
+ *
+ * Shopify hands back catalogue prices in shop currency, and sending them on
+ * untouched put an unconverted item price next to a converted quote total —
+ * the same "€30.00 under a €3,351.60 subtotal" mismatch the serializers were
+ * fixed for. The shopper is choosing between these prices and the summary that
+ * follows from them, so they have to be in the same money.
+ *
+ * The rate is the order's own, so a replacement is priced by the rate the
+ * shopper already paid at rather than today's.
+ */
+const catalogueConverter = async (merchantId: string, orderId: string) => {
+  const order = await prisma.order.findFirstOrThrow({
+    where: { id: orderId, merchantId },
+  });
+  const fx = displayConverter(
+    order,
+    await resolveDisplayMode(merchantId),
+    order.currency,
+  );
+  return {
+    currency: fx.currency,
+    price: (value: number) => fx.money(toDecimal(value)) ?? value,
+  };
+};
+
+/**
  * Exchange options for one returned item: the other variants of the same
  * product, which covers the "wrong size" case that dominates real exchanges.
  */
@@ -323,25 +350,52 @@ export const getExchangeOptions = async (
   });
   if (!line) throw notFound("That item isn't part of this order.");
 
+  const fx = await catalogueConverter(merchantId, orderId);
+
   if (!line.productId) {
     // Nothing to swap for — the item didn't come from Shopify, or predates
     // product ids being captured during sync.
-    return { product: null, variants: [], currentVariantId: line.variantId };
+    return {
+      product: null,
+      variants: [],
+      currentVariantId: line.variantId,
+      currency: fx.currency,
+    };
   }
 
   const product = await getProductVariants(merchantId, line.productId);
   return {
     product: product ? { id: product.id, title: product.title } : null,
-    variants: product?.variants ?? [],
+    variants: (product?.variants ?? []).map((v) => ({
+      ...v,
+      price: fx.price(v.price),
+    })),
     // Lets the picker mark the size they already have.
     currentVariantId: line.variantId,
+    currency: fx.currency,
   };
 };
 
-export const browseExchangeProducts = (
+export const browseExchangeProducts = async (
   merchantId: string,
+  orderId: string,
   { search, cursor }: { search?: string; cursor?: string },
-) => browseProducts(merchantId, { search, cursor });
+) => {
+  const [result, fx] = await Promise.all([
+    browseProducts(merchantId, { search, cursor }),
+    catalogueConverter(merchantId, orderId),
+  ]);
+  return {
+    ...result,
+    products: result.products.map((p) => ({
+      ...p,
+      minPrice: fx.price(p.minPrice),
+      maxPrice: fx.price(p.maxPrice),
+      currency: fx.currency,
+      variants: p.variants.map((v) => ({ ...v, price: fx.price(v.price) })),
+    })),
+  };
+};
 
 /**
  * Turns validated selections into priced quote lines.
