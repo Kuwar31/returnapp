@@ -154,61 +154,66 @@ const buildDraftInput = (
   /**
    * Bill the customer in the currency they originally paid in.
    *
-   * This is not the merchant's display preference — it's what the shopper is
-   * actually charged. Invoicing someone in India in EUR because that's the
-   * shop's bookkeeping currency is wrong regardless of what the dashboard is
-   * set to show.
+   * This is what the shopper is actually charged, not a display preference —
+   * invoicing someone in India in EUR because that's the shop's bookkeeping
+   * currency is wrong however the dashboard is set.
    */
-  const charge = forDisplay(
-    totals.creditApplied,
+  const presentment = forDisplay(
+    ZERO,
     opts.order,
     "PRESENTMENT",
     opts.order.currency,
-  );
-  if (charge.currency !== opts.order.currency) {
-    input.presentmentCurrencyCode = charge.currency;
+  ).currency;
+  if (presentment !== opts.order.currency) {
+    input.presentmentCurrencyCode = presentment;
   }
 
   /**
-   * The return credit rides as an order-level discount rather than as adjusted
-   * line prices, so the merchant can see on the draft what the goods are worth
-   * and what the return paid for.
+   * The return credit is applied as a PERCENTAGE, not a fixed amount.
    *
-   * Both `value` and `amountWithCurrency` are sent, and they are not
-   * alternatives:
+   * This is the difference between a like-for-like exchange settling at zero
+   * and it quietly asking for money. Shopify prices the replacement from
+   * today's catalogue, converted at Shopify's own rate; our credit is the
+   * historical price converted at the rate that order was charged at. Those
+   * two numbers are close but never equal, so a fixed amount always leaves a
+   * few rupees owing on a swap that should cost nothing.
    *
-   *   value              Float!, and documented as "a fixed amount in your
-   *                      shop currency" — so it stays unconverted. Sending
-   *                      only amountWithCurrency omitted a non-null field and
-   *                      Shopify rejected the whole mutation as
-   *                      INVALID_VARIABLE.
-   *   amountWithCurrency the same discount expressed in the currency the draft
-   *                      is billed in. Without it, a converted figure in
-   *                      `value` would be read as shop currency and
-   *                      under-discount by the exchange rate — roughly 110x
-   *                      here.
+   * A percentage carries no units and no rate, so it can't drift: swapping an
+   * item for one of equal value discounts 100% of it, whatever either side is
+   * denominated in or when the catalogue last changed.
    *
-   * They describe one discount in two units, so they cannot disagree.
+   * Capped at 100 because a trade-down can't discount more than the goods are
+   * worth — the surplus goes back through the return's own payout instead.
    */
-  if (totals.creditApplied.greaterThan(0)) {
-    const billedSeparately =
-      charge.amount !== null && charge.currency !== opts.order.currency;
+  if (totals.creditApplied.greaterThan(0) && totals.itemsTotal.greaterThan(0)) {
+    const pct = totals.creditApplied.div(totals.itemsTotal).mul(100);
+    const capped = pct.greaterThan(100) ? toDecimal(100) : round2(pct);
 
     input.appliedDiscount = {
-      valueType: "FIXED_AMOUNT",
-      value: Number(totals.creditApplied.toFixed(2)),
-      ...(billedSeparately
-        ? {
-            amountWithCurrency: {
-              amount: charge.amount!.toFixed(2),
-              currencyCode: charge.currency,
-            },
-          }
-        : {}),
+      valueType: "PERCENTAGE",
+      value: Number(capped.toFixed(2)),
       title: "Return credit",
       description: `Credit from return ${opts.reference}`,
     };
   }
+
+  /**
+   * Traceability, so a draft order can be tied back to its return from inside
+   * Shopify alone — a merchant looking at an unexplained draft shouldn't have
+   * to come here to find out what it is.
+   */
+  input.customAttributes = [
+    { key: "Return", value: opts.reference },
+    { key: "Order", value: `#${opts.orderNumber}` },
+  ];
+  input.metafields = [
+    {
+      namespace: "custom",
+      key: "original_return_reference",
+      type: "single_line_text_field",
+      value: opts.reference,
+    },
+  ];
 
   return input;
 };

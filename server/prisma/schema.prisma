@@ -26,6 +26,11 @@ model Merchant {
   domain    String?  @unique
   email     String?
   currency  String   @default("USD")
+  /**
+   * How exchanges are fulfilled in Shopify. The two paths trade off against
+   * each other and neither is strictly better — see ExchangeMethod.
+   */
+  exchangeMethod ExchangeMethod @default(DRAFT_ORDER)
   timezone  String   @default("UTC")
   status    MerchantStatus @default(ACTIVE)
   createdAt DateTime @default(now())
@@ -42,6 +47,25 @@ model Merchant {
   integrations   Integration[]
 
   @@map("merchants")
+}
+
+/**
+ * Which mechanism creates the replacement for an exchange.
+ *
+ * DRAFT_ORDER reserves the replacement stock the moment the return is
+ * approved, so a popular size can't sell out while the parcel is in transit,
+ * and any balance is collected through a normal checkout link. The cost is
+ * that the exchange is a second order, so it doesn't net against the original
+ * in Shopify's own reporting.
+ *
+ * SHOPIFY_NATIVE puts the replacement on the original order via
+ * `exchangeLineItems`, so revenue nets correctly and Shopify holds fulfillment
+ * until any balance is paid. The cost is that nothing commits until
+ * `returnProcess` runs — days later — so the stock is unreserved until then.
+ */
+enum ExchangeMethod {
+  DRAFT_ORDER
+  SHOPIFY_NATIVE
 }
 
 enum MerchantStatus {
@@ -488,6 +512,9 @@ model ExchangeItem {
   title        String
   variantTitle String?
   imageUrl     String?
+  /// The ExchangeLineItem Shopify created, which `returnProcess` needs to
+  /// confirm the exchange. Only set on the SHOPIFY_NATIVE path.
+  externalExchangeLineItemId String?
   quantity     Int     @default(1)
   unitPrice    Decimal @default(0) @db.Decimal(12, 2)
   /// Amount the shopper still owes when the swap costs more
