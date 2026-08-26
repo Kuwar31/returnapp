@@ -174,20 +174,37 @@ const buildDraftInput = (
    * line prices, so the merchant can see on the draft what the goods are worth
    * and what the return paid for.
    *
-   * `amountWithCurrency` rather than `value`: the docs are explicit that a
-   * FIXED_AMOUNT `value` is "a fixed amount in your shop currency", so passing
-   * a converted figure there would be read as EUR and under-discount by ~110x.
-   * Stating the currency outright removes the ambiguity — the same trap that
-   * nearly issued a 110x gift card, avoided by naming the unit instead of
-   * assuming it.
+   * Both `value` and `amountWithCurrency` are sent, and they are not
+   * alternatives:
+   *
+   *   value              Float!, and documented as "a fixed amount in your
+   *                      shop currency" — so it stays unconverted. Sending
+   *                      only amountWithCurrency omitted a non-null field and
+   *                      Shopify rejected the whole mutation as
+   *                      INVALID_VARIABLE.
+   *   amountWithCurrency the same discount expressed in the currency the draft
+   *                      is billed in. Without it, a converted figure in
+   *                      `value` would be read as shop currency and
+   *                      under-discount by the exchange rate — roughly 110x
+   *                      here.
+   *
+   * They describe one discount in two units, so they cannot disagree.
    */
-  if (totals.creditApplied.greaterThan(0) && charge.amount !== null) {
+  if (totals.creditApplied.greaterThan(0)) {
+    const billedSeparately =
+      charge.amount !== null && charge.currency !== opts.order.currency;
+
     input.appliedDiscount = {
       valueType: "FIXED_AMOUNT",
-      amountWithCurrency: {
-        amount: charge.amount.toFixed(2),
-        currencyCode: charge.currency,
-      },
+      value: Number(totals.creditApplied.toFixed(2)),
+      ...(billedSeparately
+        ? {
+            amountWithCurrency: {
+              amount: charge.amount!.toFixed(2),
+              currencyCode: charge.currency,
+            },
+          }
+        : {}),
       title: "Return credit",
       description: `Credit from return ${opts.reference}`,
     };
