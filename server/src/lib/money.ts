@@ -36,7 +36,7 @@ export const formatMoney = (
 };
 
 // ---------------------------------------------------------------------------
-// Presentment conversion
+// Display currency
 // ---------------------------------------------------------------------------
 
 /** The presentment figures an order carries, if it has any. */
@@ -50,26 +50,26 @@ export interface OrderRateSource {
 /**
  * Converts a shop-currency amount into the currency the customer was charged.
  *
- * Used for money that leaves the shop's own books — currently the exchange
- * draft order, which must bill in the currency the shopper actually paid in.
- * The app's own screens deliberately do NOT use this: rendering converted
- * figures alongside unconverted ones produced totals that didn't add up, and
- * displaying one currency throughout is worth more than displaying the
- * customer's.
+ * Two callers, one rule. The exchange draft order bills in it because Shopify
+ * must charge the shopper in the currency they actually paid; the serializers
+ * render in it when the merchant has asked to see presentment figures.
  *
  * The rate comes from the order itself — presentment total over shop total —
- * not from a feed, so a figure always matches what that customer was charged
- * rather than today's rate.
+ * not from a feed. That matters: rates differ per order because they were
+ * placed at different times, and a single global rate would silently restate
+ * historical figures the customer has already seen.
  *
- * Falls back to `fallbackCurrency` whenever the rate can't be derived. That
- * argument is required rather than defaulted: a hardcoded fallback once
- * rendered a EUR store's figures as USD when a caller forgot to load the
+ * Falls back to `fallbackCurrency` whenever the rate can't be derived, so an
+ * order predating presentment capture degrades to "unconverted" rather than
+ * wrong. That argument is required rather than defaulted: a hardcoded fallback
+ * once rendered a EUR store's figures as USD when a caller forgot to load the
  * order, and nothing failed loudly.
  */
 export const forDisplay = (
   amount: Prisma.Decimal | null,
   order: OrderRateSource | null | undefined,
   mode: "SHOP" | "PRESENTMENT",
+  /** Used when the order isn't loaded. See the note above on why it's required. */
   fallbackCurrency: string,
 ): { amount: number | null; currency: string } => {
   const shopCurrency = order?.currency ?? fallbackCurrency;
@@ -95,4 +95,18 @@ export const forDisplay = (
 
   const rate = presentmentTotal.div(shopTotal);
   return { amount: round2(amount.mul(rate)).toNumber(), currency: target };
+};
+
+/** Curries `forDisplay` for a single order, since serializers convert many. */
+export const displayConverter = (
+  order: OrderRateSource | null | undefined,
+  mode: "SHOP" | "PRESENTMENT",
+  fallbackCurrency: string,
+) => {
+  const currency = forDisplay(ZERO, order, mode, fallbackCurrency).currency;
+  return {
+    currency,
+    money: (value: Prisma.Decimal | null) =>
+      forDisplay(value, order, mode, fallbackCurrency).amount,
+  };
 };

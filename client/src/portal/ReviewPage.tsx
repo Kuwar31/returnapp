@@ -69,7 +69,13 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const currency = order.currency;
+  /**
+   * Read from whatever payload the amounts on screen came from, never from the
+   * order. The server may render in the customer's presentment currency, and
+   * labelling converted figures with the shop's currency is how this page once
+   * showed a euro subtotal under a rupee sign.
+   */
+  const currency = quote?.currency ?? eligibility.items[0]?.currency ?? order.currency;
   const itemById = new Map(eligibility.items.map((i) => [i.id, i]));
   /** Draft keys are articles (`<lineId>#<n>`), so resolve through the line. */
   const itemFor = (key: string) => itemById.get(lineIdOf(key));

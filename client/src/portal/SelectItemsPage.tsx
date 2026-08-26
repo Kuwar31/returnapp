@@ -48,7 +48,9 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
   const [quote, setQuote] = useState<Quote | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const currency = order.currency;
+  /** The payload that carried the amounts owns the currency — see ReviewPage. */
+  const currency =
+    quote?.currency ?? eligibility.items[0]?.currency ?? order.currency;
   const chosen = useMemo(() => toSelections(decisions), [decisions]);
 
   // Re-quote whenever a decision changes. Debounced because opening and closing

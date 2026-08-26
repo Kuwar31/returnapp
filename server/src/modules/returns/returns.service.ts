@@ -1,7 +1,7 @@
 import type { Prisma, ResolutionType, ReturnStatus } from "@prisma/client";
 import { conflict, notFound, unprocessable } from "../../lib/errors.js";
 import { prisma } from "../../lib/prisma.js";
-import { toDecimal } from "../../lib/money.js";
+import { forDisplay, toDecimal } from "../../lib/money.js";
 import { logger } from "../../lib/logger.js";
 import { notifyInBackground } from "../email/notifications.js";
 import {
@@ -27,6 +27,8 @@ import { quoteReturn } from "../policy/quote.service.js";
 import { assertTransition, STATUS_LABELS } from "./status.js";
 
 const detailInclude = {
+  // Carries the presentment rate every money field is converted with.
+  order: true,
   lineItems: { include: { reason: true, orderLineItem: true } },
   exchangeItems: true,
   shipment: true,
@@ -62,7 +64,8 @@ export const listReturns = async (
     prisma.returnRequest.count({ where }),
     prisma.returnRequest.findMany({
       where,
-      include: { lineItems: true },
+      // The order carries the presentment rate the list converts with.
+      include: { lineItems: true, order: true },
       orderBy: { submittedAt: "desc" },
       skip: (filters.page - 1) * filters.pageSize,
       take: filters.pageSize,
@@ -804,25 +807,65 @@ export const addNote = async (
   });
 };
 
+const OPEN_STATUSES: ReturnStatus[] = [
+  "SUBMITTED",
+  "APPROVED",
+  "IN_TRANSIT",
+  "RECEIVED",
+];
+
 export const getDashboardStats = async (merchantId: string) => {
-  const [byStatus, pendingValue] = await Promise.all([
+  const [byStatus, open, merchant] = await Promise.all([
     prisma.returnRequest.groupBy({
       by: ["status"],
       where: { merchantId },
       _count: { _all: true },
     }),
-    prisma.returnRequest.aggregate({
-      where: {
-        merchantId,
-        status: { in: ["SUBMITTED", "APPROVED", "IN_TRANSIT", "RECEIVED"] },
-      },
-      _sum: { estimatedTotal: true },
+    /**
+     * Fetched rather than SUMmed in SQL.
+     *
+     * Each order converts at its own rate, so a single aggregate can't be
+     * converted afterwards — the sum would need one rate for figures that
+     * came from several. Open returns are a small set by definition.
+     */
+    prisma.returnRequest.findMany({
+      where: { merchantId, status: { in: OPEN_STATUSES } },
+      select: { estimatedTotal: true, currency: true, order: true },
+    }),
+    prisma.merchant.findUnique({
+      where: { id: merchantId },
+      select: { currency: true, displayCurrency: true },
     }),
   ]);
 
   const counts = Object.fromEntries(
     byStatus.map((row) => [row.status, row._count._all]),
   ) as Partial<Record<ReturnStatus, number>>;
+
+  const mode = merchant?.displayCurrency ?? "SHOP";
+  const shopCurrency = merchant?.currency ?? "USD";
+
+  /**
+   * Convert every row first, then decide whether the sum is meaningful.
+   *
+   * Orders that predate presentment capture degrade to shop currency while
+   * their neighbours convert, and adding those together would produce a total
+   * in no currency at all — labelled by whichever row happened to be last.
+   * A mixed set falls back to shop currency for the whole figure, which is at
+   * least a number the merchant can reconcile against their own books.
+   */
+  const converted = open.map((row) => ({
+    display: forDisplay(toDecimal(row.estimatedTotal), row.order, mode, row.currency),
+    shop: toDecimal(row.estimatedTotal).toNumber(),
+  }));
+
+  const targets = new Set(converted.map((c) => c.display.currency));
+  const consistent = targets.size <= 1;
+  const currency = consistent ? (targets.values().next().value ?? shopCurrency) : shopCurrency;
+  const openValue = converted.reduce(
+    (sum, c) => sum + (consistent ? (c.display.amount ?? 0) : c.shop),
+    0,
+  );
 
   return {
     counts: {
@@ -833,8 +876,8 @@ export const getDashboardStats = async (merchantId: string) => {
       resolved: counts.RESOLVED ?? 0,
       rejected: counts.REJECTED ?? 0,
     },
-    openValue: pendingValue._sum.estimatedTotal
-      ? toDecimal(pendingValue._sum.estimatedTotal).toNumber()
-      : 0,
+    openValue: Math.round(openValue * 100) / 100,
+    /** So the dashboard labels the figure rather than assuming a currency. */
+    currency,
   };
 };
