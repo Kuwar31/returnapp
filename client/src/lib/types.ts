@@ -343,3 +343,18 @@ export interface StoreSettings {
   presentmentCurrency: string | null;
   exchangeMethod: ExchangeMethod;
 }
+
+/** Whether Shopify settled a native exchange correctly, and what can be done. */
+export interface ExchangeDiagnosis {
+  /**
+   * UNCOMMITTED — the replacement was never processed; the app can settle it.
+   * UNSETTLED   — processed without netting; needs a refund from the order,
+   *               which requires a scope this app doesn't hold.
+   */
+  state: "NOT_APPLICABLE" | "HEALTHY" | "UNCOMMITTED" | "UNSETTLED";
+  summary: string;
+  refundOwed: { amount: number; currency: string } | null;
+  repairable: boolean;
+  shopifyReturnName: string | null;
+  orderOutstanding: { amount: number; currency: string } | null;
+}

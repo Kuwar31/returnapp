@@ -1223,3 +1223,21 @@ table.data tbody tr:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* The stranded-exchange banner: explanation on the left, action on the right. */
+.repair {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.repair__body p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.repair .btn {
+  flex-shrink: 0;
+}

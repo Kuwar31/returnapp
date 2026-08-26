@@ -7,6 +7,10 @@ import { validate } from "../../middleware/validate.js";
 import { serializeReturn, serializeReturnSummary } from "./serializers.js";
 import * as returnsService from "./returns.service.js";
 import { resolveDisplayMode } from "../settings/merchant-settings.js";
+import {
+  diagnoseExchange,
+  runExchangeRepair,
+} from "../shopify/exchange-repair.service.js";
 
 export const returnsRouter = Router();
 
@@ -267,6 +271,40 @@ returnsRouter.post(
       req.admin!.sub,
     );
     res.json(serializeReturn(updated, await resolveDisplayMode(req.admin!.merchantId)));
+  }),
+);
+
+/**
+ * Diagnoses an exchange that Shopify settled wrong. Read-only, so the detail
+ * page can ask on every render without side effects.
+ */
+returnsRouter.get(
+  "/:id/exchange/diagnose",
+  asyncHandler(async (req, res) => {
+    res.json(
+      await diagnoseExchange(req.admin!.merchantId, req.params.id),
+    );
+  }),
+);
+
+/** Commits a stranded exchange and nets it against the return. */
+returnsRouter.post(
+  "/:id/exchange/repair",
+  requireRole("OWNER", "ADMIN"),
+  asyncHandler(async (req, res) => {
+    const diagnosis = await runExchangeRepair(
+      req.admin!.merchantId,
+      req.params.id,
+      req.admin!.sub,
+    );
+    const updated = await returnsService.getReturn(
+      req.admin!.merchantId,
+      req.params.id,
+    );
+    res.json({
+      ...serializeReturn(updated, await resolveDisplayMode(req.admin!.merchantId)),
+      diagnosis,
+    });
   }),
 );
 

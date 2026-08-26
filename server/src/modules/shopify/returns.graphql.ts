@@ -306,3 +306,35 @@ export const SHOPIFY_RETURN_REASONS = new Set([
 
 export const toShopifyReturnReason = (code: string | null): string =>
   code && SHOPIFY_RETURN_REASONS.has(code) ? code : "OTHER";
+
+/**
+ * The exchange's state on a return, for diagnosing one that was settled wrong.
+ *
+ * `processedQuantity` is the field that matters: an exchange line item that
+ * reads zero was registered and never committed, which is what a return closed
+ * without netting leaves behind.
+ */
+export const RETURN_EXCHANGE_STATE = `#graphql
+  query ReturnExchangeState($id: ID!) {
+    return(id: $id) {
+      id
+      name
+      status
+      exchangeLineItems(first: 50) {
+        nodes {
+          id
+          quantity
+          processedQuantity
+          unprocessedQuantity
+          processableQuantity
+          variantId
+        }
+      }
+      order {
+        id
+        name
+        totalOutstandingSet { presentmentMoney { amount currencyCode } }
+      }
+    }
+  }
+`;

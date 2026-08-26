@@ -2,7 +2,12 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import { api } from "../lib/api";
 import { dateTime, money, shortDate, titleCase } from "../lib/format";
-import type { ExchangeDraft, RefundPreview, ReturnDetail } from "../lib/types";
+import type {
+  ExchangeDiagnosis,
+  ExchangeDraft,
+  RefundPreview,
+  ReturnDetail,
+} from "../lib/types";
 import { ErrorAlert, Loading } from "../components/Feedback";
 import { StatusBadge } from "../components/StatusBadge";
 
@@ -280,6 +285,7 @@ export default function ReturnDetailPage() {
   const [acting, setActing] = useState(false);
   const [note, setNote] = useState("");
   const [preview, setPreview] = useState<RefundPreview | null>(null);
+  const [diagnosis, setDiagnosis] = useState<ExchangeDiagnosis | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -308,6 +314,42 @@ export default function ReturnDetailPage() {
       active = false;
     };
   }, [id, detail?.status]);
+
+  /**
+   * Whether Shopify settled this return's exchange correctly.
+   *
+   * Read-only and non-critical — a failure just means no banner. Only returns
+   * with a native exchange come back as anything other than NOT_APPLICABLE, so
+   * this stays silent on everything else.
+   */
+  useEffect(() => {
+    let active = true;
+    api
+      .get<ExchangeDiagnosis>(`/admin/returns/${id}/exchange/diagnose`, {
+        auth: "admin",
+      })
+      .then((data) => active && setDiagnosis(data))
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [id, detail?.status]);
+
+  const repairExchange = async () => {
+    setActing(true);
+    setError(null);
+    try {
+      const updated = await api.post<
+        ReturnDetail & { diagnosis: ExchangeDiagnosis }
+      >(`/admin/returns/${id}/exchange/repair`, undefined, { auth: "admin" });
+      setDetail(updated);
+      setDiagnosis(updated.diagnosis);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "The repair failed.");
+    } finally {
+      setActing(false);
+    }
+  };
 
   /** Every action returns the updated record, so we just swap it in. */
   const act = async (path: string, body?: unknown) => {
@@ -540,6 +582,64 @@ export default function ReturnDetailPage() {
       )}
 
       <ErrorAlert message={error} />
+
+      {/*
+        Only ever rendered for a return whose exchange Shopify settled wrong.
+        Two outcomes, and the difference matters to the merchant: one the app
+        can put right itself, the other needs a refund from the order because
+        Shopify has already finished with the return.
+      */}
+      {diagnosis &&
+        (diagnosis.state === "UNCOMMITTED" || diagnosis.state === "UNSETTLED") && (
+          <div className="alert alert--warn repair">
+            <div className="repair__body">
+              <strong>
+                {diagnosis.state === "UNCOMMITTED"
+                  ? "This exchange was never completed in Shopify"
+                  : "This exchange was charged without crediting the return"}
+              </strong>
+              <p>{diagnosis.summary}</p>
+              {diagnosis.refundOwed && (
+                <p>
+                  Shopify prices the refund owed at{" "}
+                  <strong>
+                    {money(
+                      diagnosis.refundOwed.amount,
+                      diagnosis.refundOwed.currency,
+                    )}
+                  </strong>
+                  .
+                </p>
+              )}
+              {diagnosis.state === "UNSETTLED" && diagnosis.orderOutstanding && (
+                <p>
+                  Refund{" "}
+                  <strong>
+                    {money(
+                      diagnosis.refundOwed?.amount ??
+                        diagnosis.orderOutstanding.amount,
+                      diagnosis.refundOwed?.currency ??
+                        diagnosis.orderOutstanding.currency,
+                    )}
+                  </strong>{" "}
+                  on order {diagnosis.shopifyReturnName?.split("-")[0]} in Shopify
+                  and release the hold on the replacement. This app issues refunds
+                  through the return itself, which Shopify has already closed, so
+                  it can't do it from here.
+                </p>
+              )}
+            </div>
+            {diagnosis.repairable && (
+              <button
+                className="btn btn--sm"
+                disabled={acting}
+                onClick={() => void repairExchange()}
+              >
+                {acting ? "Settling…" : "Settle exchange"}
+              </button>
+            )}
+          </div>
+        )}
 
       {/* The one banner Loop leads with: a return nobody has touched that is
           running out of window. Only shown while it can still be acted on. */}
