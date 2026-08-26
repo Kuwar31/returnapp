@@ -42,6 +42,26 @@ export const loadDraft = (orderId: string): Draft => {
   }
 };
 
+/**
+ * The stored exchange price, but only when it's in the currency being rendered.
+ *
+ * A draft survives reloads and setting changes, so its price can be in a
+ * currency the page is no longer showing. Returning null then makes the label
+ * disappear, which is honest — the quote alongside it is always current and
+ * still tells the shopper what they'll pay. Relabelling it instead is how an
+ * unconverted "₹100.00" ended up under a converted "₹11,172.00".
+ */
+export const exchangePriceIn = (
+  decision: { exchangePrice: number | null; exchangeCurrency?: string | null },
+  currency: string,
+): number | null => {
+  if (decision.exchangePrice === null) return null;
+  // Drafts written before the currency was stamped carry no claim about it;
+  // trusting them is what this guard exists to prevent.
+  if (decision.exchangeCurrency !== currency) return null;
+  return decision.exchangePrice;
+};
+
 export const clearDraft = (orderId: string): void => {
   try {
     sessionStorage.removeItem(key(orderId));

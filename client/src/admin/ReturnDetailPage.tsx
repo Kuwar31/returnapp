@@ -712,6 +712,18 @@ export default function ReturnDetailPage() {
               </div>
 
               {/*
+                An upgrade pays out nothing — the credit is spent on the
+                replacement — so the total above is legitimately zero. Without
+                this row that zero reads as a bug rather than as "they owe us".
+              */}
+              {totals.amountDue > 0 && (
+                <div className="tot__grand tot__grand--due">
+                  <span>Customer owes</span>
+                  <span>{money(totals.amountDue, detail.currency)}</span>
+                </div>
+              )}
+
+              {/*
                 How the money actually leaves. Worth stating explicitly: with
                 per-line resolutions one return can refund one item, credit
                 another and gift-card a third, and "Total refund" alone hides

@@ -1080,6 +1080,14 @@ table.data tbody tr:hover {
   letter-spacing: -0.01em;
 }
 
+/* An outstanding balance, not a payout — coloured so it doesn't read as one. */
+.tot__grand--due {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 0;
+  color: var(--danger, #b42318);
+}
+
 /* `.rhead` no longer holds the action buttons — they moved to their own bar —
    so it stops being a two-column flex and lets the meta sit under the title. */
 .rhead {

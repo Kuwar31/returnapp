@@ -167,6 +167,12 @@ export interface ReturnDetail {
     restockingFee: number;
     estimatedTotal: number;
     settledTotal: number | null;
+    /**
+     * What the shopper owes when the replacement costs more than the credit.
+     * The payout floors at zero in that case, so this is the only figure that
+     * says a balance is outstanding.
+     */
+    amountDue: number;
   };
   submittedAt: string;
   reviewedAt: string | null;

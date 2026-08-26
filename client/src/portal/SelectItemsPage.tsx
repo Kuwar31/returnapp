@@ -6,7 +6,14 @@ import type { OrderSession, Quote, ResolutionType } from "../lib/types";
 import { ErrorAlert } from "../components/Feedback";
 import { PortalStepper } from "./PortalLayout";
 import { ItemDrawer, type ItemDecision } from "./ItemDrawer";
-import { articleKey, lineIdOf, loadDraft, saveDraft, toSelections } from "./draft";
+import {
+  articleKey,
+  exchangePriceIn,
+  lineIdOf,
+  loadDraft,
+  saveDraft,
+  toSelections,
+} from "./draft";
 import type { Route } from "./+types/SelectItemsPage";
 
 /** Loads the order behind the portal token, bouncing to lookup if it's gone. */
@@ -177,8 +184,8 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
                       {decision.exchangeLabel && (
                         <div className="muted">
                           Exchanging for: {decision.exchangeLabel}
-                          {decision.exchangePrice !== null &&
-                            ` · ${money(decision.exchangePrice, currency)}`}
+                          {exchangePriceIn(decision, currency) !== null &&
+                            ` · ${money(exchangePriceIn(decision, currency)!, currency)}`}
                         </div>
                       )}
                     </div>

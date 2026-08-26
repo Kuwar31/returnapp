@@ -20,6 +20,16 @@ export interface ItemDecision {
   /** Kept only to render the summary; the server re-prices from Shopify. */
   exchangeLabel: string | null;
   exchangePrice: number | null;
+  /**
+   * What `exchangePrice` is denominated in, captured when it was chosen.
+   *
+   * The draft outlives the page, so a price picked before the merchant changed
+   * display currency — or before a deploy that changed how prices are
+   * converted — would otherwise be rendered under whatever symbol the page is
+   * using now. That put an unconverted "₹100.00" under a converted "₹11,172.00"
+   * for the same item. Stale prices are dropped on render rather than relabelled.
+   */
+  exchangeCurrency: string | null;
 }
 
 /**
@@ -167,6 +177,7 @@ export function ItemDrawer({
         ? `${productTitle ?? options?.product?.title ?? ""} · ${variant.title}`.trim()
         : null,
       exchangePrice: variant?.price ?? null,
+      exchangeCurrency: variant ? (options?.currency ?? currency) : null,
     });
   };
 

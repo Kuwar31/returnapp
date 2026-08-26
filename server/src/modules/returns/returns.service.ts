@@ -1,7 +1,7 @@
 import type { Prisma, ResolutionType, ReturnStatus } from "@prisma/client";
 import { conflict, notFound, unprocessable } from "../../lib/errors.js";
 import { prisma } from "../../lib/prisma.js";
-import { forDisplay, toDecimal } from "../../lib/money.js";
+import { displayConverter, forDisplay, toDecimal } from "../../lib/money.js";
 import { logger } from "../../lib/logger.js";
 import { notifyInBackground } from "../email/notifications.js";
 import {
@@ -22,7 +22,7 @@ import {
   ensureExchangeDraftOrder,
   sendExchangeInvoice,
 } from "../shopify/exchange.service.js";
-import { resolveExchangeMethod } from "../settings/merchant-settings.js";
+import { resolveDisplayMode, resolveExchangeMethod } from "../settings/merchant-settings.js";
 import { generateCreditCode } from "./reference.js";
 import { quoteReturn } from "../policy/quote.service.js";
 import { assertTransition, STATUS_LABELS } from "./status.js";
@@ -420,12 +420,24 @@ const payoutSplit = async (merchantId: string, id: string) => {
  * rather than a single destination.
  */
 export const getPayoutBreakdown = async (merchantId: string, id: string) => {
-  const split = await payoutSplit(merchantId, id);
+  const [split, request, mode] = await Promise.all([
+    payoutSplit(merchantId, id),
+    getReturn(merchantId, id),
+    resolveDisplayMode(merchantId),
+  ]);
+  /**
+   * Converted like every other money field on this response.
+   *
+   * These are appended to the payload after serializeReturn rather than by it,
+   * which is exactly how they got missed: the admin rendered them with the
+   * detail's currency while the numbers themselves were still shop currency.
+   */
+  const fx = displayConverter(request.order, mode, request.currency);
   return [...split.entries()]
     .filter(([, amount]) => amount.greaterThan(0))
     .map(([resolution, amount]) => ({
       resolution,
-      amount: amount.toNumber(),
+      amount: fx.money(amount) ?? amount.toNumber(),
     }));
 };
 
@@ -504,14 +516,30 @@ export const resolveReturn = async (
    * credit another, exchange a third — so each destination is driven by whether
    * *any* line chose it, not by a single resolution on the request.
    *
-   * Exchanges pay out through their own draft order rather than through a
-   * refund or a credit — see completeExchangeDraftOrder below.
+   * Under the draft-order method exchanges pay out through their own draft
+   * rather than through a refund or a credit — see completeExchangeDraftOrder
+   * below.
    */
   const resolutions = new Set(current.lineItems.map((li) => li.resolution));
 
-  if (resolutions.has("REFUND")) {
+  /**
+   * A native exchange is only real once returnProcess commits it.
+   *
+   * Until then Shopify holds the replacement as an unreleased exchange item:
+   * processedQuantity 0, no order line, nothing to fulfil. Closing the return
+   * instead — which is what happens to every non-refund resolution — leaves it
+   * in that state permanently, with the return marked closed and the shopper
+   * waiting for goods no warehouse has been told to send.
+   */
+  const hasNativeExchange = current.exchangeItems.some(
+    (item) => item.externalExchangeLineItemId,
+  );
+
+  const processed = resolutions.has("REFUND") || hasNativeExchange;
+  if (processed) {
     // Throws on failure, leaving the return at RECEIVED so the merchant can
-    // fix the cause and retry rather than silently under-paying a customer.
+    // fix the cause and retry rather than silently under-paying a customer or
+    // closing a return whose exchange never committed.
     await processShopifyReturn(merchantId, id);
   }
 
@@ -638,12 +666,16 @@ export const resolveReturn = async (
   });
 
   /**
-   * Store credit and exchanges are compensated outside the return, so the
-   * Shopify return just needs closing — no refund to process. Leaving it open
-   * would keep Shopify's own "Process and refund" button on the order, from
-   * which a merchant could accidentally pay the customer twice.
+   * Store credit and draft-order exchanges are compensated outside the return,
+   * so the Shopify return just needs closing — no refund to process. Leaving it
+   * open would keep Shopify's own "Process and refund" button on the order,
+   * from which a merchant could accidentally pay the customer twice.
+   *
+   * Skipped whenever returnProcess already ran: it closes the return itself,
+   * and closing a second time would either error or, worse, close a return
+   * whose exchange we had just committed.
    */
-  if (current.resolution !== "REFUND") {
+  if (!processed) {
     try {
       await closeShopifyReturn(merchantId, id);
     } catch (error) {

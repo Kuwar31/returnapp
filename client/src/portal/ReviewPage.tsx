@@ -12,6 +12,7 @@ import { ErrorAlert } from "../components/Feedback";
 import { PortalStepper } from "./PortalLayout";
 import {
   clearDraft,
+  exchangePriceIn,
   lineIdOf,
   loadDraft,
   saveDraft,
@@ -219,9 +220,9 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
                       <div className="review__tile-title">
                         {d.exchangeLabel}
                       </div>
-                      {d.exchangePrice !== null && (
+                      {exchangePriceIn(d, currency) !== null && (
                         <div className="muted">
-                          {money(d.exchangePrice, currency)}
+                          {money(exchangePriceIn(d, currency)!, currency)}
                         </div>
                       )}
                     </div>
@@ -308,8 +309,8 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
                     <span className="summary__blank" />
                     <span className="summary__label">{d.exchangeLabel}</span>
                     <span>
-                      {d.exchangePrice !== null
-                        ? money(d.exchangePrice, currency)
+                      {exchangePriceIn(d, currency) !== null
+                        ? money(exchangePriceIn(d, currency)!, currency)
                         : ""}
                     </span>
                   </div>

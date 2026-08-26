@@ -93,6 +93,26 @@ export const serializeReturn = (
   display: "SHOP" | "PRESENTMENT" = "SHOP",
 ) => {
   const fx = displayConverter(request.order, display, request.currency);
+
+  /**
+   * What the shopper still owes, when the replacement costs more than the
+   * credit. Derived rather than stored, from figures already converted above.
+   *
+   * The admin previously showed only "Settled total 0.00" for these, because
+   * the payout floors at zero when a return owes money rather than paying it —
+   * correct, but it left a merchant looking at a return worth nothing with no
+   * indication that a balance was outstanding.
+   */
+  const purchased = (request.exchangeItems ?? []).reduce(
+    (sum, item) => sum + (fx.money(item.unitPrice) ?? 0) * item.quantity,
+    0,
+  );
+  const credited =
+    (fx.money(request.itemsSubtotal) ?? 0) +
+    (fx.money(request.bonusCredit) ?? 0) -
+    (fx.money(request.restockingFee) ?? 0);
+  const amountDue = Math.max(0, Math.round((purchased - credited) * 100) / 100);
+
   return {
   id: request.id,
   reference: request.reference,
@@ -113,6 +133,7 @@ export const serializeReturn = (
     restockingFee: fx.money(request.restockingFee),
     estimatedTotal: fx.money(request.estimatedTotal),
     settledTotal: fx.money(request.settledTotal),
+    amountDue,
   },
   flaggedAt: request.flaggedAt,
   flagReason: request.flagReason,
