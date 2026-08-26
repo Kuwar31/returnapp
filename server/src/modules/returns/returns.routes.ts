@@ -6,7 +6,7 @@ import { requireRole } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
 import { serializeReturn, serializeReturnSummary } from "./serializers.js";
 import * as returnsService from "./returns.service.js";
-import { resolveDisplayMode } from "../settings/display-currency.js";
+import { resolveDisplayMode } from "../settings/merchant-settings.js";
 
 export const returnsRouter = Router();
 

@@ -57,6 +57,17 @@ export const RETURN_CREATE = `#graphql
             }
           }
         }
+        # Only populated on the SHOPIFY_NATIVE path, and the only place these
+        # ids are ever handed out. returnProcess addresses each replacement by
+        # id, so an exchange whose ids weren't captured here can never be
+        # committed — it would sit open in Shopify forever.
+        exchangeLineItems(first: 50) {
+          nodes {
+            id
+            quantity
+            variantId
+          }
+        }
       }
       userErrors { field message code }
     }

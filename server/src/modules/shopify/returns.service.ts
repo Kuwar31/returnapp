@@ -14,6 +14,7 @@ import {
   SUGGESTED_FINANCIAL_OUTCOME,
   toShopifyReturnReason,
 } from "./returns.graphql.js";
+import { resolveExchangeMethod } from "../settings/merchant-settings.js";
 
 interface UserError {
   field?: string[] | null;
@@ -199,15 +200,6 @@ export const createShopifyReturn = async (
     });
   }
 
-  /**
-   * Exchanges are deliberately NOT sent as `exchangeLineItems` here.
-   *
-   * They run through their own draft order (see exchange.service.ts) so the
-   * replacement stock can be reserved at approval, which Shopify's native
-   * exchange can't do — it only commits at returnProcess, days later. Passing
-   * them here as well would give the shopper two replacements: one on this
-   * return and one on the draft order.
-   */
   const input: Record<string, unknown> = {
     orderId: request.order.externalId,
     returnLineItems,
@@ -216,6 +208,31 @@ export const createShopifyReturn = async (
     notifyCustomer: false,
     requestedAt: request.submittedAt.toISOString(),
   };
+
+  /**
+   * Exchanges go here only on the SHOPIFY_NATIVE path.
+   *
+   * Under DRAFT_ORDER the replacement is a separate draft order, so sending it
+   * here as well would give the shopper two of everything — one on this return
+   * and one on the draft. The merchant picks between the two; see
+   * ExchangeMethod for what each buys.
+   *
+   * A variant id is required either way: Shopify can only reserve or bill for
+   * something in its own catalogue, so an exchange item we never resolved to a
+   * variant is skipped rather than sent as a nameless line.
+   */
+  const method = await resolveExchangeMethod(merchantId);
+  const nativeExchangeItems =
+    method === "SHOPIFY_NATIVE"
+      ? request.exchangeItems.filter((item) => item.variantId)
+      : [];
+
+  if (nativeExchangeItems.length > 0) {
+    input.exchangeLineItems = nativeExchangeItems.map((item) => ({
+      variantId: item.variantId,
+      quantity: item.quantity,
+    }));
+  }
 
   const data = await queryShop<{
     returnCreate: {
@@ -228,6 +245,9 @@ export const createShopifyReturn = async (
             id: string;
             fulfillmentLineItem?: { id: string } | null;
           }>;
+        };
+        exchangeLineItems: {
+          nodes: Array<{ id: string; quantity: number; variantId: string | null }>;
         };
       } | null;
       userErrors: UserError[];
@@ -261,6 +281,34 @@ export const createShopifyReturn = async (
         where: { id: item.id },
         data: { externalReturnLineItemId: externalId },
       });
+    }
+  }
+
+  /**
+   * Same for the exchange line items, and rather more load-bearing.
+   *
+   * `returnProcess` identifies each replacement by this id and by nothing else,
+   * so if it isn't captured here the exchange can never be committed. Matched
+   * on variant id because that is the only field that survives the round trip;
+   * quantities are consumed so two lines of the same variant each claim their
+   * own node rather than both matching the first.
+   */
+  const unclaimed = [...created.exchangeLineItems.nodes];
+  for (const item of nativeExchangeItems) {
+    const idx = unclaimed.findIndex(
+      (n) => n.variantId === item.variantId && n.quantity === item.quantity,
+    );
+    const node = idx >= 0 ? unclaimed.splice(idx, 1)[0] : undefined;
+    if (node) {
+      await prisma.exchangeItem.update({
+        where: { id: item.id },
+        data: { externalExchangeLineItemId: node.id },
+      });
+    } else {
+      logger.warn(
+        { merchantId, returnRequestId, variantId: item.variantId },
+        "Shopify returned no exchange line item for this variant; it cannot be processed natively",
+      );
     }
   }
 
@@ -500,6 +548,22 @@ export const getSuggestedOutcome = async (
     .filter((item) => item.quantity > 0);
   if (returnLineItems.length === 0) return null;
 
+  /**
+   * Native exchanges offset the refund, so they have to be priced with it.
+   *
+   * A return can be REFUND at the top level and still carry exchange lines —
+   * resolutions are per line here — and quoting that as a pure refund would
+   * suggest paying back the full value of goods the shopper is also being sent
+   * a replacement for. Empty on the draft-order path, where the replacement is
+   * billed separately and correctly doesn't reduce this refund.
+   */
+  const exchangeLineItems = request.exchangeItems
+    .filter((item) => item.externalExchangeLineItemId)
+    .map((item) => ({
+      id: item.externalExchangeLineItemId!,
+      quantity: item.quantity,
+    }));
+
   type Amount = { amount: string; currencyCode: string };
   type Money = { shopMoney: Amount; presentmentMoney?: Amount };
   const data = await queryShop<{
@@ -521,7 +585,7 @@ export const getSuggestedOutcome = async (
   }>(merchantId, SUGGESTED_FINANCIAL_OUTCOME, {
     returnId: request.externalReturnId,
     returnLineItems,
-    exchangeLineItems: [],
+    exchangeLineItems,
     refundMethodAllocation: "ORIGINAL_PAYMENT_METHODS",
   });
 
@@ -571,7 +635,7 @@ export const processShopifyReturn = async (
 ): Promise<void> => {
   let request = await prisma.returnRequest.findFirstOrThrow({
     where: { id: returnRequestId, merchantId },
-    include: { lineItems: true },
+    include: { lineItems: true, exchangeItems: true },
   });
   // A return approved before this integration existed — or one whose creation
   // failed earlier — still has no Shopify return. Create it now rather than
@@ -581,7 +645,7 @@ export const processShopifyReturn = async (
     if (!created) return;
     request = await prisma.returnRequest.findFirstOrThrow({
       where: { id: returnRequestId, merchantId },
-      include: { lineItems: true },
+      include: { lineItems: true, exchangeItems: true },
     });
   }
 
@@ -617,6 +681,26 @@ export const processShopifyReturn = async (
     returnId: request.externalReturnId,
     notifyCustomer: false,
   };
+
+  /**
+   * Exchanges must be named here or they simply don't happen.
+   *
+   * `ReturnProcessInput.exchangeLineItems` defaults to an empty list, and
+   * processing a return with that default closes it while leaving every
+   * replacement uncommitted — no error, no replacement, and a return that
+   * looks settled. The ids come from returnCreate; anything without one was
+   * never registered natively and is skipped rather than guessed at.
+   */
+  const exchangeLineItems = request.exchangeItems
+    .filter((item) => item.externalExchangeLineItemId)
+    .map((item) => ({
+      id: item.externalExchangeLineItemId,
+      quantity: item.quantity,
+    }));
+
+  if (exchangeLineItems.length > 0) {
+    input.exchangeLineItems = exchangeLineItems;
+  }
 
   if (outcome && outcome.transactions.length > 0) {
     // Cap each transaction at what Shopify says is still refundable, so a

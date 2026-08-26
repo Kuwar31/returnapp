@@ -7,7 +7,7 @@ import { requireRole } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
 import { SHOPIFY_RETURN_REASONS } from "../shopify/returns.graphql.js";
 import * as reasonsService from "./reasons.service.js";
-import { clearDisplayModeCache } from "./display-currency.js";
+import { clearMerchantSettingsCache } from "./merchant-settings.js";
 
 export const settingsRouter = Router();
 
@@ -108,6 +108,7 @@ settingsRouter.get(
         slug: true,
         currency: true,
         displayCurrency: true,
+        exchangeMethod: true,
       },
     });
 
@@ -131,15 +132,33 @@ settingsRouter.get(
 
 settingsRouter.patch(
   "/store",
-  validate(z.object({ displayCurrency: z.enum(["SHOP", "PRESENTMENT"]) })),
+  validate(
+    z
+      .object({
+        displayCurrency: z.enum(["SHOP", "PRESENTMENT"]).optional(),
+        exchangeMethod: z.enum(["DRAFT_ORDER", "SHOPIFY_NATIVE"]).optional(),
+      })
+      .refine((v) => Object.keys(v).length > 0, {
+        message: "Nothing to update.",
+      }),
+  ),
   asyncHandler(async (req, res) => {
     const merchant = await prisma.merchant.update({
       where: { id: req.admin!.merchantId },
-      data: { displayCurrency: req.body.displayCurrency },
-      select: { currency: true, displayCurrency: true },
+      // Both optional, so a request that names one setting leaves the other
+      // alone rather than resetting it to a default the merchant never chose.
+      data: {
+        ...(req.body.displayCurrency
+          ? { displayCurrency: req.body.displayCurrency }
+          : {}),
+        ...(req.body.exchangeMethod
+          ? { exchangeMethod: req.body.exchangeMethod }
+          : {}),
+      },
+      select: { currency: true, displayCurrency: true, exchangeMethod: true },
     });
     // The resolver caches for 30s; drop it so the change shows immediately.
-    clearDisplayModeCache(req.admin!.merchantId);
+    clearMerchantSettingsCache(req.admin!.merchantId);
     res.json(merchant);
   }),
 );

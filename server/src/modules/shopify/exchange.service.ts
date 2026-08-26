@@ -10,6 +10,7 @@ import {
   type OrderRateSource,
 } from "../../lib/money.js";
 import { quoteReturn } from "../policy/quote.service.js";
+import { resolveExchangeMethod } from "../settings/merchant-settings.js";
 import { queryShop } from "./shopify.client.js";
 import { resolveCustomerId } from "./credit.service.js";
 import {
@@ -237,6 +238,16 @@ export const ensureExchangeDraftOrder = async (
   merchantId: string,
   returnRequestId: string,
 ): Promise<void> => {
+  /**
+   * The two mechanisms are mutually exclusive.
+   *
+   * Under SHOPIFY_NATIVE the replacement is already on the original order,
+   * placed there by returnCreate. Opening a draft as well would reserve the
+   * stock twice and send the shopper a checkout link for goods they are also
+   * being sent natively.
+   */
+  if ((await resolveExchangeMethod(merchantId)) !== "DRAFT_ORDER") return;
+
   const existing = await prisma.exchangeDraftOrder.findUnique({
     where: { returnRequestId },
   });

@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
-import type { DisplayCurrency, StoreSettings } from "../lib/types";
+import type {
+  DisplayCurrency,
+  ExchangeMethod,
+  StoreSettings,
+} from "../lib/types";
 import { api } from "../lib/api";
 import { ErrorAlert, Loading } from "../components/Feedback";
 import { ShopifyPanel } from "./ShopifyPanel";
@@ -78,6 +82,36 @@ export default function SettingsPage() {
     } catch (e) {
       setStore(store);
       setError(e instanceof Error ? e.message : "Couldn't change the currency.");
+    }
+  };
+
+  /**
+   * Also saved on change, but for the opposite reason to the currency toggle:
+   * this one genuinely does change how returns are handled, and burying it
+   * behind the policy form's "Save changes" would make it easy to alter the
+   * exchange mechanism while meaning to edit a return window.
+   */
+  const setExchangeMethod = async (exchangeMethod: ExchangeMethod) => {
+    if (!store) return;
+    const previous = store;
+    setStore({ ...store, exchangeMethod });
+    setError(null);
+    try {
+      await api.patch(
+        "/admin/settings/store",
+        { exchangeMethod },
+        { auth: "admin" },
+      );
+      setStatus(
+        exchangeMethod === "DRAFT_ORDER"
+          ? "New exchanges will reserve stock and be paid through a checkout link."
+          : "New exchanges will be added to the original order.",
+      );
+    } catch (e) {
+      setStore(previous);
+      setError(
+        e instanceof Error ? e.message : "Couldn't change the exchange method.",
+      );
     }
   };
 
@@ -169,6 +203,41 @@ export default function SettingsPage() {
                 the same until one does.
               </p>
             )}
+          </div>
+
+          <div className="panel">
+            <h2>Exchanges</h2>
+            <div className="settings-row">
+              <div>
+                <div className="settings-row__label">Fulfil exchanges by</div>
+                <div className="settings-row__hint">
+                  Neither option is strictly better. A draft order reserves the
+                  replacement the moment you approve, so a popular size can't
+                  sell out while the parcel is coming back — but it's a second
+                  order, so it won't net against the original in Shopify's
+                  reporting. Adding to the original order reports correctly and
+                  lets Shopify hold fulfilment until any balance is paid, but
+                  nothing is reserved until you process the return.
+                </div>
+              </div>
+              <select
+                value={store.exchangeMethod}
+                onChange={(e) =>
+                  void setExchangeMethod(e.target.value as ExchangeMethod)
+                }
+              >
+                <option value="DRAFT_ORDER">
+                  A draft order — reserves stock
+                </option>
+                <option value="SHOPIFY_NATIVE">
+                  The original order — reports cleanly
+                </option>
+              </select>
+            </div>
+            <p className="muted" style={{ fontSize: 13 }}>
+              Applies to exchanges approved from now on. Returns already
+              approved keep the method they were created with.
+            </p>
           </div>
         </div>
       )}

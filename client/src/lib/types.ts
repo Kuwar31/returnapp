@@ -312,6 +312,15 @@ export interface DashboardStats {
 /** How the admin and portal render money. Storage is always shop currency. */
 export type DisplayCurrency = "SHOP" | "PRESENTMENT";
 
+/**
+ * Which mechanism creates the replacement for an exchange.
+ *
+ * DRAFT_ORDER reserves stock at approval and collects any balance through a
+ * checkout link; SHOPIFY_NATIVE puts the replacement on the original order so
+ * revenue nets correctly. See the ExchangeMethod enum in schema.prisma.
+ */
+export type ExchangeMethod = "DRAFT_ORDER" | "SHOPIFY_NATIVE";
+
 export interface StoreSettings {
   name: string;
   slug: string;
@@ -320,4 +329,5 @@ export interface StoreSettings {
   displayCurrency: DisplayCurrency;
   /** What PRESENTMENT resolves to, from the most recent order that has one. */
   presentmentCurrency: string | null;
+  exchangeMethod: ExchangeMethod;
 }

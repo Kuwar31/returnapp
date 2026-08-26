@@ -22,6 +22,7 @@ import {
   ensureExchangeDraftOrder,
   sendExchangeInvoice,
 } from "../shopify/exchange.service.js";
+import { resolveExchangeMethod } from "../settings/merchant-settings.js";
 import { generateCreditCode } from "./reference.js";
 import { quoteReturn } from "../policy/quote.service.js";
 import { assertTransition, STATUS_LABELS } from "./status.js";
@@ -177,6 +178,10 @@ export const approveReturn = async (
    * this early is inventory: the reservation holds the replacement while the
    * returned parcel is in transit. Waiting until resolution would leave the
    * shopper's chosen size sellable for the whole journey back.
+   *
+   * A no-op under SHOPIFY_NATIVE, where ensureShopifyReturn above has already
+   * put the replacement on the original order. The call stays unconditional so
+   * there is one place that decides which mechanism runs.
    *
    * Also non-fatal — see ensureShopifyReturn above.
    */
@@ -747,6 +752,14 @@ export const retryExchangeDraftOrder = async (
   }
   if (request.exchangeDraft) {
     throw conflict("This exchange already has a draft order.");
+  }
+  // Say so plainly. ensureExchangeDraftOrder now no-ops under the native
+  // method, and without this the merchant would be told Shopify refused —
+  // sending them to look for an error that was never raised.
+  if ((await resolveExchangeMethod(merchantId)) !== "DRAFT_ORDER") {
+    throw unprocessable(
+      "This store settles exchanges on the original order, so there's no draft order to create. Change the exchange method in settings if you want checkout links instead.",
+    );
   }
 
   await ensureExchangeDraftOrder(merchantId, id);

@@ -8,7 +8,7 @@ import {
   getReasonTree,
   resolveGroupForProductType,
 } from "../settings/reasons.service.js";
-import { resolveDisplayMode } from "../settings/display-currency.js";
+import { resolveDisplayMode } from "../settings/merchant-settings.js";
 import {
   qualifiesForAutoApproval,
   quoteReturn,

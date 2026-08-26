@@ -15,7 +15,7 @@ import {
   submitSchema,
 } from "./portal.schemas.js";
 import * as portalService from "./portal.service.js";
-import { resolveDisplayMode } from "../settings/display-currency.js";
+import { resolveDisplayMode } from "../settings/merchant-settings.js";
 
 export const portalRouter = Router();
 
