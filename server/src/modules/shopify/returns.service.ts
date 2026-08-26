@@ -1,3 +1,4 @@
+import type { ResolutionType } from "@prisma/client";
 import { AppError } from "../../lib/errors.js";
 import { logger } from "../../lib/logger.js";
 import { prisma } from "../../lib/prisma.js";
@@ -536,11 +537,27 @@ export const getSuggestedOutcome = async (
   });
   if (!request.externalReturnId) return null;
 
-  // Both argument lists are required by the schema, even when empty. Ask
-  // Shopify to price the accepted units only, so a partially rejected return
-  // is quoted at what we're actually going to pay.
+  /**
+   * Both argument lists are required by the schema, even when empty. Ask
+   * Shopify to price the accepted units only, so a partially rejected return
+   * is quoted at what we're actually going to pay.
+   *
+   * Scoped to the lines Shopify itself settles. A line paid as store credit or
+   * a gift card is compensated by us, in a separate call, and including it here
+   * would have Shopify refund it as cash as well — paying the shopper twice for
+   * one returned item on any return that mixes resolutions.
+   */
+  const SETTLED_BY_SHOPIFY: ResolutionType[] = [
+    "REFUND",
+    "EXCHANGE",
+    "INSTANT_EXCHANGE",
+  ];
   const returnLineItems = request.lineItems
-    .filter((item) => item.externalReturnLineItemId)
+    .filter(
+      (item) =>
+        item.externalReturnLineItemId &&
+        SETTLED_BY_SHOPIFY.includes(item.resolution),
+    )
     .map((item) => ({
       id: item.externalReturnLineItemId!,
       quantity: item.acceptedQuantity ?? item.quantity,
@@ -663,7 +680,27 @@ export const processShopifyReturn = async (
     return;
   }
 
-  const refundsCash = request.resolution === "REFUND";
+  /**
+   * Exchanges need the financial outcome too, not just refunds.
+   *
+   * returnProcess adds the replacement to the order as a new charge. Without a
+   * financialTransfer nothing credits the item that came back, so the order
+   * total goes *up* by the replacement's price and Shopify asks the shopper to
+   * pay it — even when they returned something worth more. That is how a
+   * ₹11,300 board swapped for a ₹3,400 one ended up "On hold, awaiting
+   * payment" for ₹3,400 instead of refunding ₹7,900.
+   *
+   * Shopify does the netting itself once it can see both sides: the suggested
+   * outcome is priced with the exchange line items, and comes back as a refund
+   * when the shopper is owed money. When they owe instead, it isn't a refund at
+   * all and getSuggestedOutcome returns null — we send no transfer and Shopify
+   * holds the exchange for payment, which is the documented behaviour for a
+   * net balance due.
+   */
+  const hasNativeExchange = request.exchangeItems.some(
+    (item) => item.externalExchangeLineItemId,
+  );
+  const refundsCash = request.resolution === "REFUND" || hasNativeExchange;
   const outcome = refundsCash
     ? await getSuggestedOutcome(merchantId, returnRequestId)
     : null;
