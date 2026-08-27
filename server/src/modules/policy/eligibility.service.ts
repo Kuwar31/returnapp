@@ -85,6 +85,11 @@ export const evaluateOrder = (
    * alone — the correct behaviour for orders that never came from Shopify.
    */
   shopifyReturnable?: Map<string, number>,
+  /**
+   * Unshipped units per LineItem id. Only used to explain *why* something can't
+   * be returned; it never changes whether it can be.
+   */
+  unfulfilledQuantities?: Map<string, number>,
 ): OrderEligibility => {
   const anchor = windowAnchor(order, policy);
   const windowClosesAt = anchor
@@ -119,10 +124,27 @@ export const evaluateOrder = (
     } else if (line.finalSale && !policy.allowFinalSale) {
       ineligibleReason = "Final sale items can't be returned.";
     } else if (returnable <= 0) {
+      /**
+       * Three different reasons look identical from Shopify's side — the line
+       * simply isn't among the returnable fulfillments — so the unshipped count
+       * is what tells them apart.
+       *
+       * The one that used to be misreported is an exchange replacement: a
+       * native exchange adds it to the original order straight away, so it sits
+       * there unfulfilled and got announced as "already has a return open",
+       * which was never true and left the shopper looking for a return that
+       * didn't exist.
+       */
+      const unshipped =
+        unfulfilledQuantities && line.externalId
+          ? (unfulfilledQuantities.get(line.externalId) ?? 0)
+          : 0;
       ineligibleReason =
-        fromShopify === 0 && ours > 0
-          ? "This item already has a return open in Shopify."
-          : "This item has already been returned.";
+        unshipped > 0
+          ? "This item hasn't shipped yet."
+          : fromShopify === 0 && ours > 0
+            ? "This item already has a return open in Shopify."
+            : "This item has already been returned.";
     }
 
     return {

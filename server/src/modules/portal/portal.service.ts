@@ -167,6 +167,7 @@ export const getOrderEligibility = async (
    * unusable returns page is not.
    */
   let shopifyReturnable: Map<string, number> | undefined;
+  let unfulfilledQuantities: Map<string, number> | undefined;
   if (order.externalId) {
     try {
       const fromShopify = await getShopifyReturnableQuantities(
@@ -184,8 +185,9 @@ export const getOrderEligibility = async (
        * returned elsewhere would still be offered, and then fail at approval —
        * which is the behaviour we had before consulting Shopify at all.
        */
-      if (fromShopify.size > 0) {
-        shopifyReturnable = fromShopify;
+      unfulfilledQuantities = fromShopify.unfulfilled;
+      if (fromShopify.returnable.size > 0) {
+        shopifyReturnable = fromShopify.returnable;
       } else {
         logger.debug(
           { merchantId, orderId: order.id },
@@ -200,7 +202,13 @@ export const getOrderEligibility = async (
     }
   }
 
-  const eligibility = evaluateOrder(order, policy, new Date(), shopifyReturnable);
+  const eligibility = evaluateOrder(
+    order,
+    policy,
+    new Date(),
+    shopifyReturnable,
+    unfulfilledQuantities,
+  );
 
   // Item prices are converted here too, so the picker and the running total
   // never disagree about which currency they're in.

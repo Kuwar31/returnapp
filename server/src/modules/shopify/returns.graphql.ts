@@ -29,6 +29,16 @@ export const RETURNABLE_FULFILLMENTS = `#graphql
         }
       }
     }
+    # Unshipped units, read alongside so the portal can tell apart the two
+    # reasons a line is missing from the fulfillments above: it has already been
+    # returned, or it hasn't left the warehouse yet. A native exchange puts the
+    # replacement on the original order immediately, so an order can carry
+    # unfulfilled lines long after the rest of it shipped.
+    order(id: $orderId) {
+      lineItems(first: 100) {
+        nodes { id unfulfilledQuantity }
+      }
+    }
   }
 `;
 

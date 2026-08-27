@@ -88,7 +88,11 @@ const throwOnUserErrors = (errors: UserError[], action: string): void => {
 const resolveReturnableLineItems = async (
   merchantId: string,
   orderExternalId: string,
-): Promise<Map<string, { fulfillmentLineItemId: string; quantity: number }>> => {
+): Promise<{
+  returnable: Map<string, { fulfillmentLineItemId: string; quantity: number }>;
+  /** Unshipped units per LineItem id, for telling apart *why* a line isn't returnable. */
+  unfulfilled: Map<string, number>;
+}> => {
   const data = await queryShop<{
     returnableFulfillments: {
       nodes: Array<{
@@ -100,6 +104,9 @@ const resolveReturnableLineItems = async (
         };
       }>;
     };
+    order: {
+      lineItems: { nodes: Array<{ id: string; unfulfilledQuantity: number }> };
+    } | null;
   }>(merchantId, RETURNABLE_FULFILLMENTS, { orderId: orderExternalId });
 
   const map = new Map<
@@ -121,7 +128,15 @@ const resolveReturnableLineItems = async (
       }
     }
   }
-  return map;
+
+  const unfulfilled = new Map<string, number>();
+  for (const node of data.order?.lineItems.nodes ?? []) {
+    if (node.unfulfilledQuantity > 0) {
+      unfulfilled.set(node.id, node.unfulfilledQuantity);
+    }
+  }
+
+  return { returnable: map, unfulfilled };
 };
 
 /**
@@ -142,11 +157,21 @@ const resolveReturnableLineItems = async (
 export const getShopifyReturnableQuantities = async (
   merchantId: string,
   orderExternalId: string,
-): Promise<Map<string, number>> => {
+): Promise<{
+  returnable: Map<string, number>;
+  /** Unshipped units, so "can't return this" can say which reason applies. */
+  unfulfilled: Map<string, number>;
+}> => {
   const resolved = await resolveReturnableLineItems(merchantId, orderExternalId);
-  return new Map(
-    [...resolved.entries()].map(([lineItemId, v]) => [lineItemId, v.quantity]),
-  );
+  return {
+    returnable: new Map(
+      [...resolved.returnable.entries()].map(([lineItemId, v]) => [
+        lineItemId,
+        v.quantity,
+      ]),
+    ),
+    unfulfilled: resolved.unfulfilled,
+  };
 };
 
 /**
@@ -207,7 +232,7 @@ export const createShopifyReturn = async (
     );
   }
 
-  const returnable = await resolveReturnableLineItems(
+  const { returnable } = await resolveReturnableLineItems(
     merchantId,
     request.order.externalId,
   );
