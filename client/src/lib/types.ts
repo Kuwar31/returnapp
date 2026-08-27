@@ -238,6 +238,11 @@ export interface ReturnDetail {
   } | null;
   /** The Shopify draft order carrying the exchange. Admin responses only. */
   exchangeDraft: ExchangeDraft | null;
+  /**
+   * Where to pay a balance owed on a native exchange, which has no draft order
+   * of its own. Absent whenever nothing is owed.
+   */
+  exchangePayment?: { url: string; amount: number; currency: string } | null;
   /** Sidebar context, present on the admin detail response only. */
   shopper?: { orderCount: number; returnCount: number };
   /** Where the payout is destined — a return can pay several ways at once. */

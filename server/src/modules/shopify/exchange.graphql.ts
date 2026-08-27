@@ -92,3 +92,25 @@ export const DRAFT_ORDER_COMPLETE = `#graphql
     }
   }
 `;
+
+/**
+ * Where a shopper pays a balance owed on the order itself.
+ *
+ * The native exchange route has no draft order and therefore no invoice link:
+ * the replacement is added to the original order and Shopify holds fulfilment
+ * until the difference is paid. This is the link that lets them pay it, so the
+ * confirmation page can offer the same "pay now" the draft route already does.
+ */
+export const ORDER_PAYMENT_COLLECTION = `#graphql
+  query OrderPaymentCollection($id: ID!) {
+    order(id: $id) {
+      id
+      totalOutstandingSet {
+        presentmentMoney { amount currencyCode }
+      }
+      paymentCollectionDetails {
+        additionalPaymentCollectionUrl
+      }
+    }
+  }
+`;

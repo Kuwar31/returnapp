@@ -241,6 +241,18 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
       ? draft.balanceDue
       : Math.max(0, Math.round((purchaseSubtotal - creditTotal) * 100) / 100);
 
+  /**
+   * Whichever route raised the exchange supplies the link.
+   *
+   * A completed draft is excluded so a paid exchange doesn't keep inviting
+   * payment; the native side needs no such check, since the server only returns
+   * a link while the order still carries a balance.
+   */
+  const payLink =
+    (draft?.status !== "COMPLETED" ? draft?.invoiceUrl : null) ??
+    detail.exchangePayment?.url ??
+    null;
+
   const cancel = async () => {
     setBusy(true);
     setError(null);
@@ -552,23 +564,40 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
               Someone reading "to pay" on this page should be able to act on it
               here — sending them off to find an inbox is where exchanges get
               abandoned.
+
+              Two sources, because the two exchange methods settle differently:
+              a draft order carries its own invoice, while a native exchange
+              puts the balance on the original order and Shopify supplies the
+              link to pay it. Either way the shopper sees one button.
             */}
-            {draft?.invoiceUrl && draft.status !== "COMPLETED" && owed > 0 && (
+            {payLink && owed > 0 && (
               <>
                 <a
                   className="btn btn--block"
                   style={{ marginTop: 14 }}
-                  href={draft.invoiceUrl}
+                  href={payLink}
                   target="_blank"
                   rel="noreferrer"
                 >
-                  Complete your purchase
+                  Pay now
                 </a>
                 <p className="confirm__pay-note">
                   Secure checkout with {merchant.name}. We'll ship your
                   replacement as soon as your return arrives.
                 </p>
               </>
+            )}
+
+            {/*
+              Owed something, but nothing to pay with yet. The link only exists
+              once the exchange has been raised in Shopify, which happens when
+              the store approves — saying so beats an unexplained dead end.
+            */}
+            {!payLink && owed > 0 && (
+              <p className="confirm__pay-note">
+                We'll send a payment link once the store has approved your
+                exchange.
+              </p>
             )}
 
             {draft?.status === "COMPLETED" && (

@@ -236,7 +236,11 @@ export const resolveVariants = async (
       availableForSale: boolean;
       price: string;
       media: MediaShape;
-      product: { id: string; title: string } | null;
+      product: {
+        id: string;
+        title: string;
+        featuredMedia?: { preview?: { image?: { url: string } | null } | null } | null;
+      } | null;
     } | null>;
   }>(merchantId, VARIANTS_BY_ID, { ids: [...new Set(variantIds)] });
 
@@ -254,7 +258,11 @@ export const resolveVariants = async (
       variantTitle: node.title,
       sku: node.sku,
       price: parseFloat(node.price),
-      imageUrl: firstImage(node.media),
+      // Same fallback the rest of the catalogue uses — see fetchVariantImages.
+      imageUrl:
+        firstImage(node.media) ??
+        node.product?.featuredMedia?.preview?.image?.url ??
+        null,
       productId: node.product?.id ?? null,
       available: node.availableForSale,
     });

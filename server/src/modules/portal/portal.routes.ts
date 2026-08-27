@@ -16,6 +16,10 @@ import {
 } from "./portal.schemas.js";
 import * as portalService from "./portal.service.js";
 import { resolveDisplayMode } from "../settings/merchant-settings.js";
+import {
+  backfillExchangeItemImages,
+  getExchangePaymentUrl,
+} from "../shopify/exchange.service.js";
 
 export const portalRouter = Router();
 
@@ -225,7 +229,14 @@ portalRouter.get(
     if (!request) {
       throw unauthorized("That return reference and email don't match.");
     }
-    res.json(serializeReturn(request, await resolveDisplayMode(merchant.id)));
+    // Repairs pictures stored before the product-image fallback existed. Fire
+    // and forget: it must never delay or fail the page it decorates.
+    void backfillExchangeItemImages(merchant.id, request.id);
+    res.json({
+      ...serializeReturn(request, await resolveDisplayMode(merchant.id)),
+      // Only present when a native exchange actually leaves a balance owed.
+      exchangePayment: await getExchangePaymentUrl(merchant.id, request.id),
+    });
   }),
 );
 

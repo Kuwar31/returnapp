@@ -13,11 +13,13 @@ import { quoteReturn } from "../policy/quote.service.js";
 import { resolveExchangeMethod } from "../settings/merchant-settings.js";
 import { queryShop } from "./shopify.client.js";
 import { resolveCustomerId } from "./credit.service.js";
+import { fetchVariantImages } from "./catalogue.service.js";
 import {
   DRAFT_ORDER_COMPLETE,
   DRAFT_ORDER_CREATE,
   DRAFT_ORDER_INVOICE_SEND,
   DRAFT_ORDER_UPDATE,
+  ORDER_PAYMENT_COLLECTION,
 } from "./exchange.graphql.js";
 
 interface UserError {
@@ -573,4 +575,118 @@ export const completeExchangeDraftOrder = async (
       metadata: { orderId: order?.id ?? null },
     },
   });
+};
+
+/**
+ * Fills in exchange-item pictures that were stored before the product-image
+ * fallback existed.
+ *
+ * Variants mostly carry no picture of their own, so those rows were written
+ * with a null image and render as a grey box. New exchanges resolve correctly
+ * now; this repairs the ones already on file.
+ *
+ * Called fire-and-forget from the read paths and self-limiting: it only ever
+ * looks at rows still missing an image, so once a return has been opened it
+ * costs nothing on subsequent loads. Never throws — a missing picture is
+ * cosmetic, and it must not take down a return the shopper is trying to read.
+ */
+export const backfillExchangeItemImages = async (
+  merchantId: string,
+  returnRequestId: string,
+): Promise<void> => {
+  try {
+    const missing = await prisma.exchangeItem.findMany({
+      where: {
+        returnRequestId,
+        imageUrl: null,
+        variantId: { not: null },
+        returnRequest: { merchantId },
+      },
+      select: { id: true, variantId: true },
+    });
+    if (missing.length === 0) return;
+
+    const images = await fetchVariantImages(
+      merchantId,
+      missing.map((item) => item.variantId!),
+    );
+
+    await Promise.all(
+      missing.map((item) => {
+        const url = images.get(item.variantId!);
+        return url
+          ? prisma.exchangeItem.update({
+              where: { id: item.id },
+              data: { imageUrl: url },
+            })
+          : Promise.resolve(null);
+      }),
+    );
+  } catch (error) {
+    logger.warn(
+      { merchantId, returnRequestId, error },
+      "Could not backfill exchange item images",
+    );
+  }
+};
+
+/**
+ * A link the shopper can pay an outstanding exchange balance with.
+ *
+ * Two routes, one answer. Under DRAFT_ORDER the balance lives on the draft and
+ * its invoice URL is already stored, so this is only consulted for the native
+ * route, where the replacement sits on the original order and Shopify holds
+ * fulfilment until the difference is paid.
+ *
+ * Returns null whenever nothing is owed, so a trade-down or an even swap never
+ * shows a payment prompt — that was the whole complaint about exchanges asking
+ * for money they shouldn't.
+ *
+ * Never throws: a missing link degrades to "no button", which is the state the
+ * page was in before.
+ */
+export const getExchangePaymentUrl = async (
+  merchantId: string,
+  returnRequestId: string,
+): Promise<{ url: string; amount: number; currency: string } | null> => {
+  try {
+    const request = await prisma.returnRequest.findFirst({
+      where: { id: returnRequestId, merchantId },
+      include: { order: true, exchangeItems: true },
+    });
+    if (!request?.order.externalId) return null;
+
+    // Only the native route: a draft-order exchange carries its own invoice.
+    const isNative = request.exchangeItems.some(
+      (item) => item.externalExchangeLineItemId,
+    );
+    if (!isNative) return null;
+
+    const data = await queryShop<{
+      order: {
+        totalOutstandingSet: {
+          presentmentMoney: { amount: string; currencyCode: string };
+        };
+        paymentCollectionDetails: {
+          additionalPaymentCollectionUrl: string | null;
+        };
+      } | null;
+    }>(merchantId, ORDER_PAYMENT_COLLECTION, { id: request.order.externalId });
+
+    const outstanding = data.order?.totalOutstandingSet.presentmentMoney;
+    const url = data.order?.paymentCollectionDetails.additionalPaymentCollectionUrl;
+    if (!url || !outstanding || parseFloat(outstanding.amount) <= 0) return null;
+
+    return {
+      url,
+      amount: parseFloat(outstanding.amount),
+      currency: outstanding.currencyCode,
+    };
+  } catch (error) {
+    logger.warn(
+      { merchantId, returnRequestId, error },
+      "Could not resolve an exchange payment link",
+    );
+    return null;
+  }
 };

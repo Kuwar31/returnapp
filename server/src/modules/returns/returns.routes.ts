@@ -11,6 +11,10 @@ import {
   diagnoseExchange,
   runExchangeRepair,
 } from "../shopify/exchange-repair.service.js";
+import {
+  backfillExchangeItemImages,
+  getExchangePaymentUrl,
+} from "../shopify/exchange.service.js";
 
 export const returnsRouter = Router();
 
@@ -74,10 +78,19 @@ returnsRouter.get(
       }),
       returnsService.getPayoutBreakdown(req.admin!.merchantId, req.params.id),
     ]);
+    const exchangePayment = await getExchangePaymentUrl(
+      req.admin!.merchantId,
+      req.params.id,
+    );
+
+    // Repairs pictures stored before the product-image fallback existed. Fire
+    // and forget: it must never delay or fail the page it decorates.
+    void backfillExchangeItemImages(req.admin!.merchantId, req.params.id);
     res.json({
       ...serializeReturn(request, await resolveDisplayMode(req.admin!.merchantId)),
       shopper,
       payout,
+      exchangePayment,
       policyName: request.policy?.name ?? null,
       portalSlug: merchant?.slug ?? null,
     });

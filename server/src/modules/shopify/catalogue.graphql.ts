@@ -84,7 +84,14 @@ export const VARIANTS_BY_ID = `#graphql
         availableForSale
         price
         media(first: 1) { nodes { preview { image { url } } } }
-        product { id title }
+        # The product's hero shot as a fallback: most variants carry no picture
+        # of their own, so reading only the variant's media left the exchange
+        # item as a grey box on the confirmation page.
+        product {
+          id
+          title
+          featuredMedia { preview { image { url } } }
+        }
       }
     }
   }
