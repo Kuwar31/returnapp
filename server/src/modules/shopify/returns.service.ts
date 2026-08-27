@@ -23,6 +23,55 @@ interface UserError {
   code?: string | null;
 }
 
+/** Resolutions Shopify settles itself, rather than ones we compensate. */
+const SETTLED_BY_SHOPIFY: ResolutionType[] = [
+  "REFUND",
+  "EXCHANGE",
+  "INSTANT_EXCHANGE",
+];
+
+/**
+ * The return lines Shopify settles, at the quantities it actually received.
+ *
+ * Shared by the price quote and the call that acts on it, because the two have
+ * to describe the same set. When the quote covered lines the process call
+ * didn't, Shopify credited less against the order than we had refunded, and
+ * the difference reappeared as a balance the shopper was asked to pay.
+ *
+ * Three exclusions, each load-bearing:
+ *
+ *   - Store credit and gift cards are compensated by us in a separate call.
+ *     Letting Shopify refund them as cash too pays the shopper twice.
+ *   - Rejected units were deliberately left undisposed at receive time, so
+ *     Shopify has no record of receiving them.
+ *   - A "keep" line never physically arrives at all.
+ *
+ * The quantity mirrors what receiveShopifyReturn disposed. Asking to process
+ * more than Shopify recorded as returned is what it rejects with "quantity
+ * requested must be less than or equal to the returned quantity".
+ */
+const settledReturnLineItems = (
+  lineItems: Array<{
+    externalReturnLineItemId: string | null;
+    resolution: ResolutionType;
+    acceptedQuantity: number | null;
+    quantity: number;
+    keepItem: boolean;
+  }>,
+): Array<{ id: string; quantity: number }> =>
+  lineItems
+    .filter(
+      (item) =>
+        item.externalReturnLineItemId &&
+        SETTLED_BY_SHOPIFY.includes(item.resolution) &&
+        !item.keepItem,
+    )
+    .map((item) => ({
+      id: item.externalReturnLineItemId!,
+      quantity: item.acceptedQuantity ?? item.quantity,
+    }))
+    .filter((item) => item.quantity > 0);
+
 const throwOnUserErrors = (errors: UserError[], action: string): void => {
   if (errors.length === 0) return;
   throw new AppError(
@@ -537,32 +586,8 @@ export const getSuggestedOutcome = async (
   });
   if (!request.externalReturnId) return null;
 
-  /**
-   * Both argument lists are required by the schema, even when empty. Ask
-   * Shopify to price the accepted units only, so a partially rejected return
-   * is quoted at what we're actually going to pay.
-   *
-   * Scoped to the lines Shopify itself settles. A line paid as store credit or
-   * a gift card is compensated by us, in a separate call, and including it here
-   * would have Shopify refund it as cash as well — paying the shopper twice for
-   * one returned item on any return that mixes resolutions.
-   */
-  const SETTLED_BY_SHOPIFY: ResolutionType[] = [
-    "REFUND",
-    "EXCHANGE",
-    "INSTANT_EXCHANGE",
-  ];
-  const returnLineItems = request.lineItems
-    .filter(
-      (item) =>
-        item.externalReturnLineItemId &&
-        SETTLED_BY_SHOPIFY.includes(item.resolution),
-    )
-    .map((item) => ({
-      id: item.externalReturnLineItemId!,
-      quantity: item.acceptedQuantity ?? item.quantity,
-    }))
-    .filter((item) => item.quantity > 0);
+  // Both argument lists are required by the schema, even when empty.
+  const returnLineItems = settledReturnLineItems(request.lineItems);
   if (returnLineItems.length === 0) return null;
 
   /**
@@ -706,16 +731,28 @@ export const processShopifyReturn = async (
     : null;
 
   /**
-   * Deliberately sends no `returnLineItems`.
+   * The returned lines have to be named, or nothing is credited against the
+   * order.
    *
-   * Disposition already happened at receive time via receiveShopifyReturn.
-   * Passing the line items here makes Shopify re-run its quantity check
-   * against them and reject the call ("Quantity requested must be less than
-   * or equal to the returned quantity"), even though the items are restocked.
-   * Omitting them refunds the whole return, which is what resolving means.
+   * Omitting them was deliberate once: passing the *requested* quantity made
+   * Shopify reject the call ("quantity requested must be less than or equal to
+   * the returned quantity") because disposition had already happened at receive
+   * time and only the accepted units were disposed. The fix for that was to
+   * send what was actually received, not to stop sending anything.
+   *
+   * Without them Shopify processes the exchange, adds the replacement as a
+   * charge, and never applies the returned item's value to the order — so a
+   * shopper who returned an INR 11,300 board for an INR 3,400 one was refunded
+   * the INR 7,900 difference and *still* billed INR 3,400 for the replacement,
+   * paying for it twice.
+   *
+   * No `dispositions` here: that field is optional, and the units were disposed
+   * at receive time. Sending them again would be a second disposition for the
+   * same unit, which Shopify does not allow and cannot be undone.
    */
   const input: Record<string, unknown> = {
     returnId: request.externalReturnId,
+    returnLineItems: settledReturnLineItems(request.lineItems),
     notifyCustomer: false,
   };
 
