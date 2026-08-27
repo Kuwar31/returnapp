@@ -25,6 +25,16 @@ export interface EmailReturn {
     quantity: number;
     reasonLabel: string | null;
   }>;
+  /**
+   * Where to pay an outstanding exchange balance, when one exists.
+   *
+   * Absent for a refund, a trade-down or an even swap — nothing is owed, so
+   * inviting payment would be wrong. Present only once the exchange has
+   * actually been raised in Shopify, which is why the approval mail can carry
+   * it on the draft-order route and the resolution mail carries it on the
+   * native one.
+   */
+  payment?: { url: string; amount: number; currency: string } | null;
 }
 
 /** Escapes interpolated values so a product title can't inject markup. */
@@ -147,6 +157,34 @@ export const submittedEmail = (
   };
 };
 
+/**
+ * The "pay the difference" call to action.
+ *
+ * Deliberately its own block rather than a line inside the summary: it is the
+ * one thing in the mail the shopper has to act on, and burying it under a list
+ * of items is how an exchange ends up abandoned.
+ */
+const paymentBlock = (request: EmailReturn): string =>
+  request.payment
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0 0">
+  <tr><td style="background:#fff4f4;border:1px solid #f0c9c9;border-radius:10px;padding:16px">
+    <p style="margin:0 0 4px;font-size:13px;color:#8c9196">To complete your exchange</p>
+    <p style="margin:0 0 14px;font-size:20px;font-weight:700;color:#1a1a1c">${esc(
+      formatMoney(request.payment.amount, request.payment.currency),
+    )}</p>
+    <a href="${esc(request.payment.url)}" style="display:inline-block;background:#1a1a1c;color:#ffffff;text-decoration:none;padding:11px 18px;border-radius:8px;font-size:14px;font-weight:600">Pay now</a>
+  </td></tr>
+</table>`
+    : "";
+
+const paymentText = (request: EmailReturn): string =>
+  request.payment
+    ? `\n\nTo complete your exchange, pay ${formatMoney(
+        request.payment.amount,
+        request.payment.currency,
+      )}:\n${request.payment.url}`
+    : "";
+
 export const approvedEmail = (
   request: EmailReturn,
   brand: EmailBrand,
@@ -157,13 +195,14 @@ export const approvedEmail = (
     brand,
     heading: "Your return is approved",
     intro: `${greeting(request)} good news — your return for order #${esc(request.orderNumber)} has been approved. Send the items back and we'll process your ${esc(RESOLUTION_WORD[request.resolution] ?? "return")} as soon as they arrive.`,
-    body: summaryBlock(request, "Estimated total"),
+    body: summaryBlock(request, "Estimated total") + paymentBlock(request),
     ctaLabel: "See return instructions",
   }),
   text:
     `${greeting(request)}\n\nYour return for order #${request.orderNumber} has been approved. Send the items back and we'll process your ${RESOLUTION_WORD[request.resolution] ?? "return"} once they arrive.\n\n` +
     `Reference: ${request.reference}\n\n${itemLinesText(request)}\n\n` +
     `Estimated total: ${formatMoney(request.estimatedTotal, request.currency)}` +
+    paymentText(request) +
     footerText(brand),
 });
 
@@ -236,7 +275,9 @@ export const resolvedEmail = (
     ? `${greeting(request)} your return is all wrapped up and your store credit of <strong>${amount}</strong> is ready to spend.`
     : request.resolution === "REFUND"
       ? `${greeting(request)} your return is complete and a refund of <strong>${amount}</strong> has been issued to your original payment method. Banks usually take 3–5 business days to show it.`
-      : `${greeting(request)} your return is complete and your replacement is on its way.`;
+      : request.payment
+        ? `${greeting(request)} your return is complete. One step left — settle the difference below and your replacement ships straight away.`
+        : `${greeting(request)} your return is complete and your replacement is on its way.`;
 
   // Gift cards and store credit both surface a code block; only the gift card
   // code is actually redeemable at checkout.
@@ -263,7 +304,7 @@ export const resolvedEmail = (
       brand,
       heading,
       intro,
-      body: creditBlock,
+      body: creditBlock + paymentBlock(request),
       ctaLabel: isCredit || isGiftCard ? "Start shopping" : "View your return",
     }),
     text:
@@ -276,8 +317,11 @@ export const resolvedEmail = (
           (creditCode ? `Credit code: ${creditCode}\n\n` : "")
         : request.resolution === "REFUND"
           ? `Your return is complete and a refund of ${amount} has been issued to your original payment method. Banks usually take 3-5 business days to show it.\n\n`
-          : `Your return is complete and your replacement is on its way.\n\n`) +
+          : request.payment
+            ? `Your return is complete. One step left — settle the difference below and your replacement ships straight away.\n\n`
+            : `Your return is complete and your replacement is on its way.\n\n`) +
       `Reference: ${request.reference}` +
+      paymentText(request) +
       footerText(brand),
   };
 };

@@ -345,8 +345,19 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
                 </div>
                 {exchanges.map(([id, d]) => (
                   <div key={`sx-${id}`} className="summary__row">
-                    <span className="summary__blank" />
-                    <span className="summary__label">{d.exchangeLabel}</span>
+                    {/* Same picture the tile opposite shows — this row was the
+                        last place still rendering a permanent grey square. */}
+                    {d.exchangeImageUrl ? (
+                      <img src={d.exchangeImageUrl} alt="" />
+                    ) : (
+                      <span className="summary__blank" />
+                    )}
+                    <span className="summary__label">
+                      {d.exchangeProductTitle ?? d.exchangeLabel}
+                      {d.exchangeVariantTitle && (
+                        <span className="muted">{d.exchangeVariantTitle}</span>
+                      )}
+                    </span>
                     <span>
                       {exchangePriceIn(d, currency) !== null
                         ? money(exchangePriceIn(d, currency)!, currency)

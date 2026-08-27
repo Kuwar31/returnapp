@@ -1,8 +1,10 @@
+import type { Prisma } from "@prisma/client";
 import { env } from "../../config/env.js";
 import { logger } from "../../lib/logger.js";
 import { prisma } from "../../lib/prisma.js";
 import { toDecimal } from "../../lib/money.js";
 import { sendMail, type Mail } from "./mailer.js";
+import { getExchangePaymentUrl } from "../shopify/exchange.service.js";
 import {
   approvedEmail,
   declinedEmail,
@@ -32,6 +34,8 @@ const loadContext = async (returnRequestId: string) => {
       merchant: { select: { name: true, slug: true, branding: true } },
       lineItems: { include: { reason: true, orderLineItem: true } },
       storeCredit: { select: { code: true } },
+      // Carries the invoice link on the draft-order route.
+      exchangeDraft: true,
     },
   });
   if (!request) return null;
@@ -68,9 +72,44 @@ const loadContext = async (returnRequestId: string) => {
       quantity: item.quantity,
       reasonLabel: item.reason?.label ?? null,
     })),
+    payment: await resolvePayment(request.merchantId, request),
   };
 
   return { payload, brand, creditCode: request.storeCredit?.code ?? null };
+};
+
+/**
+ * Where the shopper pays an exchange difference, if they owe one.
+ *
+ * The two exchange routes produce it at different moments, which is why both
+ * the approval and the resolution mail can carry it: a draft order has its
+ * invoice link the moment the return is approved, while a native exchange only
+ * puts a balance on the order once it is processed.
+ *
+ * Returns null whenever nothing is owed, so a refund, a trade-down or an even
+ * swap never gets a payment prompt in the post.
+ */
+const resolvePayment = async (
+  merchantId: string,
+  request: {
+    id: string;
+    exchangeDraft: {
+      invoiceUrl: string | null;
+      status: string;
+      balanceDue: Prisma.Decimal;
+      currency: string;
+    } | null;
+  },
+): Promise<{ url: string; amount: number; currency: string } | null> => {
+  const draft = request.exchangeDraft;
+  if (draft?.invoiceUrl && draft.status !== "COMPLETED") {
+    const due = toDecimal(draft.balanceDue).toNumber();
+    if (due > 0) {
+      return { url: draft.invoiceUrl, amount: due, currency: draft.currency };
+    }
+    return null;
+  }
+  return getExchangePaymentUrl(merchantId, request.id);
 };
 
 const build = (
