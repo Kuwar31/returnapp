@@ -113,6 +113,35 @@ export function ItemDrawer({
         (url): url is string => Boolean(url),
       );
   const heading = options?.product?.title ?? item.title;
+  /** The media pane shows the replacement only once there is one to show. */
+  const showGallery = step === "size" && gallery.length > 0;
+
+  /**
+   * What the replacement costs, before a size narrows it down.
+   *
+   * Falls back to the cheapest in-stock option, since that is the only figure
+   * that can't overstate what they'd pay.
+   */
+  const displayPrice =
+    chosen?.price ??
+    (swappableVariants.length
+      ? Math.min(...swappableVariants.map((v) => v.price))
+      : (options?.variants[0]?.price ?? null));
+
+  /**
+   * A line explaining why this screen is the one they landed on, taken from
+   * the reason they gave rather than from any modelling of other shoppers.
+   */
+  const suggestion = (() => {
+    const label = `${reasonLabel} ${reason?.label ?? ""}`.toLowerCase();
+    if (/small|large|fit|size/.test(label)) {
+      return "You told us the fit was wrong, so we've kept the same item and opened its other sizes.";
+    }
+    if (/wrong item|not as described|different/.test(label)) {
+      return "Same item, other options — swap to the one you meant to receive.";
+    }
+    return "Swap this for another option of the same item.";
+  })();
   /**
    * Whatever the merchant actually calls this axis — "Size" for footwear,
    * "Color" elsewhere. Falls back to a neutral word rather than assuming every
@@ -238,19 +267,81 @@ export function ItemDrawer({
     <div className="drawer" role="dialog" aria-modal="true">
       <div className="drawer__backdrop" onClick={onCancel} />
       <div className="drawer__panel">
+        {/*
+          One image pane, shared by every step.
+          On the swap step it becomes the replacement's gallery — the drawer is
+          already two columns, so giving the swap screen its own second column
+          would have nested one image pane inside another.
+        */}
         <div className="drawer__media">
-          {item.imageUrl ? (
-            <img src={item.imageUrl} alt={item.title} />
+          {showGallery ? (
+            <>
+              <div className="swapper__stage">
+                <img src={gallery[galleryIndex]} alt={heading} />
+                {gallery.length > 1 && (
+                  <>
+                    <button
+                      type="button"
+                      className="swapper__arrow swapper__arrow--prev"
+                      aria-label="Previous image"
+                      onClick={() =>
+                        setGalleryIndex(
+                          (i) => (i - 1 + gallery.length) % gallery.length,
+                        )
+                      }
+                    >
+                      ‹
+                    </button>
+                    <button
+                      type="button"
+                      className="swapper__arrow swapper__arrow--next"
+                      aria-label="Next image"
+                      onClick={() =>
+                        setGalleryIndex((i) => (i + 1) % gallery.length)
+                      }
+                    >
+                      ›
+                    </button>
+                  </>
+                )}
+              </div>
+              {gallery.length > 1 && (
+                <div className="swapper__thumbs">
+                  {gallery.map((url, i) => (
+                    <button
+                      key={url}
+                      type="button"
+                      className={`swapper__thumb${i === galleryIndex ? " is-active" : ""}`}
+                      aria-label={`Image ${i + 1}`}
+                      aria-current={i === galleryIndex}
+                      onClick={() => setGalleryIndex(i)}
+                    >
+                      <img src={url} alt="" />
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="drawer__caption">
+                <div className="drawer__title">{heading}</div>
+                {chosen && <div className="muted">{chosen.title}</div>}
+              </div>
+            </>
           ) : (
-            <div className="drawer__placeholder" />
+            <>
+              {item.imageUrl ? (
+                <img src={item.imageUrl} alt={item.title} />
+              ) : (
+                <div className="drawer__placeholder" />
+              )}
+              <div className="drawer__caption">
+                <div className="drawer__title">{item.title}</div>
+                {item.variantTitle && (
+                  <div className="muted">{item.variantTitle}</div>
+                )}
+                <div className="muted">{money(item.unitPrice, currency)}</div>
+              </div>
+            </>
           )}
-          <div className="drawer__caption">
-            <div className="drawer__title">{item.title}</div>
-            {item.variantTitle && (
-              <div className="muted">{item.variantTitle}</div>
-            )}
-            <div className="muted">{money(item.unitPrice, currency)}</div>
-          </div>
         </div>
 
         <div className="drawer__body">
@@ -434,141 +525,99 @@ export function ItemDrawer({
               )}
 
               {options && options.variants.length > 0 && (
-                <div className="swapper">
+                <div className="swapper__panel">
+                  {/* What they're giving up, so the swap reads as a comparison. */}
+                  <div className="swapper__current">
+                    {item.imageUrl ? (
+                      <img src={item.imageUrl} alt="" />
+                    ) : (
+                      <span className="swapper__current-blank" />
+                    )}
+                    <span className="swapper__current-body">
+                      <span className="swapper__current-title">{item.title}</span>
+                      {item.variantTitle && (
+                        <span className="muted">{item.variantTitle}</span>
+                      )}
+                    </span>
+                    <span className="swapper__current-price">
+                      {money(item.unitPrice, currency)}
+                    </span>
+                  </div>
+
+                  <h2 className="swapper__title">{heading}</h2>
                   {/*
-                    Gallery on one side, decision on the other. Someone changing
-                    size is deciding whether they still want the thing at all,
-                    and the old grid of size buttons gave them nothing to look at.
+                    Priced before a size is picked. Sizes of one product almost
+                    always cost the same, so waiting for a selection hid a
+                    number we already knew and made the panel look unfinished.
                   */}
-                  <div className="swapper__media">
-                    <div className="swapper__stage">
-                      {gallery.length > 0 ? (
-                        <img src={gallery[galleryIndex]} alt={heading} />
-                      ) : (
-                        <div className="swapper__stage-blank" />
-                      )}
-                      {gallery.length > 1 && (
-                        <>
-                          <button
-                            type="button"
-                            className="swapper__arrow swapper__arrow--prev"
-                            aria-label="Previous image"
-                            onClick={() =>
-                              setGalleryIndex(
-                                (i) => (i - 1 + gallery.length) % gallery.length,
-                              )
-                            }
-                          >
-                            ‹
-                          </button>
-                          <button
-                            type="button"
-                            className="swapper__arrow swapper__arrow--next"
-                            aria-label="Next image"
-                            onClick={() =>
-                              setGalleryIndex((i) => (i + 1) % gallery.length)
-                            }
-                          >
-                            ›
-                          </button>
-                        </>
-                      )}
+                  {displayPrice !== null && (
+                    <div className="swapper__price">
+                      {money(displayPrice, options.currency)}
                     </div>
-                    {gallery.length > 1 && (
-                      <div className="swapper__thumbs">
-                        {gallery.map((url, i) => (
-                          <button
-                            key={url}
-                            type="button"
-                            className={`swapper__thumb${i === galleryIndex ? " is-active" : ""}`}
-                            aria-label={`Image ${i + 1}`}
-                            aria-current={i === galleryIndex}
-                            onClick={() => setGalleryIndex(i)}
-                          >
-                            <img src={url} alt="" />
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                  )}
+
+                  {/*
+                    Why they are looking at this screen. Drawn from the reason
+                    they gave a moment ago — deliberately not "what worked for
+                    similar shoppers", which we have no data for and would be
+                    inventing.
+                  */}
+                  {suggestion && (
+                    <p className="swapper__hint">
+                      <span aria-hidden="true">✦</span> {suggestion}
+                    </p>
+                  )}
+
+                  {/*
+                    The money consequence, stated before they commit rather
+                    than discovered on the summary screen.
+                  */}
+                  {chosen && (
+                    <p className="swapper__delta">
+                      {delta > 0.005
+                        ? `You'll pay ${money(delta, options.currency)} more.`
+                        : delta < -0.005
+                          ? `You'll receive a credit of ${money(-delta, options.currency)}.`
+                          : "An even swap — nothing more to pay."}
+                    </p>
+                  )}
+
+                  <h3 className="swapper__label">{optionName}</h3>
+                  <div className="swapper__sizes">
+                    {options.variants.map((v) => {
+                      const isCurrent = v.id === options.currentVariantId;
+                      const isChosen = v.id === chosenId;
+                      return (
+                        <button
+                          key={v.id}
+                          type="button"
+                          className={`size${isChosen ? " is-selected" : ""}${
+                            v.available ? "" : " is-out"
+                          }`}
+                          disabled={!v.available || isCurrent}
+                          aria-pressed={isChosen}
+                          onClick={() => setChosenId(v.id)}
+                          title={
+                            isCurrent
+                              ? "This is the option you have"
+                              : v.available
+                                ? money(v.price, options.currency)
+                                : "Out of stock"
+                          }
+                        >
+                          {v.title}
+                        </button>
+                      );
+                    })}
                   </div>
 
-                  <div className="swapper__panel">
-                    {/* What they're giving up, so the comparison is on screen. */}
-                    <div className="swapper__current">
-                      {item.imageUrl ? (
-                        <img src={item.imageUrl} alt="" />
-                      ) : (
-                        <span className="swapper__current-blank" />
-                      )}
-                      <span className="swapper__current-body">
-                        <span className="swapper__current-title">{item.title}</span>
-                        {item.variantTitle && (
-                          <span className="muted">{item.variantTitle}</span>
-                        )}
-                      </span>
-                      <span className="swapper__current-price">
-                        {money(item.unitPrice, currency)}
-                      </span>
-                    </div>
-
-                    <h2 className="swapper__title">{heading}</h2>
-                    {chosen && (
-                      <div className="swapper__price">
-                        {money(chosen.price, options.currency)}
-                      </div>
-                    )}
-
-                    {/*
-                      The money consequence, stated before they commit rather
-                      than discovered on the summary screen.
-                    */}
-                    {chosen && (
-                      <p className="swapper__delta">
-                        {delta > 0.005
-                          ? `You'll pay ${money(delta, options.currency)} more.`
-                          : delta < -0.005
-                            ? `You'll receive a credit of ${money(-delta, options.currency)}.`
-                            : "An even swap — nothing more to pay."}
-                      </p>
-                    )}
-
-                    <h3 className="swapper__label">{optionName}</h3>
-                    <div className="swapper__sizes">
-                      {options.variants.map((v) => {
-                        const isCurrent = v.id === options.currentVariantId;
-                        const isChosen = v.id === chosenId;
-                        return (
-                          <button
-                            key={v.id}
-                            type="button"
-                            className={`size${isChosen ? " is-selected" : ""}${
-                              v.available ? "" : " is-out"
-                            }`}
-                            disabled={!v.available || isCurrent}
-                            aria-pressed={isChosen}
-                            onClick={() => setChosenId(v.id)}
-                            title={
-                              isCurrent
-                                ? "This is the option you have"
-                                : v.available
-                                  ? money(v.price, options.currency)
-                                  : "Out of stock"
-                            }
-                          >
-                            {v.title}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <button
-                      className="btn btn--block swapper__confirm"
-                      disabled={!chosen}
-                      onClick={() => chosen && finish("EXCHANGE", chosen)}
-                    >
-                      {chosen ? "Confirm item" : "Choose an option"}
-                    </button>
-                  </div>
+                  <button
+                    className="btn btn--block swapper__confirm"
+                    disabled={!chosen}
+                    onClick={() => chosen && finish("EXCHANGE", chosen)}
+                  >
+                    {chosen ? "Confirm item" : `Choose a ${optionName.toLowerCase()}`}
+                  </button>
                 </div>
               )}
             </>

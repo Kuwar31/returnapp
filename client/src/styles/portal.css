@@ -421,7 +421,9 @@
   gap: 14px;
 }
 
-.drawer__media img,
+/* The pane's own image. Scoped with :not() so the swap gallery's stage and
+   thumbnails, which size themselves, aren't forced square and full-width. */
+.drawer__media > img,
 .drawer__placeholder {
   width: 100%;
   aspect-ratio: 1;
@@ -1587,16 +1589,12 @@
 
 /* ---------- the swap screen: gallery beside the decision ---------- */
 
-.swapper {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 24px;
-  align-items: start;
-}
-
 .swapper__stage {
   position: relative;
+  /* Square, so a portrait shoe and a landscape board occupy the same box and
+     the panel beside them doesn't jump between products. */
   aspect-ratio: 1;
+  width: 100%;
   border-radius: var(--radius);
   overflow: hidden;
   background: #f0f0f1;
@@ -1606,8 +1604,18 @@
 .swapper__stage-blank {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  /* contain, not cover: a shopper judging a replacement needs the whole
+     product in frame, not a crop of its middle. */
+  object-fit: contain;
   display: block;
+  aspect-ratio: auto;
+  border-radius: 0;
+  background: #fff;
+}
+
+.swapper__thumb img {
+  aspect-ratio: auto;
+  border-radius: 0;
 }
 
 /* Centred over the image, so they read as gallery controls rather than
@@ -1732,6 +1740,19 @@
   margin-top: 4px;
 }
 
+/* Why this screen, in the shopper's own words back to them. */
+.swapper__hint {
+  display: flex;
+  gap: 8px;
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: #f4f1fb;
+  color: #4a3f7a;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .swapper__delta {
   margin: 6px 0 0;
   font-size: 14px;
@@ -1752,8 +1773,8 @@
 }
 
 .size {
-  min-width: 52px;
-  padding: 11px 12px;
+  min-width: 62px;
+  padding: 14px 12px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   background: var(--surface);
@@ -1786,8 +1807,4 @@
   margin-top: 24px;
 }
 
-@media (max-width: 720px) {
-  .swapper {
-    grid-template-columns: 1fr;
-  }
-}
+
