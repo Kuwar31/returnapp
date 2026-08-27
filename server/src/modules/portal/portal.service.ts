@@ -377,7 +377,9 @@ export const getExchangeOptions = async (
 
   const product = await getProductVariants(merchantId, line.productId);
   return {
-    product: product ? { id: product.id, title: product.title } : null,
+    product: product
+      ? { id: product.id, title: product.title, images: product.images ?? [] }
+      : null,
     variants: (product?.variants ?? []).map((v) => ({
       ...v,
       price: fx.price(v.price),

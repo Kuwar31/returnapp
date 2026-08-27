@@ -1584,3 +1584,210 @@
   font-weight: 600;
   white-space: nowrap;
 }
+
+/* ---------- the swap screen: gallery beside the decision ---------- */
+
+.swapper {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.swapper__stage {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: #f0f0f1;
+}
+
+.swapper__stage img,
+.swapper__stage-blank {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Centred over the image, so they read as gallery controls rather than
+   page-level navigation. */
+.swapper__arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.92);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.swapper__arrow:hover {
+  background: #fff;
+}
+
+.swapper__arrow--prev {
+  left: 10px;
+}
+
+.swapper__arrow--next {
+  right: 10px;
+}
+
+.swapper__thumbs {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.swapper__thumb {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f0f0f1;
+  cursor: pointer;
+}
+
+.swapper__thumb.is-active {
+  border-color: var(--text);
+  border-width: 2px;
+}
+
+.swapper__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.swapper__panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* The item being given up, kept on screen so the swap is a comparison. */
+.swapper__current {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  background: #f6f6f7;
+  margin-bottom: 16px;
+}
+
+.swapper__current img,
+.swapper__current-blank {
+  width: 44px;
+  height: 44px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: #e6e6e8;
+  flex-shrink: 0;
+}
+
+.swapper__current-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.swapper__current-title {
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.swapper__current-price {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.swapper__title {
+  font-size: 19px;
+  line-height: 1.3;
+  margin: 0;
+}
+
+.swapper__price {
+  font-size: 19px;
+  margin-top: 4px;
+}
+
+.swapper__delta {
+  margin: 6px 0 0;
+  font-size: 14px;
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+.swapper__label {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 20px 0 10px;
+}
+
+.swapper__sizes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.size {
+  min-width: 52px;
+  padding: 11px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+
+.size:hover:not(:disabled) {
+  border-color: var(--text);
+}
+
+.size.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+  font-weight: 600;
+}
+
+/* Sold out and "the one you already have" both land here. Struck through
+   rather than hidden: a shopper who knows the size exists reads its absence
+   as a bug. */
+.size:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  text-decoration: line-through;
+}
+
+.swapper__confirm {
+  margin-top: 24px;
+}
+
+@media (max-width: 720px) {
+  .swapper {
+    grid-template-columns: 1fr;
+  }
+}

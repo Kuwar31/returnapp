@@ -18,6 +18,10 @@ export const PRODUCT_VARIANTS = `#graphql
       id
       title
       featuredMedia { preview { image { url } } }
+      # The gallery for the swap screen. A shopper choosing a different size is
+      # deciding whether they still want the thing, and one thumbnail is not
+      # enough to decide on.
+      media(first: 10) { nodes { preview { image { url } } } }
       variants(first: 100) {
         nodes {
           id

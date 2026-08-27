@@ -121,7 +121,12 @@ export interface ExchangeVariant {
 }
 
 export interface ExchangeOptions {
-  product: { id: string; title: string } | null;
+  product: {
+    id: string;
+    title: string;
+    /** Every shot of the product, hero first, for the swap screen's gallery. */
+    images: string[];
+  } | null;
   variants: ExchangeVariant[];
   /** The variant the shopper already owns, so the picker can mark it. */
   currentVariantId: string | null;

@@ -23,6 +23,8 @@ export interface ExchangeProduct {
   id: string;
   title: string;
   imageUrl: string | null;
+  /** Every shot of the product, for the swap screen's gallery. */
+  images?: string[];
   minPrice: number;
   maxPrice: number;
   currency: string;
@@ -51,6 +53,7 @@ export const getProductVariants = async (
       id: string;
       title: string;
       featuredMedia: { preview?: { image?: { url: string } | null } | null } | null;
+      media: MediaShape;
       variants: {
         nodes: Array<{
           id: string;
@@ -79,10 +82,22 @@ export const getProductVariants = async (
   }));
 
   const prices = variants.map((v) => v.price);
+  // Hero first, then the rest, de-duplicated — Shopify usually repeats the
+  // featured shot inside media and a gallery that opens on a duplicate looks
+  // broken.
+  const hero = product.featuredMedia?.preview?.image?.url ?? null;
+  const gallery = [
+    ...new Set(
+      [hero, ...(product.media?.nodes ?? []).map((n) => n?.preview?.image?.url ?? null)]
+        .filter((url): url is string => Boolean(url)),
+    ),
+  ];
+
   return {
     id: product.id,
     title: product.title,
-    imageUrl: product.featuredMedia?.preview?.image?.url ?? null,
+    imageUrl: hero,
+    images: gallery,
     minPrice: prices.length ? Math.min(...prices) : 0,
     maxPrice: prices.length ? Math.max(...prices) : 0,
     currency: "",
