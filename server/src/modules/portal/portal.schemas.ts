@@ -68,6 +68,14 @@ export type QuoteInput = z.infer<typeof quoteSchema>;
 export const submitSchema = z.object({
   items: z.array(selectionSchema).min(1, "Select at least one item"),
   customerNote: z.string().trim().max(1000).optional(),
+  /**
+   * How to pay a trade-down's leftover. Ignored unless the exchange actually
+   * leaves the shopper owed something, and defaulted server-side so an older
+   * client that doesn't send it keeps behaving as before.
+   */
+  exchangeSurplusMethod: z
+    .enum(["REFUND", "STORE_CREDIT", "GIFT_CARD"])
+    .optional(),
 });
 export type SubmitInput = z.infer<typeof submitSchema>;
 

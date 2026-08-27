@@ -409,6 +409,22 @@ const payoutSplit = async (merchantId: string, id: string) => {
       ),
     })),
   });
+
+  /**
+   * A trade-down's leftover lands under EXCHANGE, where nothing would ever pay
+   * it: the exchange itself is settled by the replacement, so that bucket has
+   * no payout path of its own. Move it to whatever the shopper asked for, and
+   * the existing destinations handle it like any other credit.
+   */
+  const surplus = quote.byResolution.get("EXCHANGE");
+  if (surplus?.greaterThan(0)) {
+    const target = request.exchangeSurplusMethod as ResolutionType;
+    quote.byResolution.delete("EXCHANGE");
+    quote.byResolution.set(
+      target,
+      (quote.byResolution.get(target) ?? toDecimal(0)).add(surplus),
+    );
+  }
   return quote.byResolution;
 };
 
@@ -520,7 +536,16 @@ export const resolveReturn = async (
    * rather than through a refund or a credit — see completeExchangeDraftOrder
    * below.
    */
-  const resolutions = new Set(current.lineItems.map((li) => li.resolution));
+  /**
+   * Driven by where the money actually lands, not by what the lines say.
+   *
+   * The two differ for a trade-down: every line reads EXCHANGE while the
+   * leftover is destined for store credit or a gift card. Keying the branches
+   * off line resolutions meant that surplus had no branch to fire and was
+   * simply never paid.
+   */
+  const owed = (destination: ResolutionType) =>
+    (split.get(destination)?.greaterThan(0) ?? false);
 
   /**
    * A native exchange is only real once returnProcess commits it.
@@ -535,7 +560,7 @@ export const resolveReturn = async (
     (item) => item.externalExchangeLineItemId,
   );
 
-  const processed = resolutions.has("REFUND") || hasNativeExchange;
+  const processed = owed("REFUND") || hasNativeExchange;
   if (processed) {
     // Throws on failure, leaving the return at RECEIVED so the merchant can
     // fix the cause and retry rather than silently under-paying a customer or
@@ -549,7 +574,7 @@ export const resolveReturn = async (
    * commits — a customer must never be told they have credit that isn't there.
    */
   let credit: CreditResult | null = null;
-  if (resolutions.has("STORE_CREDIT")) {
+  if (owed("STORE_CREDIT")) {
     credit = await issueShopifyStoreCredit(
       merchantId,
       id,
@@ -563,7 +588,7 @@ export const resolveReturn = async (
    * immediately, before anything else can fail and lose it.
    */
   let giftCard: GiftCardResult | null = null;
-  if (resolutions.has("GIFT_CARD")) {
+  if (owed("GIFT_CARD")) {
     giftCard = await issueShopifyGiftCard(merchantId, id, split.get("GIFT_CARD"));
   }
 
@@ -572,7 +597,10 @@ export const resolveReturn = async (
    * the items are back. One with a balance stays a draft until the shopper pays
    * their invoice — completing it here would ship an upgrade for free.
    */
-  if (resolutions.has("EXCHANGE") || resolutions.has("INSTANT_EXCHANGE")) {
+  const hasExchangeLine = current.lineItems.some((li) =>
+    ["EXCHANGE", "INSTANT_EXCHANGE"].includes(li.resolution),
+  );
+  if (hasExchangeLine) {
     await completeExchangeDraftOrder(merchantId, id);
   }
 

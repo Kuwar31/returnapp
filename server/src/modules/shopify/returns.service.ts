@@ -771,7 +771,27 @@ export const processShopifyReturn = async (
   const hasNativeExchange = request.exchangeItems.some(
     (item) => item.externalExchangeLineItemId,
   );
-  const refundsCash = request.resolution === "REFUND" || hasNativeExchange;
+
+  /**
+   * A trade-down's surplus only reaches Shopify as cash if that is where the
+   * shopper wanted it.
+   *
+   * On the native route returnProcess refunds the difference by itself, which
+   * is right when they chose a refund and wrong when they chose store credit or
+   * a gift card — they would get both. Suppressing the transfer leaves the
+   * money with the merchant to issue as credit instead, exactly as a plain
+   * store-credit return already works.
+   *
+   * Only applies when the exchange is the sole source of cash: a return that
+   * also has REFUND lines still owes those in cash regardless.
+   */
+  const surplusGoesElsewhere =
+    request.exchangeSurplusMethod !== "REFUND" &&
+    !request.lineItems.some((li) => li.resolution === "REFUND");
+
+  const refundsCash =
+    (request.resolution === "REFUND" || hasNativeExchange) &&
+    !surplusGoesElsewhere;
   const outcome = refundsCash
     ? await getSuggestedOutcome(merchantId, returnRequestId)
     : null;

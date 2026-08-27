@@ -84,6 +84,13 @@ enum DisplayCurrency {
   PRESENTMENT
 }
 
+/** How a trade-down's leftover value reaches the shopper. */
+enum ExchangeSurplusMethod {
+  REFUND
+  STORE_CREDIT
+  GIFT_CARD
+}
+
 enum MerchantStatus {
   ACTIVE
   SUSPENDED
@@ -352,6 +359,15 @@ model ReturnRequest {
   reference  String   @unique
   status     ReturnStatus   @default(SUBMITTED)
   resolution ResolutionType
+  /**
+   * Where the surplus goes when an exchange is worth less than what came back.
+   *
+   * A trade-down leaves the shopper owed money, and that money deserves the
+   * same choice a plain refund gets. Kept apart from `resolution` because an
+   * exchange line's resolution is already EXCHANGE — this answers a different
+   * question about the leftover.
+   */
+  exchangeSurplusMethod ExchangeSurplusMethod @default(REFUND)
 
   customerEmail String
   customerName  String?

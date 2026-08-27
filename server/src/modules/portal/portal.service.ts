@@ -564,6 +564,7 @@ export const submitReturn = async (
         customerEmail: order.email,
         customerName: order.customerName,
         customerNote: input.customerNote ?? null,
+        exchangeSurplusMethod: input.exchangeSurplusMethod ?? "REFUND",
         currency: order.currency,
         itemsSubtotal: quote.itemsSubtotal,
         bonusCredit: quote.bonusCredit,

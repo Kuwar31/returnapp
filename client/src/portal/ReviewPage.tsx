@@ -61,6 +61,9 @@ const RESOLUTION_ICON: Record<string, string> = {
 
 const EXCHANGE_RESOLUTIONS = ["EXCHANGE", "INSTANT_EXCHANGE"];
 
+/** The destinations a trade-down's leftover can go to. */
+type SurplusMethod = "REFUND" | "STORE_CREDIT" | "GIFT_CARD";
+
 export default function ReviewPage({ loaderData }: Route.ComponentProps) {
   const { order, policy, eligibility } = loaderData;
   const { slug } = useParams();
@@ -70,6 +73,8 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
   const [quote, setQuote] = useState<Quote | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  /** Where a trade-down's leftover should go. Only used when there is one. */
+  const [surplusMethod, setSurplusMethod] = useState<SurplusMethod>("REFUND");
 
   /**
    * Read from whatever payload the amounts on screen came from, never from the
@@ -144,7 +149,7 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
     try {
       const created = await api.post<ReturnDetail>(
         "/portal/session/returns",
-        { items: toSelections(draft) },
+        { items: toSelections(draft), exchangeSurplusMethod: surplusMethod },
         { auth: "portal" },
       );
       clearDraft(order.id);
@@ -169,6 +174,18 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
   /** The payout currently applied to every non-exchange line. */
   const payout =
     returning.length > 0 ? returning[0][1].resolution : null;
+
+  /**
+   * A trade-down leaves the shopper owed money even though every line is an
+   * exchange. That leftover deserves the same choice a plain refund gets, so
+   * the credit options appear for it too — driven by their own state, since
+   * there is no non-exchange line whose resolution could carry the answer.
+   */
+  const surplus =
+    returning.length === 0 && exchanges.length > 0 && quote
+      ? quote.estimatedTotal
+      : 0;
+  const choosingForSurplus = surplus > 0;
 
   /**
    * Applies one payout to all returned lines.
@@ -385,13 +402,19 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
               </div>
             )}
 
-            {returning.length > 0 && (
+            {(returning.length > 0 || choosingForSurplus) && (
               <div className="summary__section">
-                <h3 className="summary__subheading">Credit options</h3>
+                <h3 className="summary__subheading">
+                  {choosingForSurplus
+                    ? "How would you like the difference?"
+                    : "Credit options"}
+                </h3>
                 {(eligibility.allowedResolutions as ResolutionType[])
                   .filter((r) => !EXCHANGE_RESOLUTIONS.includes(r))
                   .map((r) => {
-                    const selected = payout === r;
+                    const selected = choosingForSurplus
+                      ? surplusMethod === r
+                      : payout === r;
                     const bonus =
                       r !== "REFUND" && policy.bonusCreditPercent > 0;
                     return (
@@ -399,7 +422,11 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
                         key={r}
                         type="button"
                         className={`payout-card${selected ? " is-selected" : ""}`}
-                        onClick={() => choosePayout(r)}
+                        onClick={() =>
+                          choosingForSurplus
+                            ? setSurplusMethod(r as SurplusMethod)
+                            : choosePayout(r)
+                        }
                         aria-pressed={selected}
                       >
                         <span className="payout-card__icon" aria-hidden="true">
