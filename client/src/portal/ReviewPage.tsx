@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { redirect, useNavigate, useParams } from "react-router";
 import { api, ApiError, getToken } from "../lib/api";
 import { money } from "../lib/format";
@@ -13,6 +13,7 @@ import { PortalStepper } from "./PortalLayout";
 import {
   clearDraft,
   exchangePriceIn,
+  hydrateExchangeDetails,
   lineIdOf,
   loadDraft,
   saveDraft,
@@ -91,6 +92,32 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
     }
     setDraft(stored);
   }, [order.id, slug, navigate]);
+
+
+  /**
+   * Tops up exchange details a draft saved before these fields existed is
+   * missing, so a stale selection heals itself instead of showing a grey box.
+   *
+   * Guarded to run once. Keying it off the missing image alone would never
+   * settle for a variant that genuinely has no picture: the top-up would leave
+   * the field null, the draft would still look stale, and the effect would
+   * refetch on every render.
+   */
+  const hydrated = useRef(false);
+  useEffect(() => {
+    if (hydrated.current || Object.keys(draft).length === 0) return;
+    hydrated.current = true;
+    void hydrateExchangeDetails(draft, (ids) =>
+      api.get("/portal/session/exchange/variant-info", {
+        auth: "portal",
+        query: { ids: ids.join(",") },
+      }),
+    ).then((patched) => {
+      if (!patched) return;
+      setDraft(patched);
+      saveDraft(order.id, patched);
+    });
+  }, [draft, order.id]);
 
   useEffect(() => {
     const items = toSelections(draft);

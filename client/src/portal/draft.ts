@@ -87,3 +87,62 @@ export const toSelections = (draft: Draft) =>
       ? { exchange: { variantId: d.exchangeVariantId, quantity: 1 } }
       : {}),
   }));
+
+/**
+ * Fills in exchange display details a stored draft is missing.
+ *
+ * Drafts survive deploys, so one saved before a field existed carries no
+ * picture and no split title — which is how a chosen replacement rendered as a
+ * grey box next to a combined "Product · Variant" label. Rather than ask the
+ * shopper to pick again, the page fetches what it lacks.
+ *
+ * Returns null when there is nothing to fill, so callers can skip the write
+ * entirely and avoid a pointless re-render.
+ */
+export const hydrateExchangeDetails = async (
+  draft: Draft,
+  fetchInfo: (ids: string[]) => Promise<{
+    currency: string;
+    variants: Array<{
+      id: string;
+      title: string;
+      variantTitle: string;
+      imageUrl: string | null;
+      price: number;
+    }>;
+  }>,
+): Promise<Draft | null> => {
+  const stale = Object.entries(draft).filter(
+    ([, d]) => d.exchangeVariantId && !d.exchangeImageUrl,
+  );
+  if (stale.length === 0) return null;
+
+  try {
+    const info = await fetchInfo([
+      ...new Set(stale.map(([, d]) => d.exchangeVariantId!)),
+    ]);
+    const byId = new Map(info.variants.map((v) => [v.id, v]));
+
+    let changed = false;
+    const next: Draft = { ...draft };
+    for (const [key, decision] of stale) {
+      const v = byId.get(decision.exchangeVariantId!);
+      if (!v) continue;
+      next[key] = {
+        ...decision,
+        exchangeImageUrl: v.imageUrl,
+        exchangeProductTitle: v.title,
+        exchangeVariantTitle: v.variantTitle,
+        // Re-stamped together: a price without its currency is what made these
+        // figures unreadable in the first place.
+        exchangePrice: v.price,
+        exchangeCurrency: info.currency,
+      };
+      changed = true;
+    }
+    return changed ? next : null;
+  } catch {
+    // Cosmetic. A failed top-up leaves the draft exactly as it was.
+    return null;
+  }
+};

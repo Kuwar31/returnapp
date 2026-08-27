@@ -17,6 +17,7 @@ import {
 import { notifyInBackground } from "../email/notifications.js";
 import {
   browseProducts,
+  describeVariants,
   getProductVariants,
   resolveVariants,
 } from "../shopify/catalogue.service.js";
@@ -384,6 +385,36 @@ export const getExchangeOptions = async (
     // Lets the picker mark the size they already have.
     currentVariantId: line.variantId,
     currency: fx.currency,
+  };
+};
+
+/**
+ * Fills in the display details of exchange variants a shopper already chose.
+ *
+ * The portal draft lives in the browser and outlives deploys, so a selection
+ * saved before a field existed carries no picture and no split title. Rather
+ * than make the shopper redo their choice, the page asks for what it's missing.
+ *
+ * Prices come back converted, like every other money field the portal sends.
+ */
+export const describeExchangeVariants = async (
+  merchantId: string,
+  orderId: string,
+  variantIds: string[],
+) => {
+  const [described, fx] = await Promise.all([
+    describeVariants(merchantId, variantIds),
+    catalogueConverter(merchantId, orderId),
+  ]);
+  return {
+    currency: fx.currency,
+    variants: [...described.entries()].map(([id, v]) => ({
+      id,
+      title: v.title,
+      variantTitle: v.variantTitle,
+      imageUrl: v.imageUrl,
+      price: fx.price(v.price),
+    })),
   };
 };
 

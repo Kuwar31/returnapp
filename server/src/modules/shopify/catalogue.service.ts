@@ -269,3 +269,64 @@ export const resolveVariants = async (
   }
   return map;
 };
+
+/**
+ * Display details for variants the shopper has already chosen.
+ *
+ * Separate from resolveVariants, which is the purchase-time trust check and
+ * throws on anything out of stock — wrong here, because this only ever
+ * describes a choice that was already made and validated. A sold-out variant
+ * still needs its name and picture rendered.
+ *
+ * Exists because the portal draft outlives deploys: a selection saved before a
+ * field was recorded has no way to fill it in from local state, and the shopper
+ * shouldn't have to redo their choice to get a picture.
+ */
+export const describeVariants = async (
+  merchantId: string,
+  variantIds: string[],
+): Promise<
+  Map<
+    string,
+    { title: string; variantTitle: string; imageUrl: string | null; price: number }
+  >
+> => {
+  const out = new Map<
+    string,
+    { title: string; variantTitle: string; imageUrl: string | null; price: number }
+  >();
+  if (variantIds.length === 0) return out;
+
+  try {
+    const data = await queryShop<{
+      nodes: Array<{
+        id: string;
+        title: string;
+        price: string;
+        media: MediaShape;
+        product: {
+          title: string;
+          featuredMedia?: { preview?: { image?: { url: string } | null } | null } | null;
+        } | null;
+      } | null>;
+    }>(merchantId, VARIANTS_BY_ID, {
+      ids: [...new Set(variantIds)].slice(0, 100),
+    });
+
+    for (const node of data.nodes) {
+      if (!node) continue;
+      out.set(node.id, {
+        title: node.product?.title ?? node.title,
+        variantTitle: node.title,
+        imageUrl:
+          firstImage(node.media) ??
+          node.product?.featuredMedia?.preview?.image?.url ??
+          null,
+        price: parseFloat(node.price),
+      });
+    }
+  } catch (error) {
+    logger.warn({ merchantId, error }, "Could not describe exchange variants");
+  }
+  return out;
+};

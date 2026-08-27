@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, redirect, useNavigate, useParams } from "react-router";
 import { api, ApiError, getToken } from "../lib/api";
 import { money } from "../lib/format";
@@ -9,6 +9,7 @@ import { ItemDrawer, type ItemDecision } from "./ItemDrawer";
 import {
   articleKey,
   exchangePriceIn,
+  hydrateExchangeDetails,
   lineIdOf,
   loadDraft,
   saveDraft,
@@ -54,6 +55,32 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
   const [openArticle, setOpenArticle] = useState<string | null>(null);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+
+  /**
+   * Tops up exchange details a draft saved before these fields existed is
+   * missing, so a stale selection heals itself instead of showing a grey box.
+   *
+   * Guarded to run once. Keying it off the missing image alone would never
+   * settle for a variant that genuinely has no picture: the top-up would leave
+   * the field null, the draft would still look stale, and the effect would
+   * refetch on every render.
+   */
+  const hydrated = useRef(false);
+  useEffect(() => {
+    if (hydrated.current || Object.keys(decisions).length === 0) return;
+    hydrated.current = true;
+    void hydrateExchangeDetails(decisions, (ids) =>
+      api.get("/portal/session/exchange/variant-info", {
+        auth: "portal",
+        query: { ids: ids.join(",") },
+      }),
+    ).then((patched) => {
+      if (!patched) return;
+      setDecisions(patched);
+      saveDraft(order.id, patched);
+    });
+  }, [decisions, order.id]);
 
   /** The payload that carried the amounts owns the currency — see ReviewPage. */
   const currency =

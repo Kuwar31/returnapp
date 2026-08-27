@@ -180,6 +180,22 @@ portalRouter.get(
   }),
 );
 
+/**
+ * Display details for variants already chosen, so a draft saved before a field
+ * existed can fill itself in rather than making the shopper choose again.
+ */
+portalRouter.get(
+  "/session/exchange/variant-info",
+  validate(z.object({ ids: z.string().min(1).max(2000) }), "query"),
+  asyncHandler(async (req, res) => {
+    const { merchantId, orderId } = req.portal!;
+    const ids = String(req.query.ids).split(",").filter(Boolean).slice(0, 50);
+    res.json(
+      await portalService.describeExchangeVariants(merchantId, orderId, ids),
+    );
+  }),
+);
+
 /** Live totals as the shopper changes items or resolution. */
 portalRouter.post(
   "/session/quote",
