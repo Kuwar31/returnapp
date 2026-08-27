@@ -168,6 +168,7 @@ export const getOrderEligibility = async (
    */
   let shopifyReturnable: Map<string, number> | undefined;
   let unfulfilledQuantities: Map<string, number> | undefined;
+  let exchangeReplacements: Set<string> | undefined;
   if (order.externalId) {
     try {
       const fromShopify = await getShopifyReturnableQuantities(
@@ -186,6 +187,7 @@ export const getOrderEligibility = async (
        * which is the behaviour we had before consulting Shopify at all.
        */
       unfulfilledQuantities = fromShopify.unfulfilled;
+      exchangeReplacements = fromShopify.exchangeReplacements;
       if (fromShopify.returnable.size > 0) {
         shopifyReturnable = fromShopify.returnable;
       } else {
@@ -208,6 +210,7 @@ export const getOrderEligibility = async (
     new Date(),
     shopifyReturnable,
     unfulfilledQuantities,
+    exchangeReplacements,
   );
 
   // Item prices are converted here too, so the picker and the running total

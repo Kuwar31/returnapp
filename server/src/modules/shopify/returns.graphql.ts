@@ -38,6 +38,18 @@ export const RETURNABLE_FULFILLMENTS = `#graphql
       lineItems(first: 100) {
         nodes { id unfulfilledQuantity }
       }
+      # Which order lines are themselves replacements from an earlier exchange.
+      # Shopify links each ExchangeLineItem to the LineItem it created once the
+      # return is processed, so this identifies them outright rather than by
+      # guessing from the variant — which would also catch a variant the shopper
+      # genuinely bought in the first place.
+      returns(first: 20) {
+        nodes {
+          exchangeLineItems(first: 20) {
+            nodes { lineItems { id } }
+          }
+        }
+      }
     }
   }
 `;

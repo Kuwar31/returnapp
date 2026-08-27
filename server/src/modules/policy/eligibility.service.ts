@@ -90,6 +90,15 @@ export const evaluateOrder = (
    * be returned; it never changes whether it can be.
    */
   unfulfilledQuantities?: Map<string, number>,
+  /**
+   * Lines that are themselves replacements from an earlier exchange.
+   *
+   * A native exchange puts the replacement on the original order, so without
+   * this the portal offers it straight back — a shopper could exchange a
+   * replacement, then exchange that, indefinitely, each hop netting against a
+   * return that has already been settled.
+   */
+  exchangeReplacements?: Set<string>,
 ): OrderEligibility => {
   const anchor = windowAnchor(order, policy);
   const windowClosesAt = anchor
@@ -113,11 +122,23 @@ export const evaluateOrder = (
       shopifyReturnable && line.externalId
         ? (shopifyReturnable.get(line.externalId) ?? 0)
         : undefined;
-    const returnable =
-      fromShopify === undefined ? ours : Math.min(ours, fromShopify);
+    // Replacements are closed to further returns outright, whatever the counts
+    // say — this is the one exclusion that isn't about availability.
+    const isExchangeReplacement = Boolean(
+      line.externalId && exchangeReplacements?.has(line.externalId),
+    );
+
+    const returnable = isExchangeReplacement
+      ? 0
+      : fromShopify === undefined
+        ? ours
+        : Math.min(ours, fromShopify);
 
     let ineligibleReason: string | null = null;
-    if (!anchor) {
+    if (isExchangeReplacement) {
+      ineligibleReason =
+        "This item is a replacement from an earlier exchange, so it can't be returned again.";
+    } else if (!anchor) {
       ineligibleReason = "This item hasn't shipped yet.";
     } else if (!withinWindow) {
       ineligibleReason = `The ${policy.returnWindowDays}-day return window has closed.`;

@@ -92,6 +92,8 @@ const resolveReturnableLineItems = async (
   returnable: Map<string, { fulfillmentLineItemId: string; quantity: number }>;
   /** Unshipped units per LineItem id, for telling apart *why* a line isn't returnable. */
   unfulfilled: Map<string, number>;
+  /** LineItem ids that are themselves replacements from an earlier exchange. */
+  exchangeReplacements: Set<string>;
 }> => {
   const data = await queryShop<{
     returnableFulfillments: {
@@ -106,6 +108,13 @@ const resolveReturnableLineItems = async (
     };
     order: {
       lineItems: { nodes: Array<{ id: string; unfulfilledQuantity: number }> };
+      returns: {
+        nodes: Array<{
+          exchangeLineItems: {
+            nodes: Array<{ lineItems: Array<{ id: string }> | null }>;
+          };
+        }>;
+      };
     } | null;
   }>(merchantId, RETURNABLE_FULFILLMENTS, { orderId: orderExternalId });
 
@@ -136,7 +145,16 @@ const resolveReturnableLineItems = async (
     }
   }
 
-  return { returnable: map, unfulfilled };
+  const exchangeReplacements = new Set<string>();
+  for (const ret of data.order?.returns.nodes ?? []) {
+    for (const exchange of ret.exchangeLineItems.nodes) {
+      for (const line of exchange.lineItems ?? []) {
+        exchangeReplacements.add(line.id);
+      }
+    }
+  }
+
+  return { returnable: map, unfulfilled, exchangeReplacements };
 };
 
 /**
@@ -161,6 +179,8 @@ export const getShopifyReturnableQuantities = async (
   returnable: Map<string, number>;
   /** Unshipped units, so "can't return this" can say which reason applies. */
   unfulfilled: Map<string, number>;
+  /** Lines that are replacements from an earlier exchange. */
+  exchangeReplacements: Set<string>;
 }> => {
   const resolved = await resolveReturnableLineItems(merchantId, orderExternalId);
   return {
@@ -171,6 +191,7 @@ export const getShopifyReturnableQuantities = async (
       ]),
     ),
     unfulfilled: resolved.unfulfilled,
+    exchangeReplacements: resolved.exchangeReplacements,
   };
 };
 
