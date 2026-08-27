@@ -21,6 +21,14 @@ export interface ItemDecision {
   exchangeLabel: string | null;
   exchangePrice: number | null;
   /**
+   * The replacement's picture and variant, so the shopper can see what they're
+   * swapping to rather than reading its name. Both may be absent on a draft
+   * saved before they were recorded, so every use has to tolerate null.
+   */
+  exchangeImageUrl?: string | null;
+  exchangeVariantTitle?: string | null;
+  exchangeProductTitle?: string | null;
+  /**
    * What `exchangePrice` is denominated in, captured when it was chosen.
    *
    * The draft outlives the page, so a price picked before the merchant changed
@@ -178,6 +186,11 @@ export function ItemDrawer({
         : null,
       exchangePrice: variant?.price ?? null,
       exchangeCurrency: variant ? (options?.currency ?? currency) : null,
+      exchangeImageUrl: variant?.imageUrl ?? null,
+      exchangeVariantTitle: variant?.title ?? null,
+      exchangeProductTitle: variant
+        ? (productTitle ?? options?.product?.title ?? null)
+        : null,
     });
   };
 

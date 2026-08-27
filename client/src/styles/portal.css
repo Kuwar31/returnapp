@@ -1520,3 +1520,67 @@
   color: var(--success-fg);
   font-weight: 600;
 }
+
+/* ---------- the replacement chosen for an exchange ---------- */
+
+/*
+  Sits inside a pick-card's decision block. Given its own surface so the item
+  being swapped *to* reads as a distinct thing from the item being returned,
+  rather than as another line of grey supporting text.
+*/
+.swap {
+  margin-top: 8px;
+}
+
+.swap__caption {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-subtle, #6b7280);
+  margin-bottom: 6px;
+}
+
+.swap__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface, #fff);
+}
+
+.swap__thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: #f0f0f1;
+  flex-shrink: 0;
+}
+
+.swap__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.swap__title {
+  font-size: 14px;
+  font-weight: 600;
+  /* Product names run long; keep the row one line tall. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.swap__variant {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.swap__price {
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}

@@ -216,10 +216,22 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
                 <div className="review__grid">
                   {exchanges.map(([id, d]) => (
                     <div key={`x-${id}`} className="review__tile">
-                      <div className="review__tile-blank" />
+                      {/* Was always a blank square — the picture is in the
+                          draft now, same as the returned items opposite. */}
+                      {d.exchangeImageUrl ? (
+                        <img
+                          src={d.exchangeImageUrl}
+                          alt={d.exchangeProductTitle ?? ""}
+                        />
+                      ) : (
+                        <div className="review__tile-blank" />
+                      )}
                       <div className="review__tile-title">
-                        {d.exchangeLabel}
+                        {d.exchangeProductTitle ?? d.exchangeLabel}
                       </div>
+                      {d.exchangeVariantTitle && (
+                        <div className="muted">{d.exchangeVariantTitle}</div>
+                      )}
                       {exchangePriceIn(d, currency) !== null && (
                         <div className="muted">
                           {money(exchangePriceIn(d, currency)!, currency)}

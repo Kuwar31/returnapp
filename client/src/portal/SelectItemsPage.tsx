@@ -181,11 +181,45 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
                       {decision.reasonLabel && (
                         <div className="muted">{decision.reasonLabel}</div>
                       )}
+                      {/*
+                        The replacement, shown the way the returned item above
+                        is shown. It used to be a run-on line of text, which
+                        made the one thing the shopper is choosing harder to
+                        read than the thing they already own.
+                      */}
                       {decision.exchangeLabel && (
-                        <div className="muted">
-                          Exchanging for: {decision.exchangeLabel}
-                          {exchangePriceIn(decision, currency) !== null &&
-                            ` · ${money(exchangePriceIn(decision, currency)!, currency)}`}
+                        <div className="swap">
+                          <div className="swap__caption">Exchanging for</div>
+                          <div className="swap__item">
+                            {decision.exchangeImageUrl ? (
+                              <img
+                                className="swap__thumb"
+                                src={decision.exchangeImageUrl}
+                                alt=""
+                              />
+                            ) : (
+                              <div className="swap__thumb" />
+                            )}
+                            <div className="swap__body">
+                              <div className="swap__title">
+                                {decision.exchangeProductTitle ??
+                                  decision.exchangeLabel}
+                              </div>
+                              {decision.exchangeVariantTitle && (
+                                <div className="swap__variant">
+                                  {decision.exchangeVariantTitle}
+                                </div>
+                              )}
+                            </div>
+                            {exchangePriceIn(decision, currency) !== null && (
+                              <span className="swap__price">
+                                {money(
+                                  exchangePriceIn(decision, currency)!,
+                                  currency,
+                                )}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
