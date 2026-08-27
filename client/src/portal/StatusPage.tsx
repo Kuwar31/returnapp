@@ -585,6 +585,22 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
                   Secure checkout with {merchant.name}. We'll ship your
                   replacement as soon as your return arrives.
                 </p>
+                {/*
+                  The native link settles the whole order, not this return's
+                  share, and the two differ when the order carries another
+                  unpaid exchange. Better to say so here than to let checkout
+                  ask for a larger number than the line above promised.
+                */}
+                {detail.exchangePayment &&
+                  detail.exchangePayment.currency === currency &&
+                  Math.abs(detail.exchangePayment.amount - owed) > 0.01 && (
+                    <p className="confirm__pay-note">
+                      This order has{" "}
+                      {money(detail.exchangePayment.amount, currency)}{" "}
+                      outstanding in total, including earlier exchanges, and
+                      checkout will settle all of it.
+                    </p>
+                  )}
               </>
             )}
 
