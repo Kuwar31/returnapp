@@ -151,7 +151,15 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
 
         <ErrorAlert message={error} />
 
-        {!eligibility.withinWindow && (
+        {/*
+          Only when a window actually closed.
+          An unshipped order has no window yet — `windowClosesAt` is null,
+          because the clock starts at fulfilment — and announcing it as "outside
+          the 30-day window" told shoppers their time had run out on an order
+          that hadn't left the warehouse. Each item says why it isn't available
+          on its own row, which is the accurate version of the same news.
+        */}
+        {!eligibility.withinWindow && eligibility.windowClosesAt && (
           <div className="alert alert--warn">
             This order is outside the {eligibility.windowDays}-day return window.
           </div>
