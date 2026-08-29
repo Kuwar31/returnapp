@@ -178,6 +178,10 @@ const SYNC_ORDERS_QUERY = `#graphql
           presentmentMoney { amount currencyCode }
         }
         fulfillments(first: 10) { createdAt deliveredAt displayStatus }
+        # Phone is deliberately absent. It is protected customer data, and an
+        # app without that approval doesn't simply get the field omitted —
+        # Shopify rejects the whole query, which silently broke every order
+        # sync this one backs.
         shippingAddress {
           name
           address1
@@ -186,7 +190,6 @@ const SYNC_ORDERS_QUERY = `#graphql
           provinceCode
           zip
           country
-          phone
         }
         lineItems(first: 250) {
           nodes {
@@ -294,4 +297,63 @@ export const backfillOrders = async (
 
   logger.info({ merchantId, imported, skipped }, "Backfill complete");
   return { imported, skipped };
+};
+
+/**
+ * Pulls one order straight from Shopify, by order number.
+ *
+ * This is the replacement for the order and fulfillment webhooks, and it exists
+ * because of where the app is hosted rather than anything wrong with them: a
+ * free Render instance sleeps after ~15 minutes idle and takes over twenty
+ * seconds to wake, while Shopify gives a webhook five. Every delivery to a
+ * sleeping instance failed; the ones that landed while it was warm went
+ * through, which is why the logs showed both against the same minute.
+ *
+ * Polling on a timer would fail for exactly the same reason — a timer needs a
+ * process that is awake. Reading does not: the shopper's own request wakes the
+ * instance, and the sync happens inside the request that needs it.
+ *
+ * Deliberately non-fatal. A stale mirror still answers the lookup, so Shopify
+ * being unreachable should degrade freshness rather than take the portal down.
+ * Returns whether it actually refreshed, for the caller's logs.
+ */
+export const syncOrderByNumber = async (
+  merchantId: string,
+  orderNumber: string,
+): Promise<boolean> => {
+  try {
+    const { shop, accessToken } = await getShopCredentials(merchantId);
+
+    /**
+     * `name` is Shopify's own field for the number a shopper reads off their
+     * confirmation, hash and all. Quoted so an order like "#1072-A" can't be
+     * parsed as extra search terms.
+     */
+    const bare = orderNumber.replace(/^#/, "").trim();
+    const result = await shopifyGraphQL<SyncOrdersResult>(
+      shop,
+      accessToken,
+      SYNC_ORDERS_QUERY,
+      { first: 5, after: null, query: `name:"${bare}"` },
+    );
+
+    let synced = false;
+    for (const node of result.orders.nodes) {
+      const normalized = mapGraphQLOrder(node);
+      if (!normalized) continue;
+      // Guard against a fuzzy match: Shopify's search is not an exact lookup,
+      // and syncing a neighbouring order under a shopper's request would be
+      // both wrong and confusing.
+      if (normalized.orderNumber.replace(/^#/, "") !== bare) continue;
+      await upsertOrder(merchantId, normalized);
+      synced = true;
+    }
+    return synced;
+  } catch (error) {
+    logger.warn(
+      { merchantId, orderNumber, error },
+      "Could not refresh this order from Shopify; using the stored copy",
+    );
+    return false;
+  }
 };

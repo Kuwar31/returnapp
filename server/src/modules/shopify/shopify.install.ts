@@ -242,14 +242,45 @@ const WEBHOOK_CREATE = `#graphql
   }
 `;
 
-/** Topics we need to keep Postgres in step with the store. */
-export const WEBHOOK_TOPICS = [
-  "ORDERS_CREATE",
-  "ORDERS_UPDATED",
-  "FULFILLMENTS_CREATE",
-  "FULFILLMENTS_UPDATE",
-  "APP_UNINSTALLED",
-] as const;
+const WEBHOOK_LIST = `#graphql
+  query WebhookSubscriptions($first: Int!) {
+    webhookSubscriptions(first: $first) {
+      nodes {
+        id
+        topic
+        endpoint { __typename ... on WebhookHttpEndpoint { callbackUrl } }
+      }
+    }
+  }
+`;
+
+const WEBHOOK_DELETE = `#graphql
+  mutation DeleteWebhook($id: ID!) {
+    webhookSubscriptionDelete(id: $id) {
+      deletedWebhookSubscriptionId
+      userErrors { field message }
+    }
+  }
+`;
+
+/**
+ * Only what has no alternative.
+ *
+ * The order and fulfillment topics used to live here and were removed because
+ * they could not be delivered, not because they were wrong: this app runs on an
+ * instance that sleeps when idle and takes over twenty seconds to wake, while
+ * Shopify allows a webhook five. Every delivery to a sleeping instance failed,
+ * and the store's log filled with errors that said nothing about the code.
+ * Orders are now read from Shopify at lookup instead — see syncOrderByNumber.
+ *
+ * Uninstall stays. There is no read path that can notice it: once the token is
+ * revoked there is nothing left to poll with, so if this notification is missed
+ * the app keeps a dead integration forever.
+ *
+ * Worth restoring the order topics if this ever moves to an instance that stays
+ * awake — a webhook is still the only way to hear about an order nobody looks up.
+ */
+export const WEBHOOK_TOPICS = ["APP_UNINSTALLED"] as const;
 
 export const registerWebhooks = async (shop: string, accessToken: string) => {
   const uri = `${env.APP_URL}/api/shopify/webhooks`;
@@ -276,5 +307,58 @@ export const registerWebhooks = async (shop: string, accessToken: string) => {
     } catch (error) {
       logger.error({ shop, topic, error }, "Failed to register webhook");
     }
+  }
+
+  await pruneWebhooks(shop, accessToken);
+};
+
+/**
+ * Deletes subscriptions this app no longer wants.
+ *
+ * Registering fewer topics does not remove the ones already on the store, so
+ * without this the order and fulfillment subscriptions keep being delivered,
+ * keep timing out, and keep filling the merchant's log with errors about code
+ * that no longer expects them.
+ *
+ * Matched on topic alone, not on callback URL. Shopify only ever lists the
+ * calling app's own subscriptions, so everything here is ours — and this store
+ * had each dropped topic registered twice, once against production and once
+ * against a developer's tunnel, so every order fired ten deliveries instead of
+ * five. Scoping to one URL would have left the other set behind for good.
+ *
+ * Topics still in use are left alone at every URL, so a developer running
+ * locally keeps their own uninstall hook.
+ */
+const pruneWebhooks = async (shop: string, accessToken: string) => {
+  const keep = new Set<string>(WEBHOOK_TOPICS);
+
+  try {
+    const listed = await shopifyGraphQL<{
+      webhookSubscriptions: {
+        nodes: Array<{
+          id: string;
+          topic: string;
+          endpoint: { __typename: string; callbackUrl?: string };
+        }>;
+      };
+    }>(shop, accessToken, WEBHOOK_LIST, { first: 100 });
+
+    for (const sub of listed.webhookSubscriptions.nodes) {
+      if (keep.has(sub.topic)) continue;
+
+      const result = await shopifyGraphQL<{
+        webhookSubscriptionDelete: { userErrors: Array<{ message: string }> };
+      }>(shop, accessToken, WEBHOOK_DELETE, { id: sub.id });
+
+      const errors = result.webhookSubscriptionDelete.userErrors;
+      if (errors.length > 0) {
+        logger.warn({ shop, topic: sub.topic, errors }, "Could not remove webhook");
+      } else {
+        logger.info({ shop, topic: sub.topic }, "Removed webhook we no longer use");
+      }
+    }
+  } catch (error) {
+    // Non-fatal: a stale subscription is noise, not a broken install.
+    logger.warn({ shop, error }, "Could not prune webhooks");
   }
 };

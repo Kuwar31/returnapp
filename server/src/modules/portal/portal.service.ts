@@ -25,6 +25,7 @@ import {
   ensureShopifyReturn,
   getShopifyReturnableQuantities,
 } from "../shopify/returns.service.js";
+import { syncOrderByNumber } from "../shopify/order.sync.js";
 import { generateReference } from "../returns/reference.js";
 import type { QuoteInput, SubmitInput } from "./portal.schemas.js";
 
@@ -67,6 +68,18 @@ export const lookupOrder = async (
   orderNumber: string,
   email: string,
 ) => {
+  /**
+   * Refresh from Shopify before answering, in place of the order and
+   * fulfillment webhooks — see syncOrderByNumber for why they can't be relied
+   * on here.
+   *
+   * This is the right moment for it whatever the hosting: lookup is the only
+   * point where staleness is visible to anyone, and it also picks up an order
+   * placed since the last backfill, which used to mean the portal insisted a
+   * real order didn't exist.
+   */
+  await syncOrderByNumber(merchantId, orderNumber);
+
   const order = await prisma.order.findFirst({
     where: { merchantId, orderNumber },
     include: { lineItems: { orderBy: { title: "asc" } } },
