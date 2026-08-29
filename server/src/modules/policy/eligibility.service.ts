@@ -12,6 +12,8 @@ export interface EligibleLineItem {
   id: string;
   title: string;
   variantTitle: string | null;
+  /** Display-ready, e.g. "Size: 37". Null when the product has no options. */
+  variantLabel: string | null;
   sku: string | null;
   imageUrl: string | null;
   unitPrice: number;
@@ -34,6 +36,36 @@ export interface OrderEligibility {
   hasEligibleItems: boolean;
   allowedResolutions: ResolutionType[];
 }
+
+/**
+ * Turns stored variant options into something a shopper can read.
+ *
+ * Shopify's variantTitle carries only the values, so a single-option product
+ * arrived as a bare "37" — or worse, "1" — printed under the product name with
+ * nothing to say what it measured. Where the option names were captured, they
+ * are put back: "Size: 37", or "Colour: Blue · Size: M".
+ *
+ * Falls back to the bare title, since orders synced before the names were
+ * stored still have to render as they always did.
+ */
+const variantLabel = (line: OrderLineItem): string | null => {
+  const options = line.variantOptions;
+  if (Array.isArray(options) && options.length > 0) {
+    const parts = options
+      .filter(
+        (o): o is { name: string; value: string } =>
+          Boolean(o) &&
+          typeof o === "object" &&
+          typeof (o as { name?: unknown }).name === "string" &&
+          typeof (o as { value?: unknown }).value === "string",
+      )
+      // Merchants type option names by hand and this store entered "size", so
+      // the first letter is raised rather than printing "size: 1" at a shopper.
+      .map((o) => `${o.name.charAt(0).toUpperCase()}${o.name.slice(1)}: ${o.value}`);
+    if (parts.length > 0) return parts.join(" · ");
+  }
+  return line.variantTitle;
+};
 
 /** The date the return window is counted from, per the policy. */
 const windowAnchor = (order: Order, policy: ReturnPolicy): Date | null => {
@@ -172,6 +204,14 @@ export const evaluateOrder = (
       id: line.id,
       title: line.title,
       variantTitle: line.variantTitle,
+      /**
+       * "Size: 37" rather than a bare "37".
+       *
+       * Shopify's variantTitle is only the values, so a single-option product
+       * rendered as a lone number with nothing saying what it measured. Falls
+       * back to the bare title for orders synced before the names were stored.
+       */
+      variantLabel: variantLabel(line),
       sku: line.sku,
       imageUrl: line.imageUrl,
       unitPrice: toDecimal(line.unitPrice).toNumber(),

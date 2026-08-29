@@ -13,6 +13,8 @@ export interface NormalizedLineItem {
   productType: string | null;
   title: string;
   variantTitle: string | null;
+  /** Option axis and value, e.g. [{ name: "Size", value: "37" }]. */
+  variantOptions?: Array<{ name: string; value: string }> | null;
   imageUrl: string | null;
   quantity: number;
   unitPrice: number;
@@ -224,7 +226,10 @@ export interface GraphQLOrderNode {
       image: { url: string } | null;
       discountedUnitPriceSet: { shopMoney: { amount: string } } | null;
       product: { id: string; productType: string | null } | null;
-      variant: { id: string } | null;
+      variant: {
+        id: string;
+        selectedOptions?: Array<{ name: string; value: string }> | null;
+      } | null;
     }>;
   };
 }
@@ -268,6 +273,15 @@ export const mapGraphQLOrder = (
       sku: line.sku ?? null,
       title: line.title,
       variantTitle: line.variantTitle ?? null,
+      /**
+       * "Title" is Shopify's placeholder on products with no real options, so
+       * it is dropped here rather than shown to a shopper as "Title: Default
+       * Title".
+       */
+      variantOptions:
+        line.variant?.selectedOptions?.filter(
+          (o) => o.name.toLowerCase() !== "title",
+        ) ?? null,
       imageUrl: line.image?.url ?? null,
       quantity: line.quantity,
       unitPrice: num(line.discountedUnitPriceSet?.shopMoney.amount),

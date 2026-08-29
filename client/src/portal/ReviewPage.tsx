@@ -246,8 +246,10 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
                       <div className="review__tile-blank" />
                     )}
                     <div className="review__tile-title">{item.title}</div>
-                    {item.variantTitle && (
-                      <div className="muted">{item.variantTitle}</div>
+                    {(item.variantLabel ?? item.variantTitle) && (
+                      <div className="muted">
+                        {item.variantLabel ?? item.variantTitle}
+                      </div>
                     )}
                     <button className="linkish" onClick={() => remove(id)}>
                       Remove
@@ -334,7 +336,7 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
                     <span className="summary__label">
                       {item?.title}
                       <span className="muted">
-                        {[item?.variantTitle, d.reasonLabel]
+                        {[item?.variantLabel ?? item?.variantTitle, d.reasonLabel]
                           .filter(Boolean)
                           .join(" · ")}
                       </span>

@@ -113,6 +113,11 @@ export function ItemDrawer({
         (url): url is string => Boolean(url),
       );
   const heading = options?.product?.title ?? item.title;
+  /**
+   * The returned item's own variant, named. Prefers the server's label and
+   * falls back to the bare title for an order synced before names were stored.
+   */
+  const variantLabel = item.variantLabel ?? item.variantTitle;
   /** The media pane shows the replacement only once there is one to show. */
   const showGallery = step === "size" && gallery.length > 0;
 
@@ -335,9 +340,7 @@ export function ItemDrawer({
               )}
               <div className="drawer__caption">
                 <div className="drawer__title">{item.title}</div>
-                {item.variantTitle && (
-                  <div className="muted">{item.variantTitle}</div>
-                )}
+                {variantLabel && <div className="muted">{variantLabel}</div>}
                 <div className="muted">{money(item.unitPrice, currency)}</div>
               </div>
             </>
@@ -527,6 +530,7 @@ export function ItemDrawer({
               {options && options.variants.length > 0 && (
                 <div className="swapper__panel">
                   {/* What they're giving up, so the swap reads as a comparison. */}
+                  <div className="swapper__current-heading">Returning</div>
                   <div className="swapper__current">
                     {item.imageUrl ? (
                       <img src={item.imageUrl} alt="" />
@@ -534,13 +538,19 @@ export function ItemDrawer({
                       <span className="swapper__current-blank" />
                     )}
                     <span className="swapper__current-body">
-                      <span className="swapper__current-title">{item.title}</span>
-                      {item.variantTitle && (
-                        <span className="muted">{item.variantTitle}</span>
+                      {/* Title and price share a row, so the money lines up with
+                          the name rather than floating beside a two-line block. */}
+                      <span className="swapper__current-top">
+                        <span className="swapper__current-title">
+                          {item.title}
+                        </span>
+                        <span className="swapper__current-price">
+                          {money(item.unitPrice, currency)}
+                        </span>
+                      </span>
+                      {variantLabel && (
+                        <span className="muted">{variantLabel}</span>
                       )}
-                    </span>
-                    <span className="swapper__current-price">
-                      {money(item.unitPrice, currency)}
                     </span>
                   </div>
 

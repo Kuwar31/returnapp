@@ -217,7 +217,9 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
                       </span>
                     )}
                   </div>
-                  <div className="line-item__meta">{item.variantTitle}</div>
+                  <div className="line-item__meta">
+                    {item.variantLabel ?? item.variantTitle}
+                  </div>
 
                   {decision ? (
                     <div className="line-item__decision">

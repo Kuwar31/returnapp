@@ -1745,7 +1745,7 @@
 /* The item being given up, kept on screen so the swap is a comparison. */
 .swapper__current {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
   padding: 10px;
   border-radius: var(--radius-sm);
@@ -1863,3 +1863,22 @@
 }
 
 
+
+/* "Returning", above the item being given up on the swap screen. */
+.swapper__current-heading {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-subtle, #6b7280);
+  margin-bottom: 6px;
+}
+
+/* Title and price on one row: the money lines up with the product name rather
+   than centring itself against a two-line block. */
+.swapper__current-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}

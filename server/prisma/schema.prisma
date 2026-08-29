@@ -324,6 +324,11 @@ model OrderLineItem {
   productType  String?
   title        String
   variantTitle String?
+  /// The option axis this variant sits on, e.g. [{name:"Size",value:"37"}].
+  /// Shopify's variantTitle carries only the values — "37", or "Blue / M" —
+  /// so without the names the portal can only print a bare number at the
+  /// shopper and hope they recognise it.
+  variantOptions Json?
   imageUrl     String?
   quantity     Int     @default(1)
   // Per-unit price after line discounts
@@ -543,6 +548,11 @@ model ExchangeItem {
   sku          String?
   title        String
   variantTitle String?
+  /// The option axis this variant sits on, e.g. [{name:"Size",value:"37"}].
+  /// Shopify's variantTitle carries only the values — "37", or "Blue / M" —
+  /// so without the names the portal can only print a bare number at the
+  /// shopper and hope they recognise it.
+  variantOptions Json?
   imageUrl     String?
   /// The ExchangeLineItem Shopify created, which `returnProcess` needs to
   /// confirm the exchange. Only set on the SHOPIFY_NATIVE path.

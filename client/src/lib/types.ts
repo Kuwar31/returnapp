@@ -35,6 +35,11 @@ export interface EligibleLineItem {
   id: string;
   title: string;
   variantTitle: string | null;
+  /**
+   * Display-ready variant, e.g. "Size: 37". Shopify's variantTitle is only the
+   * value, which renders as a bare "1" with nothing saying what it measures.
+   */
+  variantLabel?: string | null;
   sku: string | null;
   imageUrl: string | null;
   unitPrice: number;

@@ -84,6 +84,7 @@ export const upsertOrder = async (
         productType: line.productType,
         title: line.title,
         variantTitle: line.variantTitle,
+        variantOptions: line.variantOptions ?? undefined,
         quantity: line.quantity,
         unitPrice: toDecimal(line.unitPrice),
         currency: line.currency,
@@ -201,7 +202,7 @@ const SYNC_ORDERS_QUERY = `#graphql
             image { url }
             discountedUnitPriceSet { shopMoney { amount } }
             product { id productType }
-            variant { id }
+            variant { id selectedOptions { name value } }
           }
         }
       }
