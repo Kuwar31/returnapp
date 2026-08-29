@@ -82,15 +82,6 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
     });
   }, [decisions, order.id]);
 
-  /**
-   * What the shopper actually ends up with.
-   *
-   * The quote reports credits and charges separately because they are computed
-   * per line — an item can leave a surplus or a shortfall, never both — but a
-   * shopper settling up cares about one number. Negative means they owe.
-   */
-  const net = quote ? quote.estimatedTotal - quote.amountDue : 0;
-
   /** The payload that carried the amounts owns the currency — see ReviewPage. */
   const currency =
     quote?.currency ?? eligibility.items[0]?.currency ?? order.currency;
@@ -340,37 +331,14 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
               </div>
             )}
             {/*
-              When a return both credits and charges, the two are shown as
-              components and the bottom line is what's left.
+              No payout figure here on purpose.
 
-              Previously they sat side by side as "You'll receive 5,836.78" and
-              "To pay 2,162.92", leaving the shopper to work out their own net
-              from two figures that never met.
+              This step is for choosing what comes back; what it settles to is
+              the review step's job, and it changes with the credit option
+              picked there. A running "You'll receive" alongside a per-item list
+              invited the shopper to read it as final before they had chosen how
+              they wanted paying.
             */}
-            {quote.amountDue > 0 && quote.estimatedTotal > 0 && (
-              <>
-                <div className="totals__row">
-                  <span>Refund for your returns</span>
-                  <span>{money(quote.estimatedTotal, currency)}</span>
-                </div>
-                <div className="totals__row">
-                  <span>Cost of your exchange</span>
-                  <span>−{money(quote.amountDue, currency)}</span>
-                </div>
-              </>
-            )}
-
-            {net >= 0 ? (
-              <div className="totals__row totals__row--grand">
-                <span>You'll receive</span>
-                <span>{money(net, currency)}</span>
-              </div>
-            ) : (
-              <div className="totals__row totals__row--grand totals__row--due">
-                <span>To pay for your exchange</span>
-                <span>{money(-net, currency)}</span>
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -380,22 +348,7 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
       {count > 0 && (
         <div className="portal__bar">
           <span className="portal__bar-label">
-            <span className="portal__bar-count">
-              {count} item{count === 1 ? "" : "s"} selected
-            </span>
-            {/*
-              Hidden on a narrow screen rather than truncated. Ellipsising a
-              currency figure turns "€5,836.78" into "€5…", which reads as five
-              euros — the total is on the card above either way.
-            */}
-            {quote && (
-              <span className="portal__bar-amount">
-                {" · "}
-                {net >= 0
-                  ? money(net, currency)
-                  : `${money(-net, currency)} to pay`}
-              </span>
-            )}
+            {count} item{count === 1 ? "" : "s"} selected
           </span>
           <button className="btn" onClick={goToReview}>
             Continue with return

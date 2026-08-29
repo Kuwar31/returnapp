@@ -431,11 +431,6 @@
   .portal__bar .btn {
     padding: 11px 16px;
   }
-
-  /* See the note in SelectItemsPage: a half-printed price is worse than none. */
-  .portal__bar-amount {
-    display: none;
-  }
 }
 
 /* ---------- item drawer ---------- */
