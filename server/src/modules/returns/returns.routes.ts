@@ -14,6 +14,7 @@ import {
 import {
   backfillExchangeItemImages,
   getExchangePaymentUrl,
+  refreshExchangeDraft,
 } from "../shopify/exchange.service.js";
 
 export const returnsRouter = Router();
@@ -61,6 +62,13 @@ returnsRouter.get(
 returnsRouter.get(
   "/:id",
   asyncHandler(async (req, res) => {
+    /**
+     * Before reading, not after: this can mark a draft paid, and the record is
+     * serialized straight into the response — fetching first would render the
+     * state we were about to correct.
+     */
+    await refreshExchangeDraft(req.admin!.merchantId, req.params.id);
+
     const request = await returnsService.getReturn(
       req.admin!.merchantId,
       req.params.id,

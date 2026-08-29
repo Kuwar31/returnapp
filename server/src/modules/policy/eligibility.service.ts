@@ -63,6 +63,13 @@ const variantLabel = (line: OrderLineItem): string | null => {
       // the first letter is raised rather than printing "size: 1" at a shopper.
       .map((o) => `${o.name.charAt(0).toUpperCase()}${o.name.slice(1)}: ${o.value}`);
     if (parts.length > 0) return parts.join(" · ");
+    /**
+     * Options were recorded and every one was Shopify's "Title" placeholder,
+     * which means the product genuinely has no options. Falling back to the
+     * title here would print "Default Title" at a shopper as though it were a
+     * choice they made.
+     */
+    return null;
   }
   return line.variantTitle;
 };

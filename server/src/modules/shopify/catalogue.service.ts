@@ -48,7 +48,10 @@ const describeOptions = (
   const named = (options ?? [])
     .filter((o) => o?.name && o.name.toLowerCase() !== "title")
     .map((o) => `${o.name.charAt(0).toUpperCase()}${o.name.slice(1)}: ${o.value}`);
-  return named.length > 0 ? named.join(" · ") : fallback;
+  if (named.length > 0) return named.join(" · ");
+  // Every option was the placeholder, so the product has none. Returning the
+  // fallback would print "Default Title" as though it were a real choice.
+  return options && options.length > 0 ? "" : fallback;
 };
 
 const firstImage = (media: MediaShape): string | null =>

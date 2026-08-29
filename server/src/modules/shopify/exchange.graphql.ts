@@ -114,3 +114,25 @@ export const ORDER_PAYMENT_COLLECTION = `#graphql
     }
   }
 `;
+
+/**
+ * The draft's current state in Shopify.
+ *
+ * The only way to learn a shopper has paid. Completing a draft through its
+ * invoice link converts it into a real order, and Shopify tells nobody: the
+ * order webhooks that might have hinted at it are gone, and even with them the
+ * new order carries nothing tying it back to the return. Asking the draft
+ * directly is unambiguous — it names the order it became.
+ */
+export const DRAFT_ORDER_STATE = `#graphql
+  query DraftOrderState($id: ID!) {
+    draftOrder(id: $id) {
+      id
+      name
+      status
+      invoiceUrl
+      order { id name displayFinancialStatus }
+      totalPriceSet { shopMoney { amount currencyCode } }
+    }
+  }
+`;

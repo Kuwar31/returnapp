@@ -19,6 +19,7 @@ import { resolveDisplayMode } from "../settings/merchant-settings.js";
 import {
   backfillExchangeItemImages,
   getExchangePaymentUrl,
+  refreshExchangeDraft,
 } from "../shopify/exchange.service.js";
 
 export const portalRouter = Router();
@@ -237,14 +238,28 @@ portalRouter.get(
   asyncHandler(async (req, res) => {
     const { slug, email } = req.query as ReferenceAuth;
     const merchant = await portalService.getMerchantBySlug(slug);
-    const request = await portalService.getReturnByReference(
+    const found = await portalService.getReturnByReference(
       merchant.id,
       req.params.reference,
       email,
     );
-    if (!request) {
+    if (!found) {
       throw unauthorized("That return reference and email don't match.");
     }
+
+    /**
+     * Reconcile, then re-read. A shopper arriving straight from checkout is the
+     * likeliest visitor to this page, and showing them "Pay now" for something
+     * they have just paid for is the worst thing it could say.
+     */
+    await refreshExchangeDraft(merchant.id, found.id);
+    const request =
+      (await portalService.getReturnByReference(
+        merchant.id,
+        req.params.reference,
+        email,
+      )) ?? found;
+
     // Repairs pictures stored before the product-image fallback existed. Fire
     // and forget: it must never delay or fail the page it decorates.
     void backfillExchangeItemImages(merchant.id, request.id);

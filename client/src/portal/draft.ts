@@ -32,7 +32,13 @@ export const describeVariant = (
   const named = (options ?? [])
     .filter((o) => o?.name && o.name.toLowerCase() !== "title")
     .map((o) => `${o.name.charAt(0).toUpperCase()}${o.name.slice(1)}: ${o.value}`);
-  return named.length > 0 ? named.join(" · ") : fallback;
+  if (named.length > 0) return named.join(" · ");
+  /**
+   * Options were present and every one was Shopify's "Title" placeholder, so
+   * the product has none. The fallback is only for when options are unknown —
+   * using it here prints "Default Title" as though the shopper chose it.
+   */
+  return options && options.length > 0 ? null : fallback;
 };
 
 /** The article key for the nth unit of a line. */

@@ -18,6 +18,7 @@ import {
   DRAFT_ORDER_COMPLETE,
   DRAFT_ORDER_CREATE,
   DRAFT_ORDER_INVOICE_SEND,
+  DRAFT_ORDER_STATE,
   DRAFT_ORDER_UPDATE,
   ORDER_PAYMENT_COLLECTION,
 } from "./exchange.graphql.js";
@@ -688,5 +689,88 @@ export const getExchangePaymentUrl = async (
       "Could not resolve an exchange payment link",
     );
     return null;
+  }
+};
+
+/**
+ * Reconciles an exchange draft with Shopify, so a paid one stops asking for
+ * payment.
+ *
+ * Completing a draft through its invoice link turns it into a real order, and
+ * nothing tells this app that happened — which left the admin showing "Invoice
+ * sent — awaiting payment" and the shopper a "Pay now" button against an
+ * exchange they had already paid for.
+ *
+ * Read on demand rather than pushed: the same reasoning as the order sync. A
+ * webhook can't be delivered to an instance that sleeps, and whoever opens the
+ * return is the one who needs it current.
+ *
+ * Never throws, and does nothing once the draft is settled — so the ordinary
+ * case costs one query and every case after that costs nothing.
+ */
+export const refreshExchangeDraft = async (
+  merchantId: string,
+  returnRequestId: string,
+): Promise<void> => {
+  try {
+    const draft = await prisma.exchangeDraftOrder.findFirst({
+      where: { returnRequestId, returnRequest: { merchantId } },
+    });
+    if (!draft) return;
+    if (draft.status === "COMPLETED" || draft.status === "CANCELLED") return;
+
+    const data = await queryShop<{
+      draftOrder: {
+        name: string | null;
+        status: string;
+        invoiceUrl: string | null;
+        order: { id: string; name: string } | null;
+      } | null;
+    }>(merchantId, DRAFT_ORDER_STATE, { id: draft.externalId });
+
+    const remote = data.draftOrder;
+    if (!remote) return;
+
+    /**
+     * Shopify's own status is the authority, but `order` is the fact that
+     * matters: a draft that names an order has been paid and converted,
+     * whatever the status string says.
+     */
+    const paid = Boolean(remote.order) || remote.status === "COMPLETED";
+    const cancelled = !paid && remote.status === "CANCELLED";
+    if (!paid && !cancelled) return;
+
+    await prisma.exchangeDraftOrder.update({
+      where: { id: draft.id },
+      data: {
+        status: paid ? "COMPLETED" : "CANCELLED",
+        externalOrderId: remote.order?.id ?? null,
+        completedAt: paid ? new Date() : null,
+        // A completed draft's invoice link is spent; keeping it would put a
+        // dead "Pay now" in front of someone who has already paid.
+        invoiceUrl: paid ? null : draft.invoiceUrl,
+      },
+    });
+
+    await prisma.returnEvent.create({
+      data: {
+        returnRequestId,
+        type: "STATUS_CHANGED",
+        message: paid
+          ? `Exchange paid — order ${remote.order?.name ?? "created"} in Shopify`
+          : `Exchange draft ${draft.name ?? ""} was cancelled in Shopify`,
+        metadata: { draftOrderId: draft.externalId, orderId: remote.order?.id ?? null },
+      },
+    });
+
+    logger.info(
+      { merchantId, returnRequestId, paid, orderId: remote.order?.id },
+      "Exchange draft reconciled with Shopify",
+    );
+  } catch (error) {
+    logger.warn(
+      { merchantId, returnRequestId, error },
+      "Could not refresh the exchange draft",
+    );
   }
 };
