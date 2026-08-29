@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { money } from "../lib/format";
+import { describeVariant } from "./draft";
 import type {
   EligibleLineItem,
   ExchangeOptions,
@@ -261,7 +262,9 @@ export function ItemDrawer({
       exchangePrice: variant?.price ?? null,
       exchangeCurrency: variant ? (options?.currency ?? currency) : null,
       exchangeImageUrl: variant?.imageUrl ?? null,
-      exchangeVariantTitle: variant?.title ?? null,
+      exchangeVariantTitle: variant
+        ? describeVariant(variant.options, variant.title)
+        : null,
       exchangeProductTitle: variant
         ? (productTitle ?? options?.product?.title ?? null)
         : null,

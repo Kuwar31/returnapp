@@ -33,6 +33,24 @@ export interface ExchangeProduct {
 
 type MediaShape = { nodes?: Array<{ preview?: { image?: { url: string } | null } | null }> } | null;
 
+/**
+ * Names a variant's options, e.g. "Size: 37".
+ *
+ * Shopify's variant title carries only the values, so a single-option product
+ * reads as a bare number. "Title" is its placeholder on products with no real
+ * options and is dropped; merchants type the rest by hand, so the first letter
+ * is raised.
+ */
+const describeOptions = (
+  options: Array<{ name: string; value: string }> | undefined | null,
+  fallback: string,
+): string => {
+  const named = (options ?? [])
+    .filter((o) => o?.name && o.name.toLowerCase() !== "title")
+    .map((o) => `${o.name.charAt(0).toUpperCase()}${o.name.slice(1)}: ${o.value}`);
+  return named.length > 0 ? named.join(" · ") : fallback;
+};
+
 const firstImage = (media: MediaShape): string | null =>
   media?.nodes?.[0]?.preview?.image?.url ?? null;
 
@@ -318,6 +336,7 @@ export const describeVariants = async (
         id: string;
         title: string;
         price: string;
+        selectedOptions?: Array<{ name: string; value: string }> | null;
         media: MediaShape;
         product: {
           title: string;
@@ -332,7 +351,9 @@ export const describeVariants = async (
       if (!node) continue;
       out.set(node.id, {
         title: node.product?.title ?? node.title,
-        variantTitle: node.title,
+        // Named, so a top-up doesn't put a bare "3" back into a draft that the
+        // picker had already labelled "Size: 3".
+        variantTitle: describeOptions(node.selectedOptions, node.title),
         imageUrl:
           firstImage(node.media) ??
           node.product?.featuredMedia?.preview?.image?.url ??

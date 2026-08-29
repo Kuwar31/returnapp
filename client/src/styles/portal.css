@@ -1877,3 +1877,12 @@
   justify-content: space-between;
   gap: 12px;
 }
+
+/* Closes a section: separated from the item rows it totals, and weighted so it
+   reads as an answer rather than another line item. */
+.summary__line--subtotal {
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-weight: 600;
+}

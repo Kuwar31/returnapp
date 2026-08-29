@@ -318,7 +318,7 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
 
             <div className="summary__section">
               <div className="summary__heading">
-                <span>Returning ({entries.length})</span>
+                <span>Return credits ({entries.length})</span>
                 <span>{quote ? money(quote.itemsSubtotal, currency) : "—"}</span>
               </div>
               {entries.map(([id, d]) => {
@@ -347,12 +347,32 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
                   </div>
                 );
               })}
+              {/* Restated under the list, so the section adds up on its own
+                  rather than only against a total four rows further down. */}
+              {quote && (
+                <div className="summary__line summary__line--subtotal">
+                  <span>Credit subtotal</span>
+                  <span>{money(quote.itemsSubtotal, currency)}</span>
+                </div>
+              )}
+              {quote && quote.bonusCredit > 0 && (
+                <div className="summary__line summary__line--credit">
+                  <span>Bonus credit</span>
+                  <span>+{money(quote.bonusCredit, currency)}</span>
+                </div>
+              )}
+              {quote && quote.restockingFee > 0 && (
+                <div className="summary__line">
+                  <span>Restocking fee</span>
+                  <span>−{money(quote.restockingFee, currency)}</span>
+                </div>
+              )}
             </div>
 
             {exchanges.length > 0 && (
               <div className="summary__section">
                 <div className="summary__heading">
-                  <span>Exchanging for ({exchanges.length})</span>
+                  <span>Purchasing ({exchanges.length})</span>
                   <span>
                     {quote
                       ? money(
@@ -387,21 +407,15 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
                     </span>
                   </div>
                 ))}
-              </div>
-            )}
-
-            {quote && (
-              <div className="summary__section">
-                {quote.bonusCredit > 0 && (
-                  <div className="summary__line summary__line--credit">
-                    <span>Bonus credit</span>
-                    <span>+{money(quote.bonusCredit, currency)}</span>
-                  </div>
-                )}
-                {quote.restockingFee > 0 && (
-                  <div className="summary__line">
-                    <span>Restocking fee</span>
-                    <span>−{money(quote.restockingFee, currency)}</span>
+                {quote && (
+                  <div className="summary__line summary__line--subtotal">
+                    <span>Purchase subtotal</span>
+                    <span>
+                      {money(
+                        quote.lines.reduce((s, l) => s + l.exchangeValue, 0),
+                        currency,
+                      )}
+                    </span>
                   </div>
                 )}
               </div>

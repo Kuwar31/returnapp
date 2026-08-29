@@ -17,6 +17,24 @@ const key = (orderId: string) => `returns.draft.${orderId}`;
  */
 export type Draft = Record<string, ItemDecision>;
 
+/**
+ * Names a chosen variant's options, e.g. "Size: 37".
+ *
+ * Shopify's variant title is only the value, so a single-option product reads
+ * as a bare "3" wherever it is printed. Merchants type these names by hand, so
+ * the first letter is raised; "Title" is Shopify's placeholder on products with
+ * no real options and is dropped rather than shown.
+ */
+export const describeVariant = (
+  options: Array<{ name: string; value: string }> | undefined | null,
+  fallback: string | null,
+): string | null => {
+  const named = (options ?? [])
+    .filter((o) => o?.name && o.name.toLowerCase() !== "title")
+    .map((o) => `${o.name.charAt(0).toUpperCase()}${o.name.slice(1)}: ${o.value}`);
+  return named.length > 0 ? named.join(" · ") : fallback;
+};
+
 /** The article key for the nth unit of a line. */
 export const articleKey = (lineId: string, index: number) =>
   `${lineId}#${index}`;

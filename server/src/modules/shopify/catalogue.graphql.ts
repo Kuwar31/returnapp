@@ -87,6 +87,7 @@ export const VARIANTS_BY_ID = `#graphql
         sku
         availableForSale
         price
+        selectedOptions { name value }
         media(first: 1) { nodes { preview { image { url } } } }
         # The product's hero shot as a fallback: most variants carry no picture
         # of their own, so reading only the variant's media left the exchange
