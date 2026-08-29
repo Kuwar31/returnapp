@@ -175,6 +175,9 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
   const payout =
     returning.length > 0 ? returning[0][1].resolution : null;
 
+  /** What they end up with once credits and charges meet — see SelectItemsPage. */
+  const net = quote ? quote.estimatedTotal - quote.amountDue : 0;
+
   /**
    * A trade-down leaves the shopper owed money even though every line is an
    * exchange. That leftover deserves the same choice a plain refund gets, so
@@ -451,17 +454,34 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
               </div>
             )}
 
-            <div className="summary__total">
-              <span>Total estimated refund</span>
-              <strong>
-                {quote ? money(quote.estimatedTotal, currency) : "—"}
-              </strong>
-            </div>
+            {/* Components first, bottom line last — see SelectItemsPage. */}
+            {quote && quote.amountDue > 0 && quote.estimatedTotal > 0 && (
+              <>
+                <div className="summary__line">
+                  <span>Refund for your returns</span>
+                  <span>{money(quote.estimatedTotal, currency)}</span>
+                </div>
+                <div className="summary__line">
+                  <span>Cost of your exchange</span>
+                  <span>−{money(quote.amountDue, currency)}</span>
+                </div>
+              </>
+            )}
 
-            {quote && quote.amountDue > 0 && (
+            {!quote ? (
+              <div className="summary__total">
+                <span>Total estimated refund</span>
+                <strong>—</strong>
+              </div>
+            ) : net >= 0 ? (
+              <div className="summary__total">
+                <span>Total estimated refund</span>
+                <strong>{money(net, currency)}</strong>
+              </div>
+            ) : (
               <div className="summary__total summary__total--due">
                 <span>To pay for your exchange</span>
-                <strong>{money(quote.amountDue, currency)}</strong>
+                <strong>{money(-net, currency)}</strong>
               </div>
             )}
 
