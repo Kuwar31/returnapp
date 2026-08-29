@@ -364,23 +364,78 @@
 }
 
 /* Sticky action bar, so the way forward is always reachable. */
+/*
+ * A full-bleed band in the store's own colour, rather than a floating card.
+ *
+ * Pinned to the viewport and stretched edge to edge with a negative inset,
+ * because the card it sits under is centred and narrower than the page — the
+ * old version inherited that width and read as one more panel in the stack
+ * instead of the one thing left to do.
+ */
 .portal__bar {
-  position: sticky;
+  position: fixed;
+  left: 0;
+  right: 0;
   bottom: 0;
-  margin-top: 20px;
+  z-index: 40;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px 20px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
-  font-size: 14px;
+  justify-content: center;
+  gap: 20px;
+  padding: 16px 24px;
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.12);
+  font-size: 15px;
   font-weight: 600;
-  width: 100%;
-  max-width: 720px;
+}
+
+/* One line, always. Wrapping "2 items selected · ₹5,836.78" over three lines
+   was most of what made the old bar look broken on a narrow screen. */
+.portal__bar-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/*
+ * Inverted against the band: the bar is already the accent colour, so an accent
+ * button would vanish into it.
+ */
+.portal__bar .btn {
+  background: #fff;
+  color: var(--text);
+  border-color: #fff;
+  flex-shrink: 0;
+  padding: 12px 24px;
+}
+
+.portal__bar .btn:hover:not(:disabled) {
+  background: #f4f4f5;
+  color: var(--text);
+}
+
+/* The bar floats over the page now, so the last card needs room to clear it. */
+.portal__card--wide,
+.review {
+  margin-bottom: 84px;
+}
+
+@media (max-width: 560px) {
+  .portal__bar {
+    gap: 12px;
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+
+  .portal__bar .btn {
+    padding: 11px 16px;
+  }
+
+  /* See the note in SelectItemsPage: a half-printed price is worse than none. */
+  .portal__bar-amount {
+    display: none;
+  }
 }
 
 /* ---------- item drawer ---------- */

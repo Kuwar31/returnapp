@@ -377,10 +377,23 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
           visible however far down the item list the shopper scrolls. */}
       {count > 0 && (
         <div className="portal__bar">
-          <span>
-            {count} item{count === 1 ? "" : "s"} selected
-            {quote &&
-              ` · ${net >= 0 ? money(net, currency) : `${money(-net, currency)} to pay`}`}
+          <span className="portal__bar-label">
+            <span className="portal__bar-count">
+              {count} item{count === 1 ? "" : "s"} selected
+            </span>
+            {/*
+              Hidden on a narrow screen rather than truncated. Ellipsising a
+              currency figure turns "€5,836.78" into "€5…", which reads as five
+              euros — the total is on the card above either way.
+            */}
+            {quote && (
+              <span className="portal__bar-amount">
+                {" · "}
+                {net >= 0
+                  ? money(net, currency)
+                  : `${money(-net, currency)} to pay`}
+              </span>
+            )}
           </span>
           <button className="btn" onClick={goToReview}>
             Continue with return
