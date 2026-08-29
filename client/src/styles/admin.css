@@ -1241,3 +1241,24 @@ table.data tbody tr:hover {
 .repair .btn {
   flex-shrink: 0;
 }
+
+/* Groups within the customer card — "Contact information", "Shipping address" —
+   so one panel can carry three kinds of fact without them running together. */
+.panel__subhead {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+  margin: 18px 0 6px;
+}
+
+/* One line per address line, as it would be written on a label. */
+.shopper__address {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-style: normal;
+  font-size: 14px;
+  color: var(--text-muted);
+}

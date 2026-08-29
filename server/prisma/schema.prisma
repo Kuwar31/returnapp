@@ -547,12 +547,9 @@ model ExchangeItem {
   variantId    String?
   sku          String?
   title        String
+  /// Already named where it's set, e.g. "Size: 37" — the portal labels a chosen
+  /// variant before storing it, so there is no second field to carry here.
   variantTitle String?
-  /// The option axis this variant sits on, e.g. [{name:"Size",value:"37"}].
-  /// Shopify's variantTitle carries only the values — "37", or "Blue / M" —
-  /// so without the names the portal can only print a bare number at the
-  /// shopper and hope they recognise it.
-  variantOptions Json?
   imageUrl     String?
   /// The ExchangeLineItem Shopify created, which `returnProcess` needs to
   /// confirm the exchange. Only set on the SHOPIFY_NATIVE path.

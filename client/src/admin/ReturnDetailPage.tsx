@@ -896,49 +896,66 @@ export default function ReturnDetailPage() {
             </a>
           )}
 
+          {/*
+            One card, grouped the way Shopify's own order page groups it:
+            who they are, how to reach them, where it ships. Previously the
+            address sat in a separate panel and read as unrelated to the person.
+          */}
           <div className="panel">
-            <h2>Shopper info</h2>
+            <h2>Customer</h2>
             <div className="shopper__name">
               {detail.customerName ?? "Customer"}
             </div>
+            {detail.shopper && (
+              <div className="shopper__stats">
+                {/*
+                  Counts rather than a rate. One order can carry several
+                  returns, so the ratio runs past 100% and reads as a bug — the
+                  raw pair is both honest and easier to judge.
+                */}
+                <strong>{detail.shopper.orderCount}</strong> order
+                {detail.shopper.orderCount === 1 ? "" : "s"} ·{" "}
+                <strong>{detail.shopper.returnCount}</strong> return
+                {detail.shopper.returnCount === 1 ? "" : "s"}
+              </div>
+            )}
+
+            <h3 className="panel__subhead">Contact information</h3>
             <a className="shopper__email" href={`mailto:${detail.customerEmail}`}>
               {detail.customerEmail}
             </a>
-            {detail.shopper && (
+            {/*
+              Rendered only when we actually hold one. Shopify gates phone
+              behind protected customer data approval, and an unapproved app
+              doesn't get the field omitted — it has the whole order query
+              rejected. So "No phone number" would be a claim about the shopper
+              we have no standing to make; silence is the accurate version.
+            */}
+            {detail.order?.shippingAddress?.phone && (
+              <a
+                className="shopper__email"
+                href={`tel:${detail.order.shippingAddress.phone}`}
+              >
+                {detail.order.shippingAddress.phone}
+              </a>
+            )}
+
+            {detail.order?.shippingAddress && (
               <>
-                <div className="shopper__stats">
-                  <strong>{detail.shopper.orderCount}</strong> orders ·{" "}
-                  <strong>{detail.shopper.returnCount}</strong> returns
-                </div>
-                {/*
-                  Deliberately counts rather than a rate. One order can carry
-                  several returns, so the ratio runs past 100% and reads as a
-                  bug — the raw pair is both honest and easier to judge.
-                */}
+                <h3 className="panel__subhead">Shipping address</h3>
+                <address className="shopper__address">
+                  {detail.order.shippingAddress.name && (
+                    <span>{detail.order.shippingAddress.name}</span>
+                  )}
+                  {/* One line each, as a label would be written — joining them
+                      with commas made a four-part address one long sentence. */}
+                  {detail.order.shippingAddress.lines.map((line) => (
+                    <span key={line}>{line}</span>
+                  ))}
+                </address>
               </>
             )}
           </div>
-
-          {detail.order?.shippingAddress && (
-            <div className="panel">
-              <h2>Shipping address</h2>
-              <div className="muted">
-                {detail.order.shippingAddress.name && (
-                  <>
-                    {detail.order.shippingAddress.name}
-                    <br />
-                  </>
-                )}
-                {detail.order.shippingAddress.lines.join(", ")}
-                {detail.order.shippingAddress.phone && (
-                  <>
-                    <br />
-                    {detail.order.shippingAddress.phone}
-                  </>
-                )}
-              </div>
-            </div>
-          )}
 
           {detail.shipment && (
             <div className="panel">
