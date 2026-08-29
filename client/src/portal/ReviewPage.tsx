@@ -75,6 +75,8 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
   const [submitting, setSubmitting] = useState(false);
   /** Where a trade-down's leftover should go. Only used when there is one. */
   const [surplusMethod, setSurplusMethod] = useState<SurplusMethod>("REFUND");
+  /** The "checkout opens in a new page" confirmation, for an upsell exchange. */
+  const [payPrompt, setPayPrompt] = useState(false);
 
   /**
    * Read from whatever payload the amounts on screen came from, never from the
@@ -143,9 +145,20 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
     setDraft(next);
   };
 
-  const submit = async () => {
+  const submit = async (payFirst = false) => {
     setSubmitting(true);
     setError(null);
+    setPayPrompt(false);
+
+    /**
+     * The tab is opened on the click itself, before any awaiting.
+     *
+     * Browsers only allow a popup while a user gesture is still on the stack,
+     * and the checkout URL doesn't exist until the return has been created —
+     * so a blank tab is claimed now and pointed at the link once it arrives.
+     */
+    const checkoutTab = payFirst ? window.open("", "_blank") : null;
+
     try {
       const created = await api.post<ReturnDetail>(
         "/portal/session/returns",
@@ -153,12 +166,26 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
         { auth: "portal" },
       );
       clearDraft(order.id);
+
+      const checkout = created.exchangeDraft?.invoiceUrl ?? null;
+      if (checkoutTab) {
+        if (checkout) {
+          checkoutTab.location.href = checkout;
+        } else {
+          // No link came back — the store settles exchanges on the original
+          // order, or the draft failed. Close the blank tab rather than
+          // stranding the shopper on it; the status page explains what's next.
+          checkoutTab.close();
+        }
+      }
+
       navigate(
         `/r/${slug}/status/${created.reference}?email=${encodeURIComponent(
           created.customerEmail,
         )}`,
       );
     } catch (e) {
+      checkoutTab?.close();
       setError(e instanceof Error ? e.message : "Something went wrong.");
     } finally {
       setSubmitting(false);
@@ -177,6 +204,8 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
 
   /** What they end up with once credits and charges meet — see SelectItemsPage. */
   const net = quote ? quote.estimatedTotal - quote.amountDue : 0;
+  /** An upgrade: the replacement costs more than the return is worth. */
+  const owesMoney = net < 0;
 
   /**
    * A trade-down leaves the shopper owed money even though every line is an
@@ -503,10 +532,14 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
 
             <button
               className="btn btn--block"
-              onClick={submit}
+              onClick={() => (owesMoney ? setPayPrompt(true) : void submit())}
               disabled={submitting || !quote}
             >
-              {submitting ? "Submitting…" : "Submit return"}
+              {submitting
+                ? "Submitting…"
+                : owesMoney
+                  ? "Pay and submit"
+                  : "Submit return"}
             </button>
             <button
               className="btn btn--secondary btn--block"
@@ -518,6 +551,45 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
           </div>
         </aside>
       </div>
+
+      {/*
+        Warns before the tab opens, because the two things about to happen are
+        not obvious: checkout is a separate page, and the return is submitted
+        either way. Said plainly rather than borrowing AfterShip's countdown —
+        nothing here expires a request after ten minutes, and inventing a
+        deadline to look urgent would be a lie.
+      */}
+      {payPrompt && (
+        <div className="paydialog" role="dialog" aria-modal="true">
+          <div
+            className="paydialog__backdrop"
+            onClick={() => setPayPrompt(false)}
+          />
+          <div className="paydialog__panel">
+            <h2>Pay and submit</h2>
+            <p>
+              Checkout will open on a new page. Your return is submitted either
+              way — if you'd rather pay later, the link is on your confirmation
+              page and in your email.
+            </p>
+            <p className="paydialog__amount">
+              <span>To pay</span>
+              <strong>{money(-net, currency)}</strong>
+            </p>
+            <div className="paydialog__actions">
+              <button
+                className="btn btn--secondary"
+                onClick={() => setPayPrompt(false)}
+              >
+                Cancel
+              </button>
+              <button className="btn" onClick={() => void submit(true)}>
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

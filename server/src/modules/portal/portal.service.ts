@@ -25,6 +25,7 @@ import {
   ensureShopifyReturn,
   getShopifyReturnableQuantities,
 } from "../shopify/returns.service.js";
+import { ensureExchangeDraftOrder } from "../shopify/exchange.service.js";
 import { syncOrderByNumber } from "../shopify/order.sync.js";
 import { generateReference } from "../returns/reference.js";
 import type { QuoteInput, SubmitInput } from "./portal.schemas.js";
@@ -687,6 +688,39 @@ export const submitReturn = async (
     await ensureShopifyReturn(merchantId, created.id);
   }
 
+  /**
+   * Open the exchange's draft now rather than at approval, but only when the
+   * shopper owes money.
+   *
+   * They are about to be sent to checkout, and there is nothing to check out
+   * against until the draft exists. The cost is that a request nobody has
+   * reviewed yet holds the replacement stock — which is the same trade the
+   * draft-order method makes anyway, just earlier, and it only applies to
+   * exchanges that cost extra.
+   *
+   * An even swap or a trade-down keeps the old timing: it has no balance, so
+   * there is no checkout to reach and no reason to reserve early.
+   *
+   * A no-op under the native method, where the replacement lives on the
+   * original order and cannot be paid for until the return is processed —
+   * ensureExchangeDraftOrder returns early there, and the response simply
+   * carries no link.
+   */
+  let record = created;
+  if (quote.amountDue.greaterThan(0)) {
+    await ensureExchangeDraftOrder(merchantId, created.id);
+    record = await prisma.returnRequest.findUniqueOrThrow({
+      where: { id: created.id },
+      include: {
+        lineItems: { include: { reason: true, orderLineItem: true } },
+        exchangeItems: true,
+        shipment: true,
+        events: { orderBy: { createdAt: "asc" } },
+        exchangeDraft: true,
+      },
+    });
+  }
+
   // Only once the transaction has committed — otherwise a rollback would still
   // have emailed the shopper about a return that doesn't exist. Auto-approved
   // requests skip straight to the approval email.
@@ -695,7 +729,7 @@ export const submitReturn = async (
     created.status === "APPROVED" ? "APPROVED" : "SUBMITTED",
   );
 
-  return created;
+  return record;
 };
 
 /** Everything the shopper's confirmation page renders. */
