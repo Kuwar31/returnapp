@@ -361,7 +361,16 @@ model ReturnRequest {
   policy     ReturnPolicy? @relation(fields: [policyId], references: [id], onDelete: SetNull)
 
   /// Short human-readable reference shown to the shopper, e.g. "R-7F3K2Q"
-  reference  String   @unique
+  /**
+   * Merchant-facing, and unique per merchant rather than globally.
+   *
+   * Six characters from a 29-letter alphabet is ~594 million combinations,
+   * which sounds ample until the birthday bound: a global constraint would hit
+   * a coin-flip chance of collision at roughly 24,000 returns across every
+   * store on the platform, and a collision fails a shopper's submission. Scoped
+   * per merchant, that threshold applies to one store's own returns instead.
+   */
+  reference  String
   status     ReturnStatus   @default(SUBMITTED)
   resolution ResolutionType
   /**
@@ -428,6 +437,7 @@ model ReturnRequest {
   feedback      ReturnFeedback?
   exchangeDraft ExchangeDraftOrder?
 
+  @@unique([merchantId, reference])
   @@index([merchantId, status])
   @@index([merchantId, submittedAt])
   @@index([orderId])

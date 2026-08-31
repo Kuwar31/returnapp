@@ -280,7 +280,17 @@ const WEBHOOK_DELETE = `#graphql
  * Worth restoring the order topics if this ever moves to an instance that stays
  * awake — a webhook is still the only way to hear about an order nobody looks up.
  */
-export const WEBHOOK_TOPICS = ["APP_UNINSTALLED"] as const;
+export const WEBHOOK_TOPICS = [
+  "APP_UNINSTALLED",
+  /**
+   * Shopify's mandatory compliance topics. Not optional for a listed app, and
+   * not replaceable by a read: two of them fire for a store that has already
+   * removed the app, so there is nothing left to poll with.
+   */
+  "CUSTOMERS_DATA_REQUEST",
+  "CUSTOMERS_REDACT",
+  "SHOP_REDACT",
+] as const;
 
 export const registerWebhooks = async (shop: string, accessToken: string) => {
   const uri = `${env.APP_URL}/api/shopify/webhooks`;
