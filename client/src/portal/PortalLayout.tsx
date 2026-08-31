@@ -46,12 +46,19 @@ export default function PortalLayout({ loaderData }: Route.ComponentProps) {
         }
       >
         <header className="portal__header">
-          {config.branding.logoUrl && (
+          {/*
+            The store identifies itself before the page explains itself.
+            A logo does that job on its own, so the name is only spelled out
+            when there isn't one — printing both is the same fact twice.
+          */}
+          {config.branding.logoUrl ? (
             <img
               className="portal__logo"
               src={config.branding.logoUrl}
               alt={config.merchant.name}
             />
+          ) : (
+            <div className="portal__store">{config.merchant.name}</div>
           )}
           <h1>{config.branding.headline}</h1>
           <p className="muted">{config.branding.subheadline}</p>
