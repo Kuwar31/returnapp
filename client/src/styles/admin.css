@@ -19,12 +19,6 @@
   padding: 0 10px;
 }
 
-.admin__store {
-  font-size: 12px;
-  color: var(--text-subtle);
-  padding: 2px 10px 0;
-}
-
 .admin__nav {
   display: flex;
   flex-direction: column;
@@ -1263,26 +1257,145 @@ table.data tbody tr:hover {
   color: var(--text-muted);
 }
 
-/* Store picker, for an account with more than one. Sits where the store's name
-   otherwise sits, so switching happens where you already look to see where you
-   are. */
-.admin__store-switch {
+/* Store picker. Sits where the store's name otherwise sits, so switching
+   happens where you already look to see where you are. It carries a visible
+   border at rest rather than only on hover: which store you're in decides what
+   every figure in the admin means, so it shouldn't read as a caption. */
+.store-switch {
+  position: relative;
+  margin-top: 10px;
+}
+
+.store-switch__button {
   width: 100%;
-  margin: 2px 0 0;
-  padding: 4px 6px;
-  border: 1px solid transparent;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  background: transparent;
+  background: var(--bg);
   font: inherit;
-  font-size: 12px;
-  color: var(--text-subtle);
+  text-align: left;
   cursor: pointer;
 }
 
-.admin__store-switch:hover,
-.admin__store-switch:focus {
-  border-color: var(--border);
+.store-switch__button:hover {
+  border-color: var(--text-subtle);
+}
+
+.store-switch__label {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.store-switch__caption {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.store-switch__name {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.store-switch__chevron {
+  font-size: 11px;
+  color: var(--text-subtle);
+}
+
+.store-switch__menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   background: var(--surface);
+  box-shadow: 0 10px 24px rgb(0 0 0 / 12%);
+}
+
+.store-switch__item,
+.store-switch__add {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.store-switch__item:hover:not(:disabled),
+.store-switch__add:hover {
+  background: var(--accent-soft);
+}
+
+.store-switch__item:disabled {
+  cursor: default;
+}
+
+.store-switch__check {
+  width: 12px;
+  flex: none;
+  color: var(--accent);
+  font-size: 11px;
+}
+
+.store-switch__item-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.store-switch__item-name {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.store-switch__item.is-active .store-switch__item-name {
+  font-weight: 600;
+}
+
+.store-switch__item-slug,
+.store-switch__busy {
+  font-size: 11px;
+  color: var(--text-subtle);
+}
+
+.store-switch__busy {
+  margin-left: auto;
+}
+
+.store-switch__add {
+  margin-top: 2px;
+  padding-top: 9px;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.store-switch__error {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--danger, #b42318);
 }
 
 /* A settings row whose control is a form rather than a single input: the form

@@ -71,7 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    */
   const switchStore = useCallback(async (merchantId: string) => {
     const result = await api.post<{ token: string }>(
-      "/admin/auth/switch",
+      "/auth/switch",
       { merchantId },
       { auth: "admin" },
     );
