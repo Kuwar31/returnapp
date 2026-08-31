@@ -1284,3 +1284,11 @@ table.data tbody tr:hover {
   border-color: var(--border);
   background: var(--surface);
 }
+
+/* A settings row whose control is a form rather than a single input: the form
+   needs the full width, so it drops below the description instead of beside it. */
+.settings-row--stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}

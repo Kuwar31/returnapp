@@ -22,6 +22,8 @@ export function ShopifyPanel() {
   const [status, setStatus] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  /** Whether the "add another store" form is open, on an already-connected shop. */
+  const [addingAnother, setAddingAnother] = useState(false);
 
   const load = () =>
     api
@@ -121,8 +123,8 @@ export function ShopifyPanel() {
             <div>
               <div className="settings-row__label">Order sync</div>
               <div className="settings-row__hint">
-                New orders arrive automatically over webhooks. Re-sync pulls the
-                last 60 days again.
+                An order refreshes from Shopify whenever it's looked up in the
+                portal. Re-sync pulls the last 60 days in one go.
                 {connection.lastSyncedAt &&
                   ` Last full sync ${dateTime(connection.lastSyncedAt)}.`}
               </div>
@@ -135,33 +137,69 @@ export function ShopifyPanel() {
               {syncing ? "Syncing…" : "Re-sync"}
             </button>
           </div>
+
+          {/*
+            Adding a store, not replacing this one. The install resolves the
+            domain to its own merchant and grants this account access, so each
+            store keeps its own orders, returns and settings — switch between
+            them from the sidebar.
+          */}
+          <div className="settings-row settings-row--stacked">
+            <div>
+              <div className="settings-row__label">Connect another store</div>
+              <div className="settings-row__hint">
+                Run several Shopify stores? Add them to this account and switch
+                between them from the sidebar. Each store keeps its own orders,
+                returns and settings — nothing is shared between them.
+              </div>
+            </div>
+            {addingAnother ? (
+              <ConnectForm />
+            ) : (
+              <button
+                className="btn btn--secondary btn--sm"
+                onClick={() => setAddingAnother(true)}
+                disabled={!connection.configured}
+              >
+                Add a store
+              </button>
+            )}
+          </div>
         </>
       ) : (
-        <form onSubmit={connect}>
+        <>
           <p className="muted" style={{ marginBottom: 14 }}>
             Connect your store to pull in orders. You'll be sent to Shopify to
             approve access.
           </p>
-          <div className="field">
-            <label htmlFor="shop">Store domain</label>
-            <input
-              id="shop"
-              value={shopInput}
-              onChange={(e) => setShopInput(e.target.value)}
-              placeholder="your-store.myshopify.com"
-              autoComplete="off"
-              required
-            />
-          </div>
-          <button
-            className="btn"
-            type="submit"
-            disabled={!connection.configured || !shopInput.trim() || connecting}
-          >
-            {connecting ? "Redirecting to Shopify…" : "Connect Shopify"}
-          </button>
-        </form>
+          <ConnectForm />
+        </>
       )}
     </div>
   );
+
+  function ConnectForm() {
+    return (
+      <form onSubmit={connect}>
+        <div className="field">
+          <label htmlFor="shop">Store domain</label>
+          <input
+            id="shop"
+            value={shopInput}
+            onChange={(e) => setShopInput(e.target.value)}
+            placeholder="your-store.myshopify.com"
+            autoComplete="off"
+            required
+          />
+        </div>
+        <button
+          className="btn"
+          type="submit"
+          disabled={!connection!.configured || !shopInput.trim() || connecting}
+        >
+          {connecting ? "Redirecting to Shopify…" : "Connect Shopify"}
+        </button>
+      </form>
+    );
+  }
 }
