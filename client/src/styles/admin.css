@@ -1325,6 +1325,8 @@ table.data tbody tr:hover {
   box-shadow: 0 10px 24px rgb(0 0 0 / 12%);
 }
 
+/* Links, not buttons: each store is a URL, so these must open in a new tab and
+   support the back button like any other navigation. */
 .store-switch__item,
 .store-switch__add {
   width: 100%;
@@ -1337,16 +1339,15 @@ table.data tbody tr:hover {
   background: transparent;
   font: inherit;
   text-align: left;
+  text-decoration: none;
+  color: inherit;
   cursor: pointer;
 }
 
-.store-switch__item:hover:not(:disabled),
+.store-switch__item:hover,
 .store-switch__add:hover {
   background: var(--accent-soft);
-}
-
-.store-switch__item:disabled {
-  cursor: default;
+  text-decoration: none;
 }
 
 .store-switch__check {

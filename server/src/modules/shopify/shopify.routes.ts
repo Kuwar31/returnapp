@@ -151,7 +151,12 @@ shopifyRouter.get(
       logger.error({ shop, error }, "Backfill failed after install"),
     );
 
-    const target = new URL("/admin", env.corsOrigins[0] ?? env.APP_URL);
+    // Straight into the store that was just connected, rather than to whichever
+    // one the account happens to list first.
+    const target = new URL(
+      `/admin/${merchant.slug}`,
+      env.corsOrigins[0] ?? env.APP_URL,
+    );
     target.searchParams.set("connected", merchant.slug);
     res.redirect(target.toString());
   }),

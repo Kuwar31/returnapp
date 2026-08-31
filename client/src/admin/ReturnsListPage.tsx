@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router";
+import { useNavigate, useParams, useSearchParams } from "react-router";
 import { api } from "../lib/api";
 import { money, shortDate, titleCase } from "../lib/format";
 import type { Paginated, ReturnSummary } from "../lib/types";
 import { EmptyState, ErrorAlert } from "../components/Feedback";
 import { StatusBadge } from "../components/StatusBadge";
+import { storePath } from "./store-path";
 
 const STATUS_FILTERS = [
   { value: "", label: "All statuses" },
@@ -18,6 +19,7 @@ const STATUS_FILTERS = [
 
 export default function ReturnsListPage() {
   const navigate = useNavigate();
+  const base = storePath(useParams().store ?? "");
   const [searchParams, setSearchParams] = useSearchParams();
 
   const status = searchParams.get("status") ?? "";
@@ -126,7 +128,7 @@ export default function ReturnsListPage() {
               {data.items.map((request) => (
                 <tr
                   key={request.id}
-                  onClick={() => navigate(`/admin/returns/${request.id}`)}
+                  onClick={() => navigate(`${base}/returns/${request.id}`)}
                 >
                   <td>
                     <strong>{request.reference}</strong>

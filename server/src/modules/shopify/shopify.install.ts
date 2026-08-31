@@ -5,6 +5,7 @@ import { encrypt } from "../../lib/crypto.js";
 import { seedDefaultReasonGroup } from "../settings/reason-defaults.js";
 import { logger } from "../../lib/logger.js";
 import { prisma } from "../../lib/prisma.js";
+import { clearMembershipCache } from "../auth/membership.js";
 import { isValidShopDomain, shopifyGraphQL } from "./shopify.client.js";
 
 export const NONCE_COOKIE = "shopify_oauth_state";
@@ -70,11 +71,19 @@ interface ShopQueryResult {
   };
 }
 
+/**
+ * Words a slug may not be, because the admin routes a store as /admin/<slug>
+ * and these are real pages there. A store called "login" would be unreachable,
+ * since a static route always wins over a dynamic one.
+ */
+const RESERVED_SLUGS = new Set(["login", "logout", "admin", "api", "r"]);
+
 /** Turns a shop domain into a URL-safe portal slug: acme.myshopify.com -> acme */
 const slugFor = async (shop: string): Promise<string> => {
   const base = shop.replace(/\.myshopify\.com$/, "").toLowerCase();
   let slug = base;
   let suffix = 1;
+  if (RESERVED_SLUGS.has(slug)) slug = `${base}-${++suffix}`;
   // Slugs are the public portal path, so they must stay unique across tenants.
   while (await prisma.merchant.findFirst({ where: { slug } })) {
     const owner = await prisma.merchant.findFirst({
@@ -203,6 +212,9 @@ export const provisionMerchant = async (
         role: "OWNER",
       },
     });
+    // The middleware caches memberships for a few seconds; drop this user's so
+    // the store they just connected is reachable the moment they land back.
+    clearMembershipCache(installedByUserId);
   }
 
   await prisma.integration.upsert({
@@ -249,6 +261,9 @@ export const provisionMerchant = async (
         role: "OWNER",
       },
     });
+    // The middleware caches memberships for a few seconds; drop this user's so
+    // the store they just connected is reachable the moment they land back.
+    clearMembershipCache(installedByUserId);
   }
 
   logger.info({ shop, merchantId: merchant.id }, "Shopify store connected");

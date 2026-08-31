@@ -1,34 +1,28 @@
 import { useEffect, useRef, useState } from "react";
-import { NavLink, Navigate, Outlet, useNavigate } from "react-router";
+import { Link, NavLink, Navigate, Outlet, useParams } from "react-router";
 import { Loading } from "../components/Feedback";
 import { useAuth } from "./AuthContext";
+import { storePath } from "./store-path";
 import type { AdminSession } from "../lib/types";
 
 const NAV = [
-  { to: "/admin", label: "Dashboard", end: true },
-  { to: "/admin/returns", label: "Returns", end: false },
-  { to: "/admin/settings", label: "Settings", end: true },
-  { to: "/admin/settings/reasons", label: "Return reasons", end: false },
+  { to: "", label: "Dashboard", end: true },
+  { to: "/returns", label: "Returns", end: false },
+  { to: "/settings", label: "Settings", end: true },
+  { to: "/settings/reasons", label: "Return reasons", end: false },
 ];
 
 /**
- * The store picker.
+ * The store picker — now a set of links rather than a control with state.
  *
- * Written as a menu rather than a `<select>` because a native dropdown can't be
- * styled to read as a control at all — it rendered as grey 12px text that
- * looked like a caption, so nobody could tell the sidebar was clickable. It
- * also has to carry more than a name: which store you're in is the single most
- * consequential piece of state in the admin, since every figure on every screen
- * belongs to it.
+ * Each store is a URL, so switching is a navigation: no token to exchange, no
+ * page reload, and the browser's own back button and "open in new tab" work on
+ * it. That last one is the point of the change — a merchant can keep two shops
+ * open side by side instead of toggling one global setting between them.
  */
 function StoreSwitcher({ session }: { session: AdminSession }) {
-  const { switchStore } = useAuth();
-  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const root = useRef<HTMLDivElement>(null);
-
   const stores = session.stores ?? [];
 
   // Close on a click anywhere else, and on Escape — the two things anyone
@@ -48,22 +42,6 @@ function StoreSwitcher({ session }: { session: AdminSession }) {
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
-
-  const choose = async (merchantId: string) => {
-    if (merchantId === session.merchant.id) {
-      setOpen(false);
-      return;
-    }
-    setBusy(merchantId);
-    setError(null);
-    try {
-      // Reloads on success, so there is no "done" state to render here.
-      await switchStore(merchantId);
-    } catch {
-      setError("Couldn't switch stores. Try again.");
-      setBusy(null);
-    }
-  };
 
   return (
     <div className="store-switch" ref={root}>
@@ -86,15 +64,14 @@ function StoreSwitcher({ session }: { session: AdminSession }) {
       {open && (
         <div className="store-switch__menu" role="menu">
           {stores.map((store) => {
-            const active = store.id === session.merchant.id;
+            const active = store.slug === session.merchant.slug;
             return (
-              <button
+              <Link
                 key={store.id}
-                type="button"
                 role="menuitem"
+                to={storePath(store.slug)}
                 className={`store-switch__item${active ? " is-active" : ""}`}
-                disabled={busy !== null}
-                onClick={() => void choose(store.id)}
+                onClick={() => setOpen(false)}
               >
                 <span className="store-switch__check" aria-hidden="true">
                   {active ? "✓" : ""}
@@ -103,40 +80,47 @@ function StoreSwitcher({ session }: { session: AdminSession }) {
                   <span className="store-switch__item-name">{store.name}</span>
                   {/*
                     The slug, because two stores can easily share a display
-                    name and the portal link is what actually differs.
+                    name and it is what the URL is keyed on.
                   */}
-                  <span className="store-switch__item-slug">/r/{store.slug}</span>
+                  <span className="store-switch__item-slug">/{store.slug}</span>
                 </span>
-                {busy === store.id && (
-                  <span className="store-switch__busy">Switching…</span>
-                )}
-              </button>
+              </Link>
             );
           })}
 
-          <button
-            type="button"
+          <Link
             className="store-switch__add"
-            onClick={() => {
-              setOpen(false);
-              navigate("/admin/settings");
-            }}
+            to={storePath(session.merchant.slug, "/settings")}
+            onClick={() => setOpen(false)}
           >
             + Connect another store
-          </button>
+          </Link>
         </div>
       )}
-
-      {error && <div className="store-switch__error">{error}</div>}
     </div>
   );
 }
 
 export default function AdminLayout() {
   const { session, loading, logout } = useAuth();
+  const { store } = useParams();
 
   if (loading) return <Loading />;
   if (!session) return <Navigate to="/admin/login" replace />;
+
+  /**
+   * A slug this account can't reach — a stale bookmark, an old /admin/returns
+   * link from before stores were in the path, or someone else's store. Send
+   * them to one they do have rather than letting the page fire off requests
+   * that will only come back 403.
+   */
+  const known = session.stores?.some((s) => s.slug === store) ?? false;
+  if (!known) {
+    const first = session.stores?.[0]?.slug ?? session.merchant.slug;
+    return <Navigate to={storePath(first)} replace />;
+  }
+
+  const base = storePath(session.merchant.slug);
 
   return (
     <div className="admin">
@@ -150,7 +134,7 @@ export default function AdminLayout() {
           {NAV.map((item) => (
             <NavLink
               key={item.to}
-              to={item.to}
+              to={`${base}${item.to}`}
               end={item.end}
               className={({ isActive }) => (isActive ? "is-active" : "")}
             >
@@ -169,7 +153,16 @@ export default function AdminLayout() {
         </div>
       </aside>
 
-      <main className="admin__main">
+      {/*
+        Keyed on the store so moving between them remounts the page underneath.
+
+        Without this, switching changes the URL but React keeps the same
+        component mounted — every page fetches in an effect that runs on mount,
+        so the new store's name appears in the sidebar above the old store's
+        returns. Doing it here rather than adding the slug to each page's
+        dependency list makes it structural: a page added later cannot forget.
+      */}
+      <main className="admin__main" key={session.merchant.slug}>
         <Outlet />
       </main>
     </div>

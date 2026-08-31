@@ -75,11 +75,9 @@ authRouter.post(
     const active = usable[0];
 
     res.json({
-      token: signAdminToken({
-        sub: user.id,
-        merchantId: active.merchantId,
-        role: active.role,
-      }),
+      // Names the person only; which store they're looking at is decided by
+      // the URL they're on, one request at a time.
+      token: signAdminToken({ sub: user.id }),
       user: { id: user.id, email: user.email, name: user.name, role: active.role },
       merchant: serializeMerchant(active.merchant),
       /** Everything this account can reach, so the client can offer a switch. */
@@ -110,9 +108,10 @@ authRouter.get(
       (m) => m.merchant.status === "ACTIVE",
     );
     /**
-     * The token names the store, but the membership is what authorises it.
-     * Checking here means access removed from a store takes effect on the next
-     * request rather than whenever a twelve-hour token happens to expire.
+     * "Who am I", not "where am I" — the client calls this before it knows any
+     * slugs, and it is the list of stores that tells it where it may go. The
+     * active membership is whichever requireAuth settled on, which without a
+     * store header is the oldest one.
      */
     const active = usable.find((m) => m.merchantId === req.admin!.merchantId);
     if (!active) throw unauthorized("You no longer have access to that store.");
@@ -128,44 +127,11 @@ authRouter.get(
   }),
 );
 
-const switchSchema = z.object({ merchantId: z.string().min(1) });
-
 /**
- * Moves the session to another of this account's stores.
+ * There is deliberately no /switch any more.
  *
- * Re-issues the token rather than taking a store id per request, which is the
- * whole reason this change stayed small: every service still reads one
- * merchantId from the token and none of them needed touching. It also means a
- * request can only ever act on the store the session was issued for, so a
- * mis-set header can't reach across tenants.
- *
- * The membership is re-read here rather than trusted from the request, so
- * asking for a store you don't belong to is indistinguishable from asking for
- * one that doesn't exist.
+ * Moving between stores used to mean trading the token in for one issued
+ * against a different merchant. Now the store rides on each request, taken
+ * from the URL, so switching is a link — nothing to exchange, nothing global to
+ * mutate, and two tabs can sit on two different stores at once.
  */
-authRouter.post(
-  "/switch",
-  requireAuth,
-  validate(switchSchema),
-  asyncHandler(async (req, res) => {
-    const membership = await prisma.membership.findFirst({
-      where: {
-        userId: req.admin!.sub,
-        merchantId: req.body.merchantId,
-        merchant: { status: "ACTIVE" },
-      },
-      include: { merchant: true },
-    });
-    if (!membership) throw unauthorized("You don't have access to that store.");
-
-    res.json({
-      token: signAdminToken({
-        sub: req.admin!.sub,
-        merchantId: membership.merchantId,
-        role: membership.role,
-      }),
-      merchant: serializeMerchant(membership.merchant),
-      role: membership.role,
-    });
-  }),
-);

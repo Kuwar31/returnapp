@@ -1,3 +1,5 @@
+import { storeFromPath } from "../admin/store-path";
+
 const BASE = import.meta.env.VITE_API_URL ?? "";
 
 export class ApiError extends Error {
@@ -58,6 +60,23 @@ export async function request<T>(
   if (auth) {
     const token = getToken(auth);
     if (token) headers.Authorization = `Bearer ${token}`;
+  }
+  /**
+   * Which store an admin request acts on, taken from the address bar.
+   *
+   * Read here rather than threaded down from a provider because the URL is the
+   * authority on this — anything else would be a second copy of the same fact,
+   * free to disagree with what the merchant is looking at. The server treats it
+   * as a claim and checks the membership behind it on every request.
+   *
+   * /auth/* is exempt: those answer "who is signed in", which has nothing to do
+   * with a store. Scoping them meant a URL naming a store you can't reach —
+   * a stale bookmark, a typo — made /auth/me fail and signed you out instead of
+   * redirecting you somewhere you can go.
+   */
+  if (auth === "admin" && !path.startsWith("/auth/")) {
+    const store = storeFromPath(window.location.pathname);
+    if (store) headers["X-Store-Slug"] = store;
   }
 
   let response: Response;

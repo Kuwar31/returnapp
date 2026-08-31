@@ -41,19 +41,31 @@ type Pages = {
   "/admin": {
     params: {};
   };
-  "/admin/returns": {
-    params: {};
-  };
-  "/admin/returns/:id": {
+  "/admin/:store": {
     params: {
+      "store": string;
+    };
+  };
+  "/admin/:store/returns": {
+    params: {
+      "store": string;
+    };
+  };
+  "/admin/:store/returns/:id": {
+    params: {
+      "store": string;
       "id": string;
     };
   };
-  "/admin/settings": {
-    params: {};
+  "/admin/:store/settings": {
+    params: {
+      "store": string;
+    };
   };
-  "/admin/settings/reasons": {
-    params: {};
+  "/admin/:store/settings/reasons": {
+    params: {
+      "store": string;
+    };
   };
   "/*": {
     params: {
@@ -65,7 +77,7 @@ type Pages = {
 type RouteFiles = {
   "root.tsx": {
     id: "root";
-    page: "/" | "/r/:slug" | "/r/:slug/items" | "/r/:slug/review" | "/r/:slug/status/:reference" | "/admin/login" | "/admin" | "/admin/returns" | "/admin/returns/:id" | "/admin/settings" | "/admin/settings/reasons" | "/*";
+    page: "/" | "/r/:slug" | "/r/:slug/items" | "/r/:slug/review" | "/r/:slug/status/:reference" | "/admin/login" | "/admin" | "/admin/:store" | "/admin/:store/returns" | "/admin/:store/returns/:id" | "/admin/:store/settings" | "/admin/:store/settings/reasons" | "/*";
   };
   "Home.tsx": {
     id: "Home";
@@ -93,35 +105,39 @@ type RouteFiles = {
   };
   "admin/AuthLayout.tsx": {
     id: "admin/AuthLayout";
-    page: "/admin/login" | "/admin" | "/admin/returns" | "/admin/returns/:id" | "/admin/settings" | "/admin/settings/reasons";
+    page: "/admin/login" | "/admin" | "/admin/:store" | "/admin/:store/returns" | "/admin/:store/returns/:id" | "/admin/:store/settings" | "/admin/:store/settings/reasons";
   };
   "admin/LoginPage.tsx": {
     id: "admin/LoginPage";
     page: "/admin/login";
   };
+  "admin/AdminIndex.tsx": {
+    id: "admin/AdminIndex";
+    page: "/admin";
+  };
   "admin/AdminLayout.tsx": {
     id: "admin/AdminLayout";
-    page: "/admin" | "/admin/returns" | "/admin/returns/:id" | "/admin/settings" | "/admin/settings/reasons";
+    page: "/admin/:store" | "/admin/:store/returns" | "/admin/:store/returns/:id" | "/admin/:store/settings" | "/admin/:store/settings/reasons";
   };
   "admin/DashboardPage.tsx": {
     id: "admin/DashboardPage";
-    page: "/admin";
+    page: "/admin/:store";
   };
   "admin/ReturnsListPage.tsx": {
     id: "admin/ReturnsListPage";
-    page: "/admin/returns";
+    page: "/admin/:store/returns";
   };
   "admin/ReturnDetailPage.tsx": {
     id: "admin/ReturnDetailPage";
-    page: "/admin/returns/:id";
+    page: "/admin/:store/returns/:id";
   };
   "admin/SettingsPage.tsx": {
     id: "admin/SettingsPage";
-    page: "/admin/settings";
+    page: "/admin/:store/settings";
   };
   "admin/ReasonsPage.tsx": {
     id: "admin/ReasonsPage";
-    page: "/admin/settings/reasons";
+    page: "/admin/:store/settings/reasons";
   };
   "NotFound.tsx": {
     id: "NotFound";
@@ -139,6 +155,7 @@ type RouteModules = {
   "portal/StatusPage": typeof import("./src/portal/StatusPage.tsx");
   "admin/AuthLayout": typeof import("./src/admin/AuthLayout.tsx");
   "admin/LoginPage": typeof import("./src/admin/LoginPage.tsx");
+  "admin/AdminIndex": typeof import("./src/admin/AdminIndex.tsx");
   "admin/AdminLayout": typeof import("./src/admin/AdminLayout.tsx");
   "admin/DashboardPage": typeof import("./src/admin/DashboardPage.tsx");
   "admin/ReturnsListPage": typeof import("./src/admin/ReturnsListPage.tsx");

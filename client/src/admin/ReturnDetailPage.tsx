@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
+import { storePath } from "./store-path";
 import { api } from "../lib/api";
 import { dateTime, money, shortDate, titleCase } from "../lib/format";
 import type {
@@ -278,7 +279,8 @@ function InspectionRow({
 }
 
 export default function ReturnDetailPage() {
-  const { id } = useParams<{ id: string }>();
+  const { id, store } = useParams<{ id: string; store: string }>();
+  const base = storePath(store ?? "");
   const [detail, setDetail] = useState<ReturnDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -466,7 +468,7 @@ export default function ReturnDetailPage() {
     return (
       <>
         <ErrorAlert message={error ?? "Return not found."} />
-        <Link className="btn btn--secondary btn--sm" to="/admin/returns">
+        <Link className="btn btn--secondary btn--sm" to={`${base}/returns`}>
           Back to returns
         </Link>
       </>
@@ -488,7 +490,7 @@ export default function ReturnDetailPage() {
 
   return (
     <>
-      <Link className="subtle" to="/admin/returns">
+      <Link className="subtle" to={`${base}/returns`}>
         ← Returns
       </Link>
 

@@ -1,14 +1,17 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router";
+import { Link, useParams } from "react-router";
 import { api } from "../lib/api";
 import { money, shortDate } from "../lib/format";
 import type { DashboardStats, Paginated, ReturnSummary } from "../lib/types";
 import { EmptyState, ErrorAlert } from "../components/Feedback";
 import { StatusBadge } from "../components/StatusBadge";
 import { useAuth } from "./AuthContext";
+import { storePath } from "./store-path";
 
 export default function DashboardPage() {
   const { session } = useAuth();
+  // Every link stays inside the store named in the URL.
+  const base = storePath(useParams().store ?? "");
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recent, setRecent] = useState<ReturnSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -55,7 +58,7 @@ export default function DashboardPage() {
             </p>
           )}
         </div>
-        <Link className="btn btn--sm" to="/admin/returns">
+        <Link className="btn btn--sm" to={`${base}/returns`}>
           View all returns
         </Link>
       </div>
@@ -96,7 +99,7 @@ export default function DashboardPage() {
               {recent.map((request) => (
                 <tr key={request.id}>
                   <td>
-                    <Link to={`/admin/returns/${request.id}`}>
+                    <Link to={`${base}/returns/${request.id}`}>
                       <strong>{request.reference}</strong>
                     </Link>
                   </td>

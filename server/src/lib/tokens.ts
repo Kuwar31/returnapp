@@ -1,10 +1,22 @@
 import jwt from "jsonwebtoken";
 import { env } from "../config/env.js";
 
+/**
+ * Names the person, not the store they happen to be looking at.
+ *
+ * The store used to be baked in here, which meant switching had to re-issue the
+ * token — and since the token lives in one localStorage slot, two tabs open on
+ * two stores would fight over it and each would silently start showing the
+ * other's data. The active store now travels per request (see
+ * `resolveMembership`), so a tab is scoped by its own URL and nothing global
+ * has to change to move between stores.
+ *
+ * The trade: a stolen token reaches every store this account belongs to rather
+ * than one. That is the same reach the account itself has, and the previous
+ * design only narrowed it until the thief called /auth/switch.
+ */
 export interface AdminTokenPayload {
   sub: string;
-  merchantId: string;
-  role: "OWNER" | "ADMIN" | "AGENT";
 }
 
 /**
