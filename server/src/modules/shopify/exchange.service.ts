@@ -14,6 +14,7 @@ import { resolveExchangeMethod } from "../settings/merchant-settings.js";
 import { queryShop } from "./shopify.client.js";
 import { resolveCustomerId } from "./credit.service.js";
 import { fetchVariantImages } from "./catalogue.service.js";
+import { holdExchangeFulfillment } from "./fulfillment-hold.js";
 import {
   DRAFT_ORDER_COMPLETE,
   DRAFT_ORDER_CREATE,
@@ -837,6 +838,26 @@ export const refreshExchangeDraft = async (
       { merchantId, returnRequestId, paid, orderId: remote.order?.id },
       "Exchange draft reconciled with Shopify",
     );
+
+    /**
+     * A shopper can pay for an upsell the moment they submit, long before the
+     * merchant has looked at the return. That leaves a paid, unfulfilled order
+     * in the fulfilment queue for items nobody has agreed to take back yet, so
+     * hold it — approving the return is what releases it.
+     *
+     * Only while the return is still awaiting review: paying after approval
+     * means the merchant has already said yes, and re-holding it then would
+     * put back a hold they may have just released by hand.
+     */
+    if (paid) {
+      const request = await prisma.returnRequest.findUnique({
+        where: { id: returnRequestId },
+        select: { status: true },
+      });
+      if (request?.status === "SUBMITTED") {
+        await holdExchangeFulfillment(merchantId, returnRequestId);
+      }
+    }
   } catch (error) {
     logger.warn(
       { merchantId, returnRequestId, error },

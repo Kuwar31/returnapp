@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { redirect, useNavigate, useParams } from "react-router";
+import { Link, redirect, useNavigate, useParams } from "react-router";
 import { api, ApiError, getToken } from "../lib/api";
 import { money } from "../lib/format";
 import type { OrderSession, Quote, ResolutionType } from "../lib/types";
@@ -11,6 +11,7 @@ import {
   hydrateExchangeDetails,
   lineIdOf,
   loadDraft,
+  loadSubmitted,
   saveDraft,
   toSelections,
 } from "./draft";
@@ -124,6 +125,7 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
   const eligible = eligibility.items.filter((i) => i.eligible);
   const ineligible = eligibility.items.filter((i) => !i.eligible);
   const count = Object.keys(decisions).length;
+  const submitted = loadSubmitted(order.id);
 
   return (
     <>
@@ -144,6 +146,26 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
         )}
 
         <ErrorAlert message={error} />
+
+        {/*
+          A return was already submitted for this order in this session — most
+          often the shopper is on their way back from the exchange checkout.
+          Their own items now read "already returned", which looks like a
+          failure, so give them the way back to the summary that says otherwise.
+        */}
+        {submitted && (
+          <p className="picker__submitted">
+            You've already started return{" "}
+            <Link
+              to={`/r/${slug}/status/${submitted.reference}?email=${encodeURIComponent(
+                submitted.email,
+              )}`}
+            >
+              {submitted.reference}
+            </Link>{" "}
+            for this order.
+          </p>
+        )}
 
         {/*
           Only when a window actually closed.

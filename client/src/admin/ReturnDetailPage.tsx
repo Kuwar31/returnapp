@@ -643,17 +643,6 @@ export default function ReturnDetailPage() {
           </div>
         )}
 
-      {/* The one banner Loop leads with: a return nobody has touched that is
-          running out of window. Only shown while it can still be acted on. */}
-      {detail.status === "SUBMITTED" && (
-        <div className="alert alert--warn rbanner">
-          <strong>This return is waiting on you</strong>
-          <div>
-            Approve or reject it so the customer knows what to send back.
-          </div>
-        </div>
-      )}
-
       <div className="detail-grid">
         <div>
           <div className="panel">

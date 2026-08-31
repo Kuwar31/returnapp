@@ -962,6 +962,16 @@
   margin-bottom: 18px;
 }
 
+/* The way back to a return already in flight for this order. */
+.picker__submitted {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgb(0 0 0 / 4%);
+  font-size: 14px;
+  text-align: center;
+}
+
 .picker__until {
   text-align: center;
   font-size: 13px;

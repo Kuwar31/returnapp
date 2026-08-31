@@ -22,6 +22,7 @@ import {
   ensureExchangeDraftOrder,
   sendExchangeInvoice,
 } from "../shopify/exchange.service.js";
+import { releaseExchangeFulfillment } from "../shopify/fulfillment-hold.js";
 import { resolveDisplayMode, resolveExchangeMethod } from "../settings/merchant-settings.js";
 import { generateCreditCode } from "./reference.js";
 import { quoteReturn } from "../policy/quote.service.js";
@@ -186,6 +187,13 @@ export const approveReturn = async (
    * Also non-fatal — see ensureShopifyReturn above.
    */
   await ensureExchangeDraftOrder(merchantId, id);
+
+  /**
+   * A shopper who paid at checkout already has a replacement order sitting in
+   * Shopify, held since payment so it couldn't ship ahead of this decision.
+   * Approving is that decision, so let it go.
+   */
+  await releaseExchangeFulfillment(merchantId, id);
 
   notifyInBackground(id, "APPROVED");
   return getReturn(merchantId, id);

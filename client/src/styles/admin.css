@@ -348,10 +348,6 @@ table.data tbody tr:hover {
   flex-wrap: wrap;
 }
 
-.rbanner {
-  margin-bottom: 18px;
-}
-
 /* ---------- return detail: item rows ---------- */
 
 .panel__head {

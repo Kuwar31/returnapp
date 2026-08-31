@@ -29,8 +29,17 @@ embedded = false
 #   write_gift_cards                         issues a gift card
 #   write_draft_orders                       opens the exchange's draft order,
 #                                            reserves its stock and invoices it
+#
+# The *_fulfillment_orders scopes hold a paid exchange until the return is
+# approved. A shopper can pay for an upsell the instant they submit, which
+# otherwise drops a ready-to-ship order into the merchant's queue for a return
+# nobody has reviewed yet. Both the merchant-managed and third-party pairs are
+# requested because a replacement ships from wherever that product lives —
+# covering only own-warehouse stock would work on some stores and silently not
+# on others.
+#
 # Add read_all_orders to reach orders older than 60 days (needs Shopify approval).
-scopes = "read_orders,read_fulfillments,read_products,read_customers,write_customers,read_returns,write_returns,read_locations,read_store_credit_accounts,read_store_credit_account_transactions,write_store_credit_account_transactions,read_gift_cards,write_gift_cards,read_draft_orders,write_draft_orders"
+scopes = "read_orders,read_fulfillments,read_products,read_customers,write_customers,read_returns,write_returns,read_locations,read_store_credit_accounts,read_store_credit_account_transactions,write_store_credit_account_transactions,read_gift_cards,write_gift_cards,read_draft_orders,write_draft_orders,read_merchant_managed_fulfillment_orders,write_merchant_managed_fulfillment_orders,read_third_party_fulfillment_orders,write_third_party_fulfillment_orders"
 
 [auth]
 redirect_urls = [

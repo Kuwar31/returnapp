@@ -15,6 +15,8 @@ import {
   hydrateExchangeDetails,
   lineIdOf,
   loadDraft,
+  loadSubmitted,
+  rememberSubmitted,
   saveDraft,
   toSelections,
   type Draft,
@@ -88,12 +90,24 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
   /** Draft keys are articles (`<lineId>#<n>`), so resolve through the line. */
   const itemFor = (key: string) => itemById.get(lineIdOf(key));
 
-  // Nothing chosen means the shopper landed here directly or reloaded after
-  // submitting — send them back rather than showing an empty review.
+  /**
+   * Nothing chosen means the shopper landed here directly, reloaded after
+   * submitting, or came back from the exchange checkout. If they have already
+   * submitted, their summary is what they're looking for — sending them to the
+   * item picker showed them their own items greyed out as "already returned",
+   * which reads like the return never went through.
+   */
   useEffect(() => {
     const stored = loadDraft(order.id);
     if (Object.keys(stored).length === 0) {
-      navigate(`/r/${slug}/items`, { replace: true });
+      const submitted = loadSubmitted(order.id);
+      navigate(
+        submitted
+          ? `/r/${slug}/status/${submitted.reference}` +
+              `?email=${encodeURIComponent(submitted.email)}`
+          : `/r/${slug}/items`,
+        { replace: true },
+      );
       return;
     }
     setDraft(stored);
@@ -165,6 +179,12 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
         { auth: "portal" },
       );
       clearDraft(order.id);
+      // Before the checkout tab is pointed anywhere: from here on, any return
+      // to this order in this browser should land on the summary.
+      rememberSubmitted(order.id, {
+        reference: created.reference,
+        email: created.customerEmail,
+      });
 
       const checkout = created.exchangeDraft?.invoiceUrl ?? null;
       if (checkoutTab) {

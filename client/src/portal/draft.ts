@@ -94,6 +94,43 @@ export const clearDraft = (orderId: string): void => {
   }
 };
 
+/** Where to send someone back to after they've already submitted this order. */
+export interface SubmittedReturn {
+  reference: string;
+  email: string;
+}
+
+const submittedKey = (orderId: string) => `returns.submitted.${orderId}`;
+
+/**
+ * Remembers the return just created for an order.
+ *
+ * Paying for an upsell exchange takes the shopper off to Shopify's checkout,
+ * and coming back — a new tab, the back button, a reopened link — used to land
+ * them on the item picker with everything greyed out as "already returned".
+ * That reads like the return failed. This is the breadcrumb that lets the
+ * portal put them back on their own summary instead.
+ */
+export const rememberSubmitted = (
+  orderId: string,
+  submitted: SubmittedReturn,
+): void => {
+  try {
+    sessionStorage.setItem(submittedKey(orderId), JSON.stringify(submitted));
+  } catch {
+    /* the shopper just doesn't get the shortcut back */
+  }
+};
+
+export const loadSubmitted = (orderId: string): SubmittedReturn | null => {
+  try {
+    const raw = sessionStorage.getItem(submittedKey(orderId));
+    return raw ? (JSON.parse(raw) as SubmittedReturn) : null;
+  } catch {
+    return null;
+  }
+};
+
 /**
  * Turns stored decisions into the payload the API expects.
  *
