@@ -300,6 +300,28 @@ export const inspectLineItem = async (
 };
 
 /**
+ * The pooled-basket arm of a quote, for a return whose shopper spent their
+ * value in the catalogue. Empty for every other return, which is what keeps
+ * the per-line path computing exactly what it always did.
+ */
+const shopNowPool = (request: {
+  shopNow: boolean;
+  shopNowBonus: Prisma.Decimal;
+  exchangeItems: Array<{ unitPrice: Prisma.Decimal; quantity: number }>;
+}) =>
+  request.shopNow
+    ? {
+        shopNow: {
+          cartTotal: request.exchangeItems.reduce(
+            (sum, ex) => sum.add(toDecimal(ex.unitPrice).mul(ex.quantity)),
+            toDecimal(0),
+          ),
+          bonus: toDecimal(request.shopNowBonus),
+        },
+      }
+    : {};
+
+/**
  * Rewrites the stored money figures from the current accepted quantities.
  *
  * Lines nobody has inspected yet count at their requested quantity, so the
@@ -308,7 +330,14 @@ export const inspectLineItem = async (
 const recalculateTotals = async (merchantId: string, id: string) => {
   const request = await prisma.returnRequest.findFirstOrThrow({
     where: { id, merchantId },
-    include: { lineItems: { include: { exchangeItems: true } }, policy: true },
+    include: {
+      lineItems: { include: { exchangeItems: true } },
+      // Read off the request too: a "shop now" basket hangs from the return
+      // rather than from a line, and quoting without it prices the goods at
+      // nothing. See priceExchange for the same reasoning.
+      exchangeItems: true,
+      policy: true,
+    },
   });
   if (!request.policy) return;
 
@@ -318,11 +347,14 @@ const recalculateTotals = async (merchantId: string, id: string) => {
       unitPrice: toDecimal(li.unitPrice),
       quantity: li.acceptedQuantity ?? li.quantity,
       resolution: li.resolution,
-      exchangeValue: li.exchangeItems.reduce(
-        (sum, ex) => sum.add(toDecimal(ex.unitPrice).mul(ex.quantity)),
-        toDecimal(0),
-      ),
+      exchangeValue: request.shopNow
+        ? toDecimal(0)
+        : li.exchangeItems.reduce(
+            (sum, ex) => sum.add(toDecimal(ex.unitPrice).mul(ex.quantity)),
+            toDecimal(0),
+          ),
     })),
+    ...shopNowPool(request),
   });
 
   await prisma.returnRequest.update({
@@ -392,7 +424,14 @@ export const markReceived = async (
 const payoutSplit = async (merchantId: string, id: string) => {
   const request = await prisma.returnRequest.findFirstOrThrow({
     where: { id, merchantId },
-    include: { lineItems: { include: { exchangeItems: true } }, policy: true },
+    include: {
+      lineItems: { include: { exchangeItems: true } },
+      // Read off the request too: a "shop now" basket hangs from the return
+      // rather than from a line, and quoting without it prices the goods at
+      // nothing. See priceExchange for the same reasoning.
+      exchangeItems: true,
+      policy: true,
+    },
   });
   if (!request.policy) return new Map<ResolutionType, Prisma.Decimal>();
 
@@ -404,11 +443,14 @@ const payoutSplit = async (merchantId: string, id: string) => {
       // shopper asked for, which is what they were quoted.
       quantity: li.acceptedQuantity ?? li.quantity,
       resolution: li.resolution,
-      exchangeValue: li.exchangeItems.reduce(
-        (sum, ex) => sum.add(toDecimal(ex.unitPrice).mul(ex.quantity)),
-        toDecimal(0),
-      ),
+      exchangeValue: request.shopNow
+        ? toDecimal(0)
+        : li.exchangeItems.reduce(
+            (sum, ex) => sum.add(toDecimal(ex.unitPrice).mul(ex.quantity)),
+            toDecimal(0),
+          ),
     })),
+    ...shopNowPool(request),
   });
 
   /**

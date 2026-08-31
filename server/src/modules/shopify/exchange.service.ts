@@ -75,9 +75,29 @@ export const priceExchange = async (
 ): Promise<ExchangeTotals | null> => {
   const request = await prisma.returnRequest.findFirstOrThrow({
     where: { id: returnRequestId, merchantId },
-    include: { lineItems: { include: { exchangeItems: true } }, policy: true },
+    include: {
+      lineItems: { include: { exchangeItems: true } },
+      /**
+       * Read off the request, not gathered from the lines.
+       *
+       * A "shop now" basket belongs to the return as a whole and has no line to
+       * hang from, so walking the lines to find exchange items would price the
+       * draft at zero and invoice the shopper for nothing. Every exchange item
+       * carries returnRequestId regardless of how it was chosen, so this is the
+       * same set as before for a per-item swap.
+       */
+      exchangeItems: true,
+      policy: true,
+    },
   });
   if (!request.policy) return null;
+
+  const cartTotal = round2(
+    request.exchangeItems.reduce(
+      (sum, ex) => sum.add(toDecimal(ex.unitPrice).mul(ex.quantity)),
+      ZERO,
+    ),
+  );
 
   const quote = quoteReturn({
     policy: request.policy,
@@ -85,12 +105,37 @@ export const priceExchange = async (
       unitPrice: toDecimal(li.unitPrice),
       quantity: li.quantity,
       resolution: li.resolution,
-      exchangeValue: li.exchangeItems.reduce(
-        (sum, ex) => sum.add(toDecimal(ex.unitPrice).mul(ex.quantity)),
-        ZERO,
-      ),
+      // Under shop-now the basket is priced as a pool below, so leaving this at
+      // zero is what keeps it from being counted twice.
+      exchangeValue: request.shopNow
+        ? ZERO
+        : li.exchangeItems.reduce(
+            (sum, ex) => sum.add(toDecimal(ex.unitPrice).mul(ex.quantity)),
+            ZERO,
+          ),
     })),
+    ...(request.shopNow
+      ? {
+          shopNow: {
+            cartTotal,
+            bonus: toDecimal(request.shopNowBonus),
+          },
+        }
+      : {}),
   });
+
+  if (request.shopNow) {
+    const lineItems = request.exchangeItems
+      .filter((ex) => ex.variantId)
+      .map((ex) => ({ variantId: ex.variantId!, quantity: ex.quantity }));
+    if (lineItems.length === 0) return null;
+    return {
+      itemsTotal: cartTotal,
+      balanceDue: quote.amountDue,
+      creditApplied: round2(cartTotal.sub(quote.amountDue)),
+      lineItems,
+    };
+  }
 
   /**
    * `due` is what a line still owes after its own return credit is consumed,

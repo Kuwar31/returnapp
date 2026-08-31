@@ -140,6 +140,12 @@ portalRouter.get(
         })),
       })),
       eligibility,
+      /**
+       * The "shop now" offer, converted into the money this order is shown in.
+       * Absent details when the merchant has it switched off, so the portal has
+       * one thing to check rather than a rule to reimplement.
+       */
+      shopNow: await portalService.getShopNowOffer(merchantId, orderId),
     });
   }),
 );

@@ -332,7 +332,50 @@ const resolveSelections = async (
     }
   }
 
-  return { order, policy, resolved, variants };
+  /**
+   * The "shop now" basket, priced the same way and under the same rule: the
+   * request names variants, Shopify says what they cost.
+   *
+   * The merchant's switch is checked here rather than only in the portal, so
+   * turning the feature off actually turns it off — a client that keeps
+   * sending baskets is refused instead of quietly served.
+   */
+  const shopItems = input.shopItems ?? [];
+  let shopNow: { cartTotal: Prisma.Decimal; bonus: Prisma.Decimal } | null = null;
+  let shopBasket: Array<{ variantId: string; quantity: number }> = [];
+
+  if (shopItems.length > 0) {
+    const merchant = await prisma.merchant.findUniqueOrThrow({
+      where: { id: merchantId },
+      select: { shopNowEnabled: true, shopNowBonusAmount: true },
+    });
+    if (!merchant.shopNowEnabled) {
+      throw badRequest("This store isn't offering shopping with return credit.");
+    }
+
+    const shopVariants = await resolveVariants(
+      merchantId,
+      shopItems.map((i) => i.variantId),
+    );
+    const cartTotal = round2(
+      shopItems.reduce((sum, item) => {
+        const variant = shopVariants.get(item.variantId);
+        if (!variant) {
+          throw badRequest("One of the items in your basket is no longer available.");
+        }
+        return sum.add(toDecimal(variant.price).mul(item.quantity));
+      }, ZERO),
+    );
+
+    shopNow = {
+      cartTotal,
+      bonus: toDecimal(merchant.shopNowBonusAmount ?? 0),
+    };
+    shopBasket = shopItems;
+    for (const [id, variant] of shopVariants) variants.set(id, variant);
+  }
+
+  return { order, policy, resolved, variants, shopNow, shopBasket };
 };
 
 /**
@@ -405,6 +448,29 @@ export const getExchangeOptions = async (
 };
 
 /**
+ * Whether this store lets a shopper spend their return value in the catalogue,
+ * and what sweetener comes with it.
+ *
+ * The bonus is converted here rather than in the portal because it is money,
+ * and every other figure the shopper sees has been through the same rate.
+ */
+export const getShopNowOffer = async (merchantId: string, orderId: string) => {
+  const merchant = await prisma.merchant.findUniqueOrThrow({
+    where: { id: merchantId },
+    select: { shopNowEnabled: true, shopNowMode: true, shopNowBonusAmount: true },
+  });
+  if (!merchant.shopNowEnabled) return { enabled: false as const };
+
+  const fx = await catalogueConverter(merchantId, orderId);
+  return {
+    enabled: true as const,
+    mode: merchant.shopNowMode,
+    bonus: fx.price(Number(merchant.shopNowBonusAmount ?? 0)),
+    currency: fx.currency,
+  };
+};
+
+/**
  * Fills in the display details of exchange variants a shopper already chose.
  *
  * The portal draft lives in the browser and outlives deploys, so a selection
@@ -464,11 +530,18 @@ export const browseExchangeProducts = async (
 const toQuoteLines = (
   resolved: Array<{ line: { unitPrice: Prisma.Decimal }; selection: QuoteInput["items"][number] }>,
   variants: Map<string, { price: number }>,
+  /**
+   * A basket is priced as a pool against every line at once, so the per-line
+   * replacement value has to stay zero here — leaving it in would charge the
+   * shopper for the same goods twice.
+   */
+  pooled = false,
 ) =>
   resolved.map(({ line, selection }) => {
-    const chosen = selection.exchange
-      ? variants.get(selection.exchange.variantId)
-      : undefined;
+    const chosen =
+      !pooled && selection.exchange
+        ? variants.get(selection.exchange.variantId)
+        : undefined;
     return {
       unitPrice: toDecimal(line.unitPrice),
       quantity: 1,
@@ -485,15 +558,16 @@ export const quoteSelection = async (
   orderId: string,
   input: QuoteInput,
 ) => {
-  const { order, policy, resolved, variants } = await resolveSelections(
+  const { order, policy, resolved, variants, shopNow } = await resolveSelections(
     merchantId,
     orderId,
     input,
   );
 
   const quote = quoteReturn({
-    lines: toQuoteLines(resolved, variants),
+    lines: toQuoteLines(resolved, variants, Boolean(shopNow)),
     policy,
+    ...(shopNow ? { shopNow } : {}),
   });
 
   /**
@@ -528,14 +602,12 @@ export const submitReturn = async (
   orderId: string,
   input: SubmitInput,
 ) => {
-  const { order, policy, resolved, variants } = await resolveSelections(
-    merchantId,
-    orderId,
-    input,
-  );
+  const { order, policy, resolved, variants, shopNow, shopBasket } =
+    await resolveSelections(merchantId, orderId, input);
 
   const quote = quoteReturn({
-    lines: toQuoteLines(resolved, variants),
+    lines: toQuoteLines(resolved, variants, Boolean(shopNow)),
+    ...(shopNow ? { shopNow } : {}),
     policy,
   });
 
@@ -581,6 +653,10 @@ export const submitReturn = async (
         customerName: order.customerName,
         customerNote: input.customerNote ?? null,
         exchangeSurplusMethod: input.exchangeSurplusMethod ?? "REFUND",
+        shopNow: Boolean(shopNow),
+        // Pinned at submission: the merchant can change the sweetener later,
+        // and it must not restate what this shopper was already promised.
+        shopNowBonus: shopNow?.bonus ?? ZERO,
         currency: order.currency,
         itemsSubtotal: quote.itemsSubtotal,
         bonusCredit: quote.bonusCredit,
@@ -632,7 +708,32 @@ export const submitReturn = async (
     const lineByOrderLineItemId = new Map(
       created.lineItems.map((li) => [li.orderLineItemId, li]),
     );
+    /**
+     * A "shop now" basket belongs to the return, not to any one line, so its
+     * items are written with no returnLineItemId. `priceExchange` reads exchange
+     * items off the request for exactly this reason.
+     */
+    for (const item of shopBasket) {
+      const variant = variants.get(item.variantId)!;
+      await tx.exchangeItem.create({
+        data: {
+          returnRequestId: created.id,
+          productId: variant.productId,
+          variantId: variant.id,
+          sku: variant.sku,
+          title: variant.title,
+          variantTitle: variant.variantTitle,
+          imageUrl: variant.imageUrl,
+          quantity: item.quantity,
+          unitPrice: toDecimal(variant.price),
+        },
+      });
+    }
+
     for (const { selection } of resolved) {
+      // A basket replaces per-line choices outright. Writing both would price
+      // the draft at the sum of the two while the shopper was quoted one.
+      if (shopNow) break;
       if (!selection.exchange) continue;
       const variant = variants.get(selection.exchange.variantId)!;
       const line = lineByOrderLineItemId.get(selection.orderLineItemId)!;

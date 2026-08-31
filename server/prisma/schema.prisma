@@ -40,6 +40,22 @@ model Merchant {
    * rather than a rate invented at display time.
    */
   displayCurrency DisplayCurrency @default(SHOP)
+  /**
+   * "Shop now" — offering the return's value as credit to spend on anything in
+   * the catalogue, rather than swapping one item for another.
+   *
+   * Off by default, and deliberately so: turning it on changes what the portal
+   * offers every shopper, which is the merchant's decision to make rather than
+   * something that should appear because they upgraded.
+   */
+  shopNowEnabled Boolean @default(false)
+  shopNowMode    ShopNowMode @default(RETURNS_PAGE)
+  /**
+   * A flat sweetener on top of the policy's percentage bonus, e.g. "$15 extra
+   * if you spend it with us". Stored in shop currency like every other figure.
+   * Null means no flat bonus; the percentage still applies.
+   */
+  shopNowBonusAmount Decimal? @db.Decimal(12, 2)
   timezone  String   @default("UTC")
   status    MerchantStatus @default(ACTIVE)
   createdAt DateTime @default(now())
@@ -75,6 +91,14 @@ model Merchant {
 enum ExchangeMethod {
   DRAFT_ORDER
   SHOPIFY_NATIVE
+}
+
+/** Where a shopper spends their return credit under "shop now". */
+enum ShopNowMode {
+  /// In the portal itself: catalogue, cart and checkout without leaving.
+  RETURNS_PAGE
+  /// Bounced to the merchant's own storefront to shop, then back to finish.
+  STOREFRONT
 }
 
 enum DisplayCurrency {
@@ -408,6 +432,20 @@ model ReturnRequest {
    * question about the leftover.
    */
   exchangeSurplusMethod ExchangeSurplusMethod @default(REFUND)
+  /**
+   * The shopper spent their return value in the catalogue rather than swapping
+   * item for item.
+   *
+   * Recorded on the request because it changes how the money is worked out: a
+   * per-item exchange nets each line against its own replacement, while this
+   * pools every line's credit against one basket. Without the flag there is no
+   * way to tell the two apart after the fact — both end up as EXCHANGE lines
+   * with ExchangeItems hanging off them.
+   */
+  shopNow Boolean @default(false)
+  /// The flat bonus that applied at submission, kept so a later settings change
+  /// can't silently restate what the shopper was promised.
+  shopNowBonus Decimal @default(0) @db.Decimal(12, 2)
 
   customerEmail String
   customerName  String?

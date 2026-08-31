@@ -110,6 +110,9 @@ settingsRouter.get(
         currency: true,
         displayCurrency: true,
         exchangeMethod: true,
+        shopNowEnabled: true,
+        shopNowMode: true,
+        shopNowBonusAmount: true,
       },
     });
 
@@ -127,6 +130,12 @@ settingsRouter.get(
     res.json({
       ...merchant,
       presentmentCurrency: sample?.presentmentCurrency ?? null,
+      // Decimal doesn't survive JSON as a number; every other money field on
+      // this API is a number, so this one is too.
+      shopNowBonusAmount:
+        merchant.shopNowBonusAmount === null
+          ? null
+          : Number(merchant.shopNowBonusAmount),
       /**
        * The whole link, not the slug. The merchant pastes this into a footer or
        * a policy page, so the client shouldn't be assembling it out of a path
@@ -145,6 +154,10 @@ settingsRouter.patch(
       .object({
         displayCurrency: z.enum(["SHOP", "PRESENTMENT"]).optional(),
         exchangeMethod: z.enum(["DRAFT_ORDER", "SHOPIFY_NATIVE"]).optional(),
+        shopNowEnabled: z.boolean().optional(),
+        shopNowMode: z.enum(["RETURNS_PAGE", "STOREFRONT"]).optional(),
+        /** Null clears the flat bonus; the percentage one still applies. */
+        shopNowBonusAmount: z.number().min(0).max(100000).nullable().optional(),
       })
       .refine((v) => Object.keys(v).length > 0, {
         message: "Nothing to update.",
@@ -162,8 +175,21 @@ settingsRouter.patch(
         ...(req.body.exchangeMethod
           ? { exchangeMethod: req.body.exchangeMethod }
           : {}),
+        ...(req.body.shopNowEnabled === undefined
+          ? {}
+          : { shopNowEnabled: req.body.shopNowEnabled }),
+        ...(req.body.shopNowMode ? { shopNowMode: req.body.shopNowMode } : {}),
+        ...(req.body.shopNowBonusAmount === undefined
+          ? {}
+          : { shopNowBonusAmount: req.body.shopNowBonusAmount }),
       },
-      select: { currency: true, displayCurrency: true, exchangeMethod: true },
+      select: {
+        currency: true,
+        displayCurrency: true,
+        exchangeMethod: true,
+        shopNowEnabled: true,
+        shopNowMode: true,
+      },
     });
     // The resolver caches for 30s; drop it so the change shows immediately.
     clearMerchantSettingsCache(req.admin!.merchantId);

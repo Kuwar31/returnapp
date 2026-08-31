@@ -62,9 +62,20 @@ export const keepsMoneyInStore = (resolution: ResolutionType): boolean =>
 export const quoteReturn = ({
   lines,
   policy,
+  shopNow,
 }: {
   lines: QuoteLine[];
   policy: ReturnPolicy;
+  /**
+   * "Shop now": one basket bought with every line's credit pooled together,
+   * rather than each line netting against its own replacement.
+   *
+   * Applied after the per-line pass rather than inside it, because a basket has
+   * no line to belong to — three returned items paying for one jacket cannot be
+   * expressed as three per-line swaps. Omitted, every figure below is computed
+   * exactly as it was before this existed.
+   */
+  shopNow?: { cartTotal: Prisma.Decimal; bonus: Prisma.Decimal };
 }): Quote => {
   const results: QuoteLineResult[] = lines.map((line) => {
     const subtotal = round2(toDecimal(line.unitPrice).mul(line.quantity));
@@ -109,12 +120,44 @@ export const quoteReturn = ({
     round2(results.reduce((acc, r) => acc.add(pick(r)), ZERO));
 
   const itemsSubtotal = sum((r) => r.itemsSubtotal);
-  const bonusCredit = sum((r) => r.bonusCredit);
   const restockingFee = sum((r) => r.restockingFee);
-  const amountDue = sum((r) => r.due);
-
   const creditedTotal = sum((r) => r.credited);
-  const estimatedTotal = creditedTotal.lessThan(0) ? ZERO : round2(creditedTotal);
+
+  const shopping = shopNow !== undefined;
+  /**
+   * The flat "spend it with us" sweetener counts as bonus credit like the
+   * percentage does, so it shows up in the same place on every screen and in
+   * the same total the shopper is promised.
+   */
+  const bonusCredit = round2(
+    sum((r) => r.bonusCredit).add(shopping ? shopNow.bonus : ZERO),
+  );
+
+  /**
+   * One pool against one basket. Everything the lines credit — plus the flat
+   * bonus — buys the cart; what's left over is still paid out, and what's short
+   * is owed at checkout.
+   */
+  const pool = shopping
+    ? round2(creditedTotal.add(shopNow.bonus))
+    : creditedTotal;
+  const shortfall = shopping
+    ? round2(
+        shopNow.cartTotal.sub(pool).greaterThan(0)
+          ? shopNow.cartTotal.sub(pool)
+          : ZERO,
+      )
+    : ZERO;
+  const leftover = shopping
+    ? round2(
+        pool.sub(shopNow.cartTotal).greaterThan(0)
+          ? pool.sub(shopNow.cartTotal)
+          : ZERO,
+      )
+    : creditedTotal;
+
+  const amountDue = round2(sum((r) => r.due).add(shortfall));
+  const estimatedTotal = leftover.lessThan(0) ? ZERO : round2(leftover);
 
   /**
    * Where each part of the payout is destined. Resolution reads this to know
@@ -122,12 +165,21 @@ export const quoteReturn = ({
    * rather than assuming a single destination for the whole return.
    */
   const byResolution = new Map<ResolutionType, Prisma.Decimal>();
-  for (const r of results) {
-    if (r.credited.lessThanOrEqualTo(0)) continue;
-    byResolution.set(
-      r.resolution,
-      round2((byResolution.get(r.resolution) ?? ZERO).add(r.credited)),
-    );
+  if (shopping) {
+    /**
+     * The basket has already absorbed the pool, so the only thing left to pay
+     * out is whatever it didn't spend. Summing the lines here instead would
+     * promise the shopper their full credit *and* the goods it bought.
+     */
+    if (leftover.greaterThan(0)) byResolution.set("EXCHANGE", leftover);
+  } else {
+    for (const r of results) {
+      if (r.credited.lessThanOrEqualTo(0)) continue;
+      byResolution.set(
+        r.resolution,
+        round2((byResolution.get(r.resolution) ?? ZERO).add(r.credited)),
+      );
+    }
   }
 
   return {
