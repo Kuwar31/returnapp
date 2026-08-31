@@ -1909,3 +1909,17 @@
   color: var(--text-muted);
   margin-bottom: 10px;
 }
+
+/* An address in the details list: label left, lines stacked right, as written
+   on a parcel rather than run together on one row. */
+.review__kv--address {
+  align-items: flex-start;
+}
+
+.review__kv--address address {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-style: normal;
+  text-align: right;
+}

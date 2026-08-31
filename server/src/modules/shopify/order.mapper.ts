@@ -207,6 +207,10 @@ export interface GraphQLOrderNode {
     displayStatus: string | null;
   }>;
   shippingAddress: {
+    firstName?: string | null;
+    lastName?: string | null;
+    company?: string | null;
+    countryCodeV2?: string | null;
     name: string | null;
     address1: string | null;
     address2: string | null;
@@ -214,7 +218,6 @@ export interface GraphQLOrderNode {
     provinceCode: string | null;
     zip: string | null;
     country: string | null;
-    phone: string | null;
   } | null;
   lineItems: {
     nodes: Array<{

@@ -44,7 +44,7 @@ export interface SerializedAddress {
  * camelCase — and rows predating either normalization are still in the table.
  * Reading both here keeps that mess out of the client.
  */
-const serializeAddress = (value: unknown): SerializedAddress | null => {
+export const serializeAddress = (value: unknown): SerializedAddress | null => {
   if (!value || typeof value !== "object") return null;
   const a = value as Record<string, unknown>;
   const str = (...keys: string[]): string | null => {

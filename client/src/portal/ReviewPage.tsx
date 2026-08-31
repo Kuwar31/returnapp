@@ -336,6 +336,26 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
               <span className="muted">Order</span>
               <span>#{order.orderNumber}</span>
             </div>
+            {/*
+              Shown because it is where the replacement goes, not as trivia.
+              On an upsell the checkout is locked to this address, so seeing it
+              here is the shopper's chance to notice it's wrong before paying.
+            */}
+            {order.shippingAddress && (
+              <div className="review__kv review__kv--address">
+                <span className="muted">
+                  {owesMoney ? "Delivering to" : "Shipping address"}
+                </span>
+                <address>
+                  {order.shippingAddress.name && (
+                    <span>{order.shippingAddress.name}</span>
+                  )}
+                  {order.shippingAddress.lines.map((line) => (
+                    <span key={line}>{line}</span>
+                  ))}
+                </address>
+              </div>
+            )}
           </div>
         </div>
 

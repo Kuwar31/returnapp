@@ -185,12 +185,18 @@ const SYNC_ORDERS_QUERY = `#graphql
         # sync this one backs.
         shippingAddress {
           name
+          firstName
+          lastName
+          company
           address1
           address2
           city
           provinceCode
           zip
           country
+          # The ISO code, not just the country's name. Reusing this address on a
+          # draft order needs an enum Shopify recognises, and "India" isn't one.
+          countryCodeV2
         }
         lineItems(first: 250) {
           nodes {

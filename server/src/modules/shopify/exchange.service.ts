@@ -119,6 +119,56 @@ export const priceExchange = async (
   return { itemsTotal, creditApplied, balanceDue, lineItems };
 };
 
+/**
+ * The order's own shipping address, in the shape a draft order accepts.
+ *
+ * Reading both key styles on purpose: addresses stored from webhooks are
+ * snake_case REST payloads, ones from the GraphQL sync are camelCase, and rows
+ * of both shapes are already in the table.
+ *
+ * Returns null unless there is a real street address with a country code —
+ * Shopify rejects a partial address outright, so half of one is worse than
+ * none, and a draft without an address simply asks the shopper for theirs.
+ */
+const toShippingAddressInput = (
+  stored: unknown,
+): Record<string, string> | null => {
+  if (!stored || typeof stored !== "object") return null;
+  const a = stored as Record<string, unknown>;
+  const str = (...keys: string[]): string | null => {
+    for (const key of keys) {
+      const found = a[key];
+      if (typeof found === "string" && found.trim()) return found.trim();
+    }
+    return null;
+  };
+
+  const address1 = str("address1");
+  const countryCode = str("countryCodeV2", "country_code", "countryCode");
+  if (!address1 || !countryCode) return null;
+
+  // A single `name` is all some payloads carry; Shopify wants it in two parts.
+  const full = str("name");
+  const [firstFromName, ...restOfName] = (full ?? "").split(" ");
+
+  const input: Record<string, string> = { address1, countryCode };
+  const optional: Record<string, string | null> = {
+    address2: str("address2"),
+    city: str("city"),
+    company: str("company"),
+    zip: str("zip", "postalCode", "postal_code"),
+    provinceCode: str("provinceCode", "province_code"),
+    firstName: str("firstName", "first_name") ?? (full ? firstFromName : null),
+    lastName:
+      str("lastName", "last_name") ??
+      (restOfName.length > 0 ? restOfName.join(" ") : null),
+  };
+  for (const [key, value] of Object.entries(optional)) {
+    if (value) input[key] = value;
+  }
+  return input;
+};
+
 /** Builds the DraftOrderInput shared by create and update. */
 const buildDraftInput = (
   totals: ExchangeTotals,
@@ -130,6 +180,8 @@ const buildDraftInput = (
     reserveUntil: Date | null;
     /** The order being returned against — supplies the presentment rate. */
     order: OrderRateSource;
+    /** Where the original shipped, so the replacement follows it. */
+    shippingAddress: Record<string, string> | null;
   },
 ): Record<string, unknown> => {
   const input: Record<string, unknown> = {
@@ -199,6 +251,22 @@ const buildDraftInput = (
       title: "Return credit",
       description: `Credit from return ${opts.reference}`,
     };
+  }
+
+  /**
+   * Ship the replacement where the original went.
+   *
+   * Setting it here does two things at once: the shopper doesn't retype an
+   * address the store already holds, and Shopify locks the field at checkout —
+   * "this order has pre-arranged shipping information". That lock is the point.
+   * An exchange is a replacement for goods already sent, so it should not be a
+   * way to have something delivered somewhere new.
+   *
+   * Omitted when the stored address is incomplete: Shopify rejects a partial
+   * one, and a draft without an address just asks the shopper for theirs.
+   */
+  if (opts.shippingAddress) {
+    input.shippingAddress = opts.shippingAddress;
   }
 
   /**
@@ -305,6 +373,7 @@ export const ensureExchangeDraftOrder = async (
       orderNumber: request.order.orderNumber,
       reserveUntil,
       order: request.order,
+      shippingAddress: toShippingAddressInput(request.order.shippingAddress),
     });
 
     const data = await queryShop<{
@@ -422,6 +491,7 @@ export const syncExchangeDraftOrder = async (
     // the hold every time the merchant edits the exchange.
     reserveUntil: null,
     order: request.order,
+    shippingAddress: toShippingAddressInput(request.order.shippingAddress),
   });
 
   const data = await queryShop<{

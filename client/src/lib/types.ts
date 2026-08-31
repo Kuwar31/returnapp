@@ -74,6 +74,8 @@ export interface OrderSession {
     customerName: string | null;
     currency: string;
     placedAt: string;
+    /** Where the order shipped, and where a replacement will go. */
+    shippingAddress?: PostalAddress | null;
   };
   policy: {
     windowDays: number;

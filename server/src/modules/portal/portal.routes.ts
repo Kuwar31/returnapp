@@ -6,7 +6,7 @@ import { asyncHandler } from "../../middleware/asyncHandler.js";
 import { requirePortalSession } from "../../middleware/auth.js";
 import { rateLimit } from "../../middleware/rateLimit.js";
 import { validate } from "../../middleware/validate.js";
-import { serializeReturn } from "../returns/serializers.js";
+import { serializeAddress, serializeReturn } from "../returns/serializers.js";
 import {
   feedbackSchema,
   lookupSchema,
@@ -104,6 +104,13 @@ portalRouter.get(
         customerName: order.customerName,
         currency: order.currency,
         placedAt: order.placedAt,
+        /**
+         * Where the order shipped. The review step shows it back so the shopper
+         * can see the replacement is going to the same place — and on an
+         * upsell it is the address the checkout is locked to, so it should not
+         * be a surprise when they get there.
+         */
+        shippingAddress: serializeAddress(order.shippingAddress),
       },
       policy: {
         windowDays: policy.returnWindowDays,
