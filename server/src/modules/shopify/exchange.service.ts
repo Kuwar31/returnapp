@@ -840,21 +840,24 @@ export const refreshExchangeDraft = async (
     );
 
     /**
-     * A shopper can pay for an upsell the moment they submit, long before the
-     * merchant has looked at the return. That leaves a paid, unfulfilled order
-     * in the fulfilment queue for items nobody has agreed to take back yet, so
-     * hold it — approving the return is what releases it.
+     * A paid exchange arrives in Shopify as an ordinary unfulfilled order —
+     * ready to ship, for items that are still in the shopper's hands. Hold it
+     * until the return is processed.
      *
-     * Only while the return is still awaiting review: paying after approval
-     * means the merchant has already said yes, and re-holding it then would
-     * put back a hold they may have just released by hand.
+     * Any status short of resolution qualifies, not just SUBMITTED: the usual
+     * route is approve, invoice, pay, so restricting this to unreviewed returns
+     * would have meant the common case was never held at all. Skipped once the
+     * return is RESOLVED, where releasing is the whole point, and after a
+     * rejection or cancellation, where the merchant may have taken the order
+     * over by hand.
      */
+    const HOLD_WHILE = ["SUBMITTED", "APPROVED", "IN_TRANSIT", "RECEIVED"];
     if (paid) {
       const request = await prisma.returnRequest.findUnique({
         where: { id: returnRequestId },
         select: { status: true },
       });
-      if (request?.status === "SUBMITTED") {
+      if (request && HOLD_WHILE.includes(request.status)) {
         await holdExchangeFulfillment(merchantId, returnRequestId);
       }
     }

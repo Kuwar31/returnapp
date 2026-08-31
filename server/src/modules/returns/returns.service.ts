@@ -188,13 +188,6 @@ export const approveReturn = async (
    */
   await ensureExchangeDraftOrder(merchantId, id);
 
-  /**
-   * A shopper who paid at checkout already has a replacement order sitting in
-   * Shopify, held since payment so it couldn't ship ahead of this decision.
-   * Approving is that decision, so let it go.
-   */
-  await releaseExchangeFulfillment(merchantId, id);
-
   notifyInBackground(id, "APPROVED");
   return getReturn(merchantId, id);
 };
@@ -611,6 +604,17 @@ export const resolveReturn = async (
   if (hasExchangeLine) {
     await completeExchangeDraftOrder(merchantId, id);
   }
+
+  /**
+   * Let the replacement ship.
+   *
+   * Held since the shopper paid, and released here rather than at approval
+   * because approving only says the return may proceed — the items are still
+   * in the post. Processing is the point where they are back and inspected,
+   * which is the promise the shopper was given: "we'll ship your replacement
+   * as soon as your return arrives".
+   */
+  await releaseExchangeFulfillment(merchantId, id);
 
   const refreshed = await getReturn(merchantId, id);
   // Prefer what Shopify actually paid; fall back to our estimate for store

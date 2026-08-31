@@ -110,44 +110,6 @@ function Section({
   );
 }
 
-/** A 1–5 rating row. Controlled so a saved score comes back selected. */
-function ScoreRow({
-  value,
-  onChange,
-  lowLabel,
-  highLabel,
-  name,
-}: {
-  value: number | null;
-  onChange: (score: number) => void;
-  lowLabel: string;
-  highLabel: string;
-  name: string;
-}) {
-  return (
-    <>
-      <div className="survey__scores" role="radiogroup" aria-label={name}>
-        {[1, 2, 3, 4, 5].map((score) => (
-          <button
-            key={score}
-            type="button"
-            role="radio"
-            aria-checked={value === score}
-            className={`survey__score${value === score ? " is-selected" : ""}`}
-            onClick={() => onChange(score)}
-          >
-            {score}
-          </button>
-        ))}
-      </div>
-      <div className="survey__ends">
-        <span>{lowLabel}</span>
-        <span>{highLabel}</span>
-      </div>
-    </>
-  );
-}
-
 export default function StatusPage({ loaderData }: Route.ComponentProps) {
   const detail = loaderData;
   const { slug } = useParams();
@@ -158,15 +120,6 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const [ease, setEase] = useState<number | null>(
-    detail.feedback?.easeScore ?? null,
-  );
-  const [repeat, setRepeat] = useState<number | null>(
-    detail.feedback?.repeatScore ?? null,
-  );
-  const [comment, setComment] = useState(detail.feedback?.comment ?? "");
-  const [thanked, setThanked] = useState(Boolean(detail.feedback));
 
   const currency = detail.currency;
   const copy = NEXT_STEP[detail.status];
@@ -253,6 +206,9 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
     detail.exchangePayment?.url ??
     null;
 
+  /** Settled, so every figure and prompt below should read in the past tense. */
+  const exchangePaid = draft?.status === "COMPLETED";
+
   const cancel = async () => {
     setBusy(true);
     setError(null);
@@ -262,27 +218,6 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
       });
       setConfirmingCancel(false);
       revalidator.revalidate();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const sendFeedback = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      await api.post(
-        `/portal/returns/${detail.reference}/feedback`,
-        {
-          easeScore: ease ?? undefined,
-          repeatScore: repeat ?? undefined,
-          comment: comment.trim() || undefined,
-        },
-        { query: auth },
-      );
-      setThanked(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
     } finally {
@@ -551,9 +486,18 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
               <strong>{money(payout, currency)}</strong>
             </div>
 
+            {/*
+              Past tense once it's settled. The old copy asked for money that
+              had already been handed over, directly above a line saying it had
+              been paid.
+            */}
             {owed > 0 && (
-              <div className="summary__total summary__total--due">
-                <span>To pay for your exchange</span>
+              <div
+                className={`summary__total ${
+                  exchangePaid ? "summary__total--paid" : "summary__total--due"
+                }`}
+              >
+                <span>{exchangePaid ? "Paid" : "To pay for your exchange"}</span>
                 <strong>{money(owed, currency)}</strong>
               </div>
             )}
@@ -603,82 +547,19 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
               </>
             )}
 
-            {/*
-              Owed something, but nothing to pay with yet. The link only exists
-              once the exchange has been raised in Shopify, which happens when
-              the store approves — saying so beats an unexplained dead end.
-            */}
-            {!payLink && owed > 0 && (
-              <p className="confirm__pay-note">
-                We'll send a payment link once the store has approved your
-                exchange.
-              </p>
-            )}
-
-            {draft?.status === "COMPLETED" && (
-              <p className="confirm__pay-note confirm__pay-note--done">
-                Paid — your replacement is being prepared.
-              </p>
-            )}
-          </div>
-
-          <div className="card survey">
-            {thanked ? (
-              <>
-                <h2 className="survey__title">Thanks for the feedback</h2>
-                <p className="muted">
-                  We read every response — it's how the returns experience gets
-                  better.
-                </p>
-                <button
-                  type="button"
-                  className="linkish survey__edit"
-                  onClick={() => setThanked(false)}
-                >
-                  Change my answers
-                </button>
-              </>
-            ) : (
-              <>
-                <h2 className="survey__title">How was your returns experience?</h2>
-                <ScoreRow
-                  name="Returns experience"
-                  value={ease}
-                  onChange={setEase}
-                  lowLabel="Very difficult"
-                  highLabel="Very easy"
-                />
-
-                <h2 className="survey__title">
-                  How likely are you to buy from {merchant.name} again?
-                </h2>
-                <ScoreRow
-                  name="Likelihood to buy again"
-                  value={repeat}
-                  onChange={setRepeat}
-                  lowLabel="Not likely at all"
-                  highLabel="Very likely"
-                />
-
-                <textarea
-                  className="survey__comment"
-                  placeholder="Tell us more (optional)"
-                  rows={4}
-                  maxLength={2000}
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                />
-
-                <button
-                  className="btn btn--block"
-                  onClick={sendFeedback}
-                  disabled={
-                    busy || (ease === null && repeat === null && !comment.trim())
-                  }
-                >
-                  {busy ? "Sending…" : "Submit"}
-                </button>
-              </>
+            {exchangePaid && (
+              <div className="confirm__paid">
+                <span className="confirm__paid-mark" aria-hidden="true">
+                  ✓
+                </span>
+                <div>
+                  <strong>Payment received</strong>
+                  <p>
+                    Your replacement is being prepared. It ships as soon as your
+                    return arrives back with us.
+                  </p>
+                </div>
+              </div>
             )}
           </div>
 

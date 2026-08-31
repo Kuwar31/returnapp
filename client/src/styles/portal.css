@@ -878,6 +878,14 @@
   color: var(--danger-fg);
 }
 
+/* Same row once it's settled. Red is for money still owed; this is money the
+   shopper has already handed over. */
+.summary__total--paid {
+  padding-top: 0;
+  border-top: none;
+  color: var(--success-fg);
+}
+
 @media (max-width: 900px) {
   .review {
     grid-template-columns: 1fr;
@@ -1413,84 +1421,6 @@
   color: var(--success-fg);
 }
 
-/* ---------- post-return survey ---------- */
-
-.survey {
-  margin-top: 18px;
-  padding: 22px;
-  background: #f6f6f7;
-  box-shadow: none;
-  border: 1px solid var(--border);
-  text-align: center;
-}
-
-.survey__title {
-  font-size: 16px;
-  font-weight: 600;
-  margin-bottom: 12px;
-}
-
-.survey__title + * {
-  margin-top: 0;
-}
-
-.survey__scores {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-}
-
-.survey__score {
-  width: 42px;
-  height: 38px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.survey__score:hover {
-  border-color: var(--text-subtle);
-}
-
-.survey__score.is-selected {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-contrast);
-}
-
-/* The anchor labels sit under the ends of the scale, not under each button. */
-.survey__ends {
-  display: flex;
-  justify-content: space-between;
-  margin: 6px 2px 20px;
-  font-size: 12px;
-  color: var(--text-subtle);
-}
-
-.survey__comment {
-  width: 100%;
-  padding: 12px 14px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  font: inherit;
-  font-size: 14px;
-  resize: vertical;
-  margin-bottom: 14px;
-}
-
-.survey__comment:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: -1px;
-}
-
-.survey__edit {
-  margin-top: 12px;
-}
-
 @media (max-width: 900px) {
   .confirm {
     grid-template-columns: 1fr;
@@ -1527,10 +1457,45 @@
   text-align: center;
 }
 
-.confirm__pay-note--done {
-  margin-top: 14px;
+/* Payment settled. Given real weight rather than another line of small print:
+   it is the one thing on this page a shopper who has just handed over money
+   is looking for. */
+.confirm__paid {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid var(--success-fg);
+  border-radius: 12px;
+  background: var(--success-bg);
+  text-align: left;
+}
+
+.confirm__paid-mark {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--success-fg);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.confirm__paid strong {
+  display: block;
+  font-size: 16px;
   color: var(--success-fg);
-  font-weight: 600;
+}
+
+.confirm__paid p {
+  margin: 4px 0 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
 }
 
 /* ---------- the replacement chosen for an exchange ---------- */
