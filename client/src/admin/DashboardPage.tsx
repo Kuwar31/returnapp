@@ -42,9 +42,18 @@ export default function DashboardPage() {
       <div className="admin__header">
         <div>
           <h1>Dashboard</h1>
-          <p className="muted" style={{ marginTop: 4 }}>
-            Portal link: /r/{session?.merchant.slug}
-          </p>
+          {session && (
+            <p className="muted" style={{ marginTop: 4 }}>
+              Portal link:{" "}
+              <a
+                href={session.merchant.portalUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {session.merchant.portalUrl}
+              </a>
+            </p>
+          )}
         </div>
         <Link className="btn btn--sm" to="/admin/returns">
           View all returns

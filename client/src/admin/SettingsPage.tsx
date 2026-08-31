@@ -5,6 +5,7 @@ import type {
   StoreSettings,
 } from "../lib/types";
 import { api } from "../lib/api";
+import { CopyLink } from "../components/CopyLink";
 import { ErrorAlert, Loading } from "../components/Feedback";
 import { ShopifyPanel } from "./ShopifyPanel";
 import { useAuth } from "./AuthContext";
@@ -157,7 +158,7 @@ export default function SettingsPage() {
         <div>
           <h1>Settings</h1>
           <p className="muted" style={{ marginTop: 4 }}>
-            Portal link: /r/{session?.merchant.slug}
+            {session?.merchant.name}
           </p>
         </div>
       </div>
@@ -166,6 +167,24 @@ export default function SettingsPage() {
       {status && <div className="alert alert--info">{status}</div>}
 
       <div className="settings-form">
+        {/*
+          The portal address comes from the server rather than being built from
+          this page's own origin: the admin and the portal are separate
+          deployments, so what the merchant is looking at isn't necessarily
+          where their customers should be sent.
+        */}
+        <div className="panel">
+          <h2>Portal link</h2>
+          <p className="settings-row__hint" style={{ marginBottom: 14 }}>
+            Where your customers start a return. Add it to your site footer,
+            your returns policy, or your order confirmation emails.
+          </p>
+          <CopyLink
+            url={store?.portalUrl ?? session?.merchant.portalUrl ?? ""}
+            label="Returns page"
+          />
+        </div>
+
         <ShopifyPanel />
       </div>
 

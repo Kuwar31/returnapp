@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import { Router } from "express";
 import { z } from "zod";
 import { unauthorized } from "../../lib/errors.js";
+import { portalUrl } from "../../lib/portal-links.js";
 import { prisma } from "../../lib/prisma.js";
 import { signAdminToken } from "../../lib/tokens.js";
 import { asyncHandler } from "../../middleware/asyncHandler.js";
@@ -16,7 +17,15 @@ const serializeMerchant = (m: {
   name: string;
   slug: string;
   currency: string;
-}) => ({ id: m.id, name: m.name, slug: m.slug, currency: m.currency });
+}) => ({
+  id: m.id,
+  name: m.name,
+  slug: m.slug,
+  currency: m.currency,
+  // Carried on the session so any screen can offer the link without a fetch of
+  // its own, and so the store switcher can tell two same-named stores apart.
+  portalUrl: portalUrl(m.slug),
+});
 
 const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email(),

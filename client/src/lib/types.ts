@@ -321,7 +321,14 @@ export interface Paginated<T> {
 
 export interface AdminSession {
   user: { id: string; email: string; name: string | null; role: string };
-  merchant: { id: string; name: string; slug: string; currency: string };
+  merchant: {
+    id: string;
+    name: string;
+    slug: string;
+    currency: string;
+    /** Shareable portal address; see StoreSettings.portalUrl. */
+    portalUrl: string;
+  };
   /**
    * Every store this account can reach, with the role held at each. One person
    * often runs several Shopify stores; role is per store, so the same login can
@@ -332,6 +339,7 @@ export interface AdminSession {
     name: string;
     slug: string;
     currency: string;
+    portalUrl: string;
     role: string;
   }>;
 }
@@ -365,6 +373,12 @@ export type ExchangeMethod = "DRAFT_ORDER" | "SHOPIFY_NATIVE";
 export interface StoreSettings {
   name: string;
   slug: string;
+  /**
+   * The full, shareable portal address. Built server-side from
+   * PORTAL_BASE_URL: the admin can be open somewhere the portal isn't served
+   * from, so the client must not assemble this from its own origin.
+   */
+  portalUrl: string;
   /** The merchant's own books — what every figure is stored in. */
   currency: string;
   displayCurrency: DisplayCurrency;

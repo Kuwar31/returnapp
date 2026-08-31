@@ -1398,6 +1398,51 @@ table.data tbody tr:hover {
   color: var(--danger, #b42318);
 }
 
+/* A URL the merchant is meant to take away with them. The field stays
+   selectable rather than being plain text, so the link is still recoverable
+   where the clipboard API is unavailable. */
+.copy-link__label {
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.copy-link__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.copy-link__field {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+}
+
+.copy-link__row .btn {
+  flex: none;
+}
+
+@media (max-width: 640px) {
+  .copy-link__row {
+    flex-wrap: wrap;
+  }
+
+  .copy-link__field {
+    flex-basis: 100%;
+  }
+}
+
 /* A settings row whose control is a form rather than a single input: the form
    needs the full width, so it drops below the description instead of beside it. */
 .settings-row--stacked {

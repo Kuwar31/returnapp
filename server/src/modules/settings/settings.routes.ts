@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { notFound } from "../../lib/errors.js";
+import { portalUrl } from "../../lib/portal-links.js";
 import { prisma } from "../../lib/prisma.js";
 import { asyncHandler } from "../../middleware/asyncHandler.js";
 import { requireRole } from "../../middleware/auth.js";
@@ -126,6 +127,13 @@ settingsRouter.get(
     res.json({
       ...merchant,
       presentmentCurrency: sample?.presentmentCurrency ?? null,
+      /**
+       * The whole link, not the slug. The merchant pastes this into a footer or
+       * a policy page, so the client shouldn't be assembling it out of a path
+       * and its own origin — the portal isn't necessarily served from wherever
+       * the admin happens to be open.
+       */
+      portalUrl: portalUrl(merchant.slug),
     });
   }),
 );

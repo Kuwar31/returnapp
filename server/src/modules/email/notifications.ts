@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
-import { env } from "../../config/env.js";
 import { logger } from "../../lib/logger.js";
+import { returnStatusUrl } from "../../lib/portal-links.js";
 import { prisma } from "../../lib/prisma.js";
 import { toDecimal } from "../../lib/money.js";
 import { sendMail, type Mail } from "./mailer.js";
@@ -40,11 +40,11 @@ const loadContext = async (returnRequestId: string) => {
   });
   if (!request) return null;
 
-  // Signed by reference + email, so the link works from the inbox without a
-  // portal session.
-  const statusUrl =
-    `${env.portalBaseUrl}/r/${request.merchant.slug}/status/${request.reference}` +
-    `?email=${encodeURIComponent(request.customerEmail)}`;
+  const statusUrl = returnStatusUrl(
+    request.merchant.slug,
+    request.reference,
+    request.customerEmail,
+  );
 
   const brand: EmailBrand = {
     merchantName: request.merchant.name,
