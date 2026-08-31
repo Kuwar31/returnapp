@@ -9,6 +9,7 @@ import {
   resolveGroupForProductType,
 } from "../settings/reasons.service.js";
 import { resolveDisplayMode } from "../settings/merchant-settings.js";
+import { signShopToken } from "../../lib/tokens.js";
 import {
   qualifiesForAutoApproval,
   quoteReturn,
@@ -49,6 +50,13 @@ const resolvePolicy = async (merchantId: string, policyId: string | null) => {
   }
   return fallback;
 };
+
+/** The store behind a session, for building links that name it. */
+export const getMerchantById = async (id: string) =>
+  prisma.merchant.findUniqueOrThrow({
+    where: { id },
+    select: { id: true, slug: true, name: true, currency: true },
+  });
 
 export const getMerchantBySlug = async (slug: string) => {
   const merchant = await prisma.merchant.findFirst({
@@ -469,6 +477,48 @@ export const getShopNowOffer = async (merchantId: string, orderId: string) => {
     bonus: fx.price(Number(merchant.shopNowBonusAmount ?? 0)),
     currency: fx.currency,
   };
+};
+
+/**
+ * The hand-off to the merchant's own storefront, for stores that would rather
+ * their customers shop in their real shop than in a returns page.
+ *
+ * The credit is priced here and sealed into the link, so the banner over there
+ * needs no call back to this API — which is what keeps this from requiring a
+ * cross-origin surface open to every merchant domain there is.
+ *
+ * The returned items themselves stay in the shopper's browser on the portal
+ * origin, untouched: they leave and come back in the same tab, so nothing has
+ * to be persisted server-side to survive the trip.
+ */
+export const buildShopSession = async (
+  merchantId: string,
+  orderId: string,
+  credit: { amount: number; currency: string },
+  portalReturnUrl: string,
+) => {
+  const merchant = await prisma.merchant.findUniqueOrThrow({
+    where: { id: merchantId },
+    select: { domain: true, shopNowEnabled: true, shopNowMode: true },
+  });
+  if (!merchant.shopNowEnabled || merchant.shopNowMode !== "STOREFRONT") {
+    throw badRequest("This store doesn't send customers off-site to shop.");
+  }
+  if (!merchant.domain) {
+    throw badRequest("This store has no storefront connected yet.");
+  }
+
+  const token = signShopToken({
+    merchantId,
+    orderId,
+    credit: credit.amount,
+    currency: credit.currency,
+    returnUrl: portalReturnUrl,
+  });
+
+  const url = new URL(`https://${merchant.domain}/`);
+  url.searchParams.set("rm_credit", token);
+  return { url: url.toString() };
 };
 
 /**

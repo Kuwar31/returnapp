@@ -1,0 +1,57 @@
+{% comment %}
+  Renders nothing on its own. The bar only appears once the shopper arrives
+  with a credit token, so a store with this embed switched on looks exactly as
+  it did before to everyone else.
+
+  The strings are declared here rather than in JavaScript so the merchant can
+  translate them with the rest of their theme.
+{% endcomment %}
+
+<div
+  id="rm-credit-bar"
+  hidden
+  data-return-label="{{ block.settings.return_label | default: 'Finish my return' }}"
+  data-credit-label="{{ block.settings.credit_label | default: 'return credit' }}"
+  data-remaining-label="{{ block.settings.remaining_label | default: 'left' }}"
+  data-over-label="{{ block.settings.over_label | default: 'over your credit' }}"
+></div>
+
+{{ 'credit-bar.css' | asset_url | stylesheet_tag }}
+<script src="{{ 'credit-bar.js' | asset_url }}" defer></script>
+
+{% schema %}
+{
+  "name": "Shop with return credit",
+  "target": "body",
+  "settings": [
+    {
+      "type": "paragraph",
+      "content": "Shows a bar at the bottom of your store when a customer arrives from your returns page to spend their return credit. It stays hidden for every other visitor."
+    },
+    {
+      "type": "text",
+      "id": "credit_label",
+      "label": "Word for the credit",
+      "default": "return credit"
+    },
+    {
+      "type": "text",
+      "id": "remaining_label",
+      "label": "Word for what's left",
+      "default": "left"
+    },
+    {
+      "type": "text",
+      "id": "over_label",
+      "label": "Word for going over",
+      "default": "over your credit"
+    },
+    {
+      "type": "text",
+      "id": "return_label",
+      "label": "Button text",
+      "default": "Finish my return"
+    }
+  ]
+}
+{% endschema %}

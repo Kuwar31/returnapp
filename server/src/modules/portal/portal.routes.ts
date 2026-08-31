@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { env } from "../../config/env.js";
 import { notFound, unauthorized } from "../../lib/errors.js";
 import { signPortalToken } from "../../lib/tokens.js";
 import { asyncHandler } from "../../middleware/asyncHandler.js";
@@ -206,6 +207,38 @@ portalRouter.get(
     const ids = String(req.query.ids).split(",").filter(Boolean).slice(0, 50);
     res.json(
       await portalService.describeExchangeVariants(merchantId, orderId, ids),
+    );
+  }),
+);
+
+/**
+ * Starts a shopping trip on the merchant's own storefront.
+ *
+ * Takes the selections rather than a figure: the credit is quoted here from the
+ * same code every other screen uses, so the number on the storefront banner
+ * can't drift from the one in the portal. What comes back is just a URL.
+ */
+portalRouter.post(
+  "/session/shop-session",
+  rateLimit({ windowMs: 60_000, max: 20 }),
+  validate(quoteSchema),
+  asyncHandler(async (req, res) => {
+    const { merchantId, orderId } = req.portal!;
+    const quote = await portalService.quoteSelection(
+      merchantId,
+      orderId,
+      req.body,
+    );
+    const merchant = await portalService.getMerchantById(merchantId);
+    res.json(
+      await portalService.buildShopSession(
+        merchantId,
+        orderId,
+        // A quote can render a null amount when there is nothing to convert;
+        // a banner promising "null" is worse than one promising zero.
+        { amount: quote.estimatedTotal ?? 0, currency: quote.currency },
+        `${env.portalBaseUrl.replace(/\/+$/, "")}/r/${merchant.slug}/shop-return`,
+      ),
     );
   }),
 );

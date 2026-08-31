@@ -25,6 +25,7 @@ export default [
     index("portal/LookupPage.tsx"),
     route("items", "portal/SelectItemsPage.tsx"),
     route("shop", "portal/ShopPage.tsx"),
+    route("shop-return", "portal/ShopReturnPage.tsx"),
     route("review", "portal/ReviewPage.tsx"),
     route("status/:reference", "portal/StatusPage.tsx"),
   ]),

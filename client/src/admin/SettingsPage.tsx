@@ -323,10 +323,11 @@ export default function SettingsPage() {
                   <div>
                     <div className="settings-row__label">Where they shop</div>
                     <div className="settings-row__hint">
-                      On the returns page they browse and check out without
-                      leaving. Sending them to your storefront shows your real
-                      product pages, but needs a theme extension this app
-                      doesn't ship yet — so it isn't selectable.
+                      On the returns page they browse a simple catalogue and
+                      never leave. On your storefront they get your real product
+                      pages, with a bar along the bottom showing their credit —
+                      that one needs the <strong>Shop with return credit</strong>{" "}
+                      app embed switched on in your theme.
                     </div>
                   </div>
                   <select
@@ -339,9 +340,7 @@ export default function SettingsPage() {
                     }
                   >
                     <option value="RETURNS_PAGE">On the returns page</option>
-                    <option value="STOREFRONT" disabled>
-                      On my storefront — not available yet
-                    </option>
+                    <option value="STOREFRONT">On my storefront</option>
                   </select>
                 </div>
 

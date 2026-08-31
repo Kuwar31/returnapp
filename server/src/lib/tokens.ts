@@ -30,6 +30,28 @@ export interface PortalTokenPayload {
 }
 
 /**
+ * Carried to the merchant's own storefront when a shopper goes off to spend
+ * their return credit there.
+ *
+ * Display-only, and deliberately so. The storefront shows the figure inside it
+ * so the banner needs no call back to this API — which means no cross-origin
+ * surface to open up for every merchant domain in the world. Nothing is
+ * *granted* by holding one: the credit and the basket are both re-priced from
+ * the database and from Shopify when the return is finally submitted, so a
+ * forged token would buy its holder nothing but a wrong number on a banner.
+ * It is signed anyway, so that number can be trusted to be ours.
+ */
+export interface ShopTokenPayload {
+  merchantId: string;
+  orderId: string;
+  /** In the currency below, already converted for display. */
+  credit: number;
+  currency: string;
+  /** Where to send the shopper back to once they have a basket. */
+  returnUrl: string;
+}
+
+/**
  * Carried through the Shopify OAuth round trip in the `state` parameter so the
  * callback knows which merchant account started the install. Signed because it
  * travels via Shopify and comes back as untrusted input.
@@ -59,6 +81,10 @@ export const signAdminToken = (payload: AdminTokenPayload): string =>
     expiresIn: "12h",
   });
 
+/** An hour: long enough to browse a catalogue, short enough to go stale. */
+export const signShopToken = (payload: ShopTokenPayload): string =>
+  jwt.sign({ ...payload, kind: "shop" }, env.JWT_SECRET, { expiresIn: "1h" });
+
 export const signPortalToken = (payload: PortalTokenPayload): string =>
   jwt.sign({ ...payload, kind: "portal" }, env.JWT_SECRET, {
     expiresIn: `${env.PORTAL_TOKEN_TTL_MINUTES}m`,
@@ -66,7 +92,7 @@ export const signPortalToken = (payload: PortalTokenPayload): string =>
 
 const verify = <T>(
   token: string,
-  kind: "admin" | "portal" | "install",
+  kind: "admin" | "portal" | "install" | "shop",
 ): T | null => {
   try {
     const decoded = jwt.verify(token, env.JWT_SECRET) as Record<
@@ -85,6 +111,9 @@ export const verifyAdminToken = (token: string) =>
 
 export const verifyPortalToken = (token: string) =>
   verify<PortalTokenPayload>(token, "portal");
+
+export const verifyShopToken = (token: string) =>
+  verify<ShopTokenPayload>(token, "shop");
 
 export const verifyInstallToken = (token: string) =>
   verify<InstallTokenPayload>(token, "install");

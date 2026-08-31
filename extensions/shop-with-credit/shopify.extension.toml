@@ -1,0 +1,18 @@
+# The storefront half of "shop now".
+#
+# A shopper who chose to spend their return value on the merchant's own site
+# arrives here with a signed credit token in the URL. This extension is what
+# shows them how much they have while they browse, and what carries their
+# basket back to the returns portal when they're done.
+#
+# An app *embed* block rather than a section: it belongs to no one template and
+# has to be present on every page of the shop, which is exactly the distinction
+# embed blocks exist for. The merchant switches it on once under
+# Online Store → Themes → Customize → App embeds.
+
+api_version = "2026-04"
+
+[[extensions]]
+type = "theme"
+name = "Shop with return credit"
+handle = "shop-with-credit"

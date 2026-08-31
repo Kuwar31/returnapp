@@ -29,6 +29,11 @@ type Pages = {
       "slug": string;
     };
   };
+  "/r/:slug/shop-return": {
+    params: {
+      "slug": string;
+    };
+  };
   "/r/:slug/review": {
     params: {
       "slug": string;
@@ -82,7 +87,7 @@ type Pages = {
 type RouteFiles = {
   "root.tsx": {
     id: "root";
-    page: "/" | "/r/:slug" | "/r/:slug/items" | "/r/:slug/shop" | "/r/:slug/review" | "/r/:slug/status/:reference" | "/admin/login" | "/admin" | "/admin/:store" | "/admin/:store/returns" | "/admin/:store/returns/:id" | "/admin/:store/settings" | "/admin/:store/settings/reasons" | "/*";
+    page: "/" | "/r/:slug" | "/r/:slug/items" | "/r/:slug/shop" | "/r/:slug/shop-return" | "/r/:slug/review" | "/r/:slug/status/:reference" | "/admin/login" | "/admin" | "/admin/:store" | "/admin/:store/returns" | "/admin/:store/returns/:id" | "/admin/:store/settings" | "/admin/:store/settings/reasons" | "/*";
   };
   "Home.tsx": {
     id: "Home";
@@ -90,7 +95,7 @@ type RouteFiles = {
   };
   "portal/PortalLayout.tsx": {
     id: "portal/PortalLayout";
-    page: "/r/:slug" | "/r/:slug/items" | "/r/:slug/shop" | "/r/:slug/review" | "/r/:slug/status/:reference";
+    page: "/r/:slug" | "/r/:slug/items" | "/r/:slug/shop" | "/r/:slug/shop-return" | "/r/:slug/review" | "/r/:slug/status/:reference";
   };
   "portal/LookupPage.tsx": {
     id: "portal/LookupPage";
@@ -103,6 +108,10 @@ type RouteFiles = {
   "portal/ShopPage.tsx": {
     id: "portal/ShopPage";
     page: "/r/:slug/shop";
+  };
+  "portal/ShopReturnPage.tsx": {
+    id: "portal/ShopReturnPage";
+    page: "/r/:slug/shop-return";
   };
   "portal/ReviewPage.tsx": {
     id: "portal/ReviewPage";
@@ -161,6 +170,7 @@ type RouteModules = {
   "portal/LookupPage": typeof import("./src/portal/LookupPage.tsx");
   "portal/SelectItemsPage": typeof import("./src/portal/SelectItemsPage.tsx");
   "portal/ShopPage": typeof import("./src/portal/ShopPage.tsx");
+  "portal/ShopReturnPage": typeof import("./src/portal/ShopReturnPage.tsx");
   "portal/ReviewPage": typeof import("./src/portal/ReviewPage.tsx");
   "portal/StatusPage": typeof import("./src/portal/StatusPage.tsx");
   "admin/AuthLayout": typeof import("./src/admin/AuthLayout.tsx");

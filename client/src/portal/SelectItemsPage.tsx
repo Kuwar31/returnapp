@@ -14,6 +14,7 @@ import {
   loadSubmitted,
   saveDraft,
   toSelections,
+  toShopSelections,
 } from "./draft";
 import type { Route } from "./+types/SelectItemsPage";
 
@@ -55,6 +56,8 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
   const [openArticle, setOpenArticle] = useState<string | null>(null);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** True while the browser is on its way to the merchant's storefront. */
+  const [leaving, setLeaving] = useState(false);
 
 
   /**
@@ -124,9 +127,34 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
    * a save — leaving this out sent the shopper to an empty shop screen, which
    * bounced them straight back here having lost their picks.
    */
-  const goToShop = () => {
+  const goToShop = async () => {
     saveDraft(order.id, decisions);
-    navigate(`/r/${slug}/shop`);
+    // On the returns page, that's the whole journey.
+    if (shopNow?.enabled && shopNow.mode !== "STOREFRONT") {
+      navigate(`/r/${slug}/shop`);
+      return;
+    }
+    /**
+     * Off to the merchant's own storefront. The credit is minted server-side
+     * into the link, so the banner over there shows the same figure this page
+     * would — and the picks stay in this origin's storage, waiting for the
+     * shopper to come back to the same tab.
+     */
+    setLeaving(true);
+    setError(null);
+    try {
+      const { url } = await api.post<{ url: string }>(
+        "/portal/session/shop-session",
+        { items: toShopSelections(loadDraft(order.id)), shopItems: [] },
+        { auth: "portal" },
+      );
+      window.location.assign(url);
+    } catch (e) {
+      setLeaving(false);
+      setError(
+        e instanceof Error ? e.message : "Couldn't open the store just now.",
+      );
+    }
   };
 
   // The drawer works on an article; the product it belongs to comes from its key.
@@ -386,9 +414,10 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
           {shopNow?.enabled && (
             <button
               className="btn btn--secondary"
-              onClick={goToShop}
+              disabled={leaving}
+              onClick={() => void goToShop()}
             >
-              Shop with your credit
+              {leaving ? "Opening the store…" : "Shop with your credit"}
             </button>
           )}
           <button className="btn" onClick={goToReview}>
