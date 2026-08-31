@@ -322,6 +322,18 @@ export interface Paginated<T> {
 export interface AdminSession {
   user: { id: string; email: string; name: string | null; role: string };
   merchant: { id: string; name: string; slug: string; currency: string };
+  /**
+   * Every store this account can reach, with the role held at each. One person
+   * often runs several Shopify stores; role is per store, so the same login can
+   * own one and assist on another.
+   */
+  stores?: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    currency: string;
+    role: string;
+  }>;
 }
 
 export interface DashboardStats {

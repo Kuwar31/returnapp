@@ -23,6 +23,15 @@ export interface PortalTokenPayload {
  * travels via Shopify and comes back as untrusted input.
  */
 export interface InstallTokenPayload {
+  /**
+   * Who started the install, not which store they were looking at.
+   *
+   * A person connecting their second shop is adding a store, not re-pointing
+   * the one on screen, so the callback needs to know the human — it grants them
+   * membership of whichever merchant the shop resolves to.
+   */
+  userId: string;
+  /** The store they were viewing, claimed only if it has no domain yet. */
   merchantId: string;
   shop: string;
   nonce: string;

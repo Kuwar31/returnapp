@@ -70,6 +70,7 @@ shopifyRouter.post(
 
     const nonce = newNonce();
     const state = signInstallToken({
+      userId: req.admin!.sub,
       merchantId: req.admin!.merchantId,
       shop,
       nonce,
@@ -139,6 +140,7 @@ shopifyRouter.get(
       access_token,
       scope,
       install.merchantId,
+      install.userId,
     );
 
     await registerWebhooks(shop, access_token);

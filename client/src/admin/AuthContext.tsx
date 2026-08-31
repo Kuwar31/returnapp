@@ -10,6 +10,8 @@ import type { AdminSession } from "../lib/types";
 
 interface AuthState {
   session: AdminSession | null;
+  /** Moves the session to another of this account's stores. */
+  switchStore: (merchantId: string) => Promise<void>;
   /** True until the stored token has been checked against /auth/me. */
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
@@ -53,7 +55,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       { email, password },
     );
     setToken("admin", result.token);
-    setSession({ user: result.user, merchant: result.merchant });
+    setSession({
+      user: result.user,
+      merchant: result.merchant,
+      stores: result.stores,
+    });
+  }, []);
+
+  /**
+   * Swaps the session token for one issued against another store.
+   *
+   * A full reload afterwards on purpose: every loaded page holds data for the
+   * store that was active when it fetched, and patching that in place invites a
+   * screen showing one store's returns under another's name.
+   */
+  const switchStore = useCallback(async (merchantId: string) => {
+    const result = await api.post<{ token: string }>(
+      "/admin/auth/switch",
+      { merchantId },
+      { auth: "admin" },
+    );
+    setToken("admin", result.token);
+    window.location.assign("/admin");
   }, []);
 
   const logout = useCallback(() => {
@@ -62,7 +85,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ session, loading, login, logout }}>
+    <AuthContext.Provider value={{ session, loading, login, logout, switchStore }}>
       {children}
     </AuthContext.Provider>
   );

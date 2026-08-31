@@ -97,16 +97,17 @@ if (!merchant) {
 
 const passwordHash = await bcrypt.hash(password!, 12);
 
+// The account is the person; the membership is their access to this store.
 const user = await prisma.user.upsert({
-  where: { merchantId_email: { merchantId: merchant!.id, email: email! } },
-  update: { passwordHash, role: "OWNER" },
-  create: {
-    merchantId: merchant!.id,
-    email: email!,
-    passwordHash,
-    role: "OWNER",
-    name: "Owner",
-  },
+  where: { email: email! },
+  update: { passwordHash },
+  create: { email: email!, passwordHash, name: "Owner" },
+});
+
+await prisma.membership.upsert({
+  where: { userId_merchantId: { userId: user.id, merchantId: merchant!.id } },
+  update: { role: "OWNER" },
+  create: { userId: user.id, merchantId: merchant!.id, role: "OWNER" },
 });
 
 console.log(

@@ -101,6 +101,8 @@ export const provisionMerchant = async (
    * created, which has no way to sign in until an invite flow exists.
    */
   linkToMerchantId?: string,
+  /** Who ran the install; they get access to whatever store it resolves to. */
+  installedByUserId?: string,
 ) => {
   if (!isValidShopDomain(shop)) throw badRequest("Invalid shop domain.");
 
@@ -110,11 +112,19 @@ export const provisionMerchant = async (
     SHOP_QUERY,
   );
 
-  // Prefer the signed-in account, then any account already holding this
-  // domain, before falling back to creating one.
-  const claimed = linkToMerchantId
+  /**
+   * The store on screen is claimed only if it has no domain of its own.
+   *
+   * That case is a bootstrap account someone signed into before connecting
+   * anything. Once an account is attached to a shop, a second install is a
+   * second store — folding it into the first would merge two businesses'
+   * orders into one tenant, which is the opposite of what the merchant asked
+   * for by installing again.
+   */
+  const onScreen = linkToMerchantId
     ? await prisma.merchant.findUnique({ where: { id: linkToMerchantId } })
     : null;
+  const claimed = onScreen && !onScreen.domain ? onScreen : null;
 
   if (claimed) {
     const conflict = await prisma.merchant.findFirst({
@@ -129,6 +139,7 @@ export const provisionMerchant = async (
 
   const existing =
     claimed ?? (await prisma.merchant.findFirst({ where: { domain: shop } }));
+
 
   const merchant = existing
     ? await prisma.merchant.update({
@@ -172,6 +183,28 @@ export const provisionMerchant = async (
    */
   await ensurePortalDefaults(merchant.id);
 
+  /**
+   * Give whoever ran the install access to the store it resolved to.
+   *
+   * This is what makes a second shop reachable at all: without it a new
+   * merchant exists with nobody able to sign into it. Idempotent, so
+   * reinstalling doesn't disturb a role someone was later given, and it never
+   * demotes — an OWNER reinstalling stays an OWNER.
+   */
+  if (installedByUserId) {
+    await prisma.membership.upsert({
+      where: {
+        userId_merchantId: { userId: installedByUserId, merchantId: merchant.id },
+      },
+      update: {},
+      create: {
+        userId: installedByUserId,
+        merchantId: merchant.id,
+        role: "OWNER",
+      },
+    });
+  }
+
   await prisma.integration.upsert({
     where: {
       merchantId_provider: { merchantId: merchant.id, provider: "SHOPIFY" },
@@ -195,6 +228,28 @@ export const provisionMerchant = async (
   // A linked account may predate this code (or have been created by a bare
   // install), so make sure the portal has a policy and reasons to work with.
   await ensurePortalDefaults(merchant.id);
+
+  /**
+   * Give whoever ran the install access to the store it resolved to.
+   *
+   * This is what makes a second shop reachable at all: without it a new
+   * merchant exists with nobody able to sign into it. Idempotent, so
+   * reinstalling doesn't disturb a role someone was later given, and it never
+   * demotes — an OWNER reinstalling stays an OWNER.
+   */
+  if (installedByUserId) {
+    await prisma.membership.upsert({
+      where: {
+        userId_merchantId: { userId: installedByUserId, merchantId: merchant.id },
+      },
+      update: {},
+      create: {
+        userId: installedByUserId,
+        merchantId: merchant.id,
+        role: "OWNER",
+      },
+    });
+  }
 
   logger.info({ shop, merchantId: merchant.id }, "Shopify store connected");
   return merchant;

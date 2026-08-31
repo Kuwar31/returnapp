@@ -46,7 +46,7 @@ model Merchant {
   updatedAt DateTime @updatedAt
 
   branding       PortalBranding?
-  users          User[]
+  memberships    Membership[]
   policies       ReturnPolicy[]
   reasons        ReturnReason[]
   reasonGroups   ReturnReasonGroup[]
@@ -97,24 +97,50 @@ enum MerchantStatus {
   CANCELLED
 }
 
+/**
+ * A person, not a person-at-a-store.
+ *
+ * Merchants routinely run several Shopify stores, and one login should reach
+ * all of them. The store a request acts on comes from the session token rather
+ * than from this row, which is what keeps every service unchanged: they still
+ * receive a merchantId, it is simply chosen at sign-in instead of being fixed
+ * to the account.
+ */
 model User {
   id           String   @id @default(cuid())
-  merchantId   String
-  merchant     Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  email        String
+  /// Globally unique now: one person, one account, however many stores.
+  email        String   @unique
   passwordHash String
   name         String?
-  role         UserRole @default(AGENT)
   lastLoginAt  DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  memberships     Membership[]
   reviewedReturns ReturnRequest[] @relation("ReviewedBy")
   events          ReturnEvent[]
 
-  @@unique([merchantId, email])
-  @@index([merchantId])
   @@map("users")
+}
+
+/**
+ * One person's access to one store, and the role they hold there.
+ *
+ * Role lives here rather than on the user because it is genuinely per store:
+ * someone can own the shop they founded and be an agent on a colleague's.
+ */
+model Membership {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  merchantId String
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  role       UserRole @default(AGENT)
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, merchantId])
+  @@index([merchantId])
+  @@map("memberships")
 }
 
 enum UserRole {
