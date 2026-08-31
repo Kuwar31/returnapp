@@ -22,48 +22,11 @@
   margin-bottom: 6px;
 }
 
-.portal__steps {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 26px;
-}
 
-.portal__step {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--text-subtle);
-}
 
-.portal__step + .portal__step::before {
-  content: "";
-  width: 22px;
-  height: 1px;
-  background: var(--border-strong);
-}
 
-.portal__step-dot {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: var(--border);
-  color: var(--text-muted);
-  display: grid;
-  place-items: center;
-  font-size: 12px;
-  font-weight: 600;
-}
 
-.portal__step.is-active {
-  color: var(--text);
-  font-weight: 600;
-}
 
-.portal__step.is-active .portal__step-dot {
-  background: var(--accent);
-  color: var(--accent-contrast);
-}
 
 .portal__card {
   width: 100%;
@@ -81,17 +44,7 @@
   text-align: center;
 }
 
-.portal__back {
-  display: inline-block;
-  margin-bottom: 14px;
-  font-size: 14px;
-  color: var(--text-muted);
-  text-decoration: none;
-}
 
-.portal__back:hover {
-  color: var(--text);
-}
 
 /* ---------- item picker ---------- */
 
@@ -311,10 +264,7 @@
     padding: 22px;
   }
 
-  .portal__steps {
-    display: none;
   }
-}
 
 /* ---------- per-item selection ---------- */
 

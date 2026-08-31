@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, redirect, useNavigate, useParams } from "react-router";
+import { redirect, useNavigate, useParams } from "react-router";
 import { api, ApiError, getToken } from "../lib/api";
 import { money } from "../lib/format";
 import type { OrderSession, Quote, ResolutionType } from "../lib/types";
 import { ErrorAlert } from "../components/Feedback";
-import { PortalStepper } from "./PortalLayout";
 import { ItemDrawer, type ItemDecision } from "./ItemDrawer";
 import {
   articleKey,
@@ -128,12 +127,7 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
 
   return (
     <>
-      <PortalStepper current={1} />
       <div className="card portal__card portal__card--wide">
-        <Link className="portal__back" to={`/r/${slug}`}>
-          ← Look up a different order
-        </Link>
-
         <h2 className="picker__heading">Select an item to return</h2>
         <p className="picker__sub">
           You'll have the opportunity to add more later.

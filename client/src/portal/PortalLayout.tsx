@@ -3,8 +3,6 @@ import { api } from "../lib/api";
 import type { PortalConfig } from "../lib/types";
 import type { Route } from "./+types/PortalLayout";
 
-const STEPS = ["Find your order", "Choose items", "All set"];
-
 /**
  * Store branding is fetched once for the whole portal. Runs in the browser
  * because the app is in SPA mode; it becomes a server `loader` unchanged if
@@ -29,22 +27,6 @@ export const usePortal = (): PortalConfig => {
   if (!data) throw new Error("usePortal must be used inside PortalLayout");
   return data;
 };
-
-export function PortalStepper({ current }: { current: number }) {
-  return (
-    <div className="portal__steps">
-      {STEPS.map((label, index) => (
-        <div
-          key={label}
-          className={`portal__step${index === current ? " is-active" : ""}`}
-        >
-          <span className="portal__step-dot">{index + 1}</span>
-          {label}
-        </div>
-      ))}
-    </div>
-  );
-}
 
 export default function PortalLayout({ loaderData }: Route.ComponentProps) {
   const config = loaderData;

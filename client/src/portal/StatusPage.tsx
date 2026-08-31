@@ -4,7 +4,7 @@ import { api } from "../lib/api";
 import { money, shortDate } from "../lib/format";
 import type { ReturnDetail, ReturnStatus } from "../lib/types";
 import { ErrorAlert } from "../components/Feedback";
-import { PortalStepper, usePortal } from "./PortalLayout";
+import { usePortal } from "./PortalLayout";
 import type { Route } from "./+types/StatusPage";
 
 /**
@@ -292,7 +292,6 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
 
   return (
     <>
-      <PortalStepper current={2} />
 
       <div className="confirm">
         <div className="confirm__main">

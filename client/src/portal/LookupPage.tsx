@@ -1,7 +1,6 @@
 import { Form, redirect, useNavigation, useParams } from "react-router";
 import { api, ApiError, setToken } from "../lib/api";
 import { ErrorAlert } from "../components/Feedback";
-import { PortalStepper } from "./PortalLayout";
 import type { Route } from "./+types/LookupPage";
 
 /**
@@ -42,7 +41,6 @@ export default function LookupPage({ actionData }: Route.ComponentProps) {
 
   return (
     <>
-      <PortalStepper current={0} />
       <div className="card portal__card">
         <h2>Find your order</h2>
         <p className="muted" style={{ margin: "6px 0 20px" }}>

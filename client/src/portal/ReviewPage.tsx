@@ -9,7 +9,6 @@ import type {
   ReturnDetail,
 } from "../lib/types";
 import { ErrorAlert } from "../components/Feedback";
-import { PortalStepper } from "./PortalLayout";
 import {
   clearDraft,
   exchangePriceIn,
@@ -237,7 +236,6 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
 
   return (
     <>
-      <PortalStepper current={2} />
       <div className="review">
         <div className="review__main">
           <h1>Review your return</h1>
