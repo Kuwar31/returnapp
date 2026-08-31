@@ -87,6 +87,33 @@ export default function SettingsPage() {
   };
 
   /**
+   * Shop-now has three settings that move together, so this saves whatever it
+   * is handed rather than growing a third near-identical single-field saver.
+   * Optimistic like the others, and rolled back on failure.
+   */
+  const saveShopNow = async (
+    patch: Partial<
+      Pick<
+        StoreSettings,
+        "shopNowEnabled" | "shopNowMode" | "shopNowBonusAmount"
+      >
+    >,
+    message: string,
+  ) => {
+    if (!store) return;
+    const previous = store;
+    setStore({ ...store, ...patch });
+    setError(null);
+    try {
+      await api.patch("/admin/settings/store", patch, { auth: "admin" });
+      setStatus(message);
+    } catch (e) {
+      setStore(previous);
+      setError(e instanceof Error ? e.message : "Couldn't save that setting.");
+    }
+  };
+
+  /**
    * Also saved on change, but for the opposite reason to the currency toggle:
    * this one genuinely does change how returns are handled, and burying it
    * behind the policy form's "Save changes" would make it easy to alter the
@@ -257,6 +284,104 @@ export default function SettingsPage() {
               Applies to exchanges approved from now on. Returns already
               approved keep the method they were created with.
             </p>
+          </div>
+
+          <div className="panel">
+            <h2>Shop now</h2>
+            <p className="settings-row__hint" style={{ marginBottom: 14 }}>
+              Instead of swapping one item for another, the customer's whole
+              return value becomes credit to spend across your catalogue. A
+              refund pays money out; this keeps it in the store.
+            </p>
+
+            <div className="settings-row">
+              <div>
+                <div className="settings-row__label">Offer shop now</div>
+                <div className="settings-row__hint">
+                  Adds a "spend it with us" option wherever a refund is offered.
+                </div>
+              </div>
+              <select
+                value={store.shopNowEnabled ? "on" : "off"}
+                onChange={(e) =>
+                  void saveShopNow(
+                    { shopNowEnabled: e.target.value === "on" },
+                    e.target.value === "on"
+                      ? "Customers can now shop with their return credit."
+                      : "Shop now is off; returns behave as before.",
+                  )
+                }
+              >
+                <option value="off">Off</option>
+                <option value="on">On</option>
+              </select>
+            </div>
+
+            {store.shopNowEnabled && (
+              <>
+                <div className="settings-row">
+                  <div>
+                    <div className="settings-row__label">Where they shop</div>
+                    <div className="settings-row__hint">
+                      On the returns page they browse and check out without
+                      leaving. Sending them to your storefront shows your real
+                      product pages, but needs a theme extension this app
+                      doesn't ship yet — so it isn't selectable.
+                    </div>
+                  </div>
+                  <select
+                    value={store.shopNowMode}
+                    onChange={(e) =>
+                      void saveShopNow(
+                        { shopNowMode: e.target.value as StoreSettings["shopNowMode"] },
+                        "Saved.",
+                      )
+                    }
+                  >
+                    <option value="RETURNS_PAGE">On the returns page</option>
+                    <option value="STOREFRONT" disabled>
+                      On my storefront — not available yet
+                    </option>
+                  </select>
+                </div>
+
+                <div className="settings-row">
+                  <div>
+                    <div className="settings-row__label">Extra credit</div>
+                    <div className="settings-row__hint">
+                      A flat bonus for spending it with you, on top of the{" "}
+                      {policy.bonusCreditPercent}% in your policy below. In{" "}
+                      {store.currency}; leave empty for none.
+                    </div>
+                  </div>
+                  {/*
+                    Committed on blur rather than on every keystroke — saving
+                    per character would write "1", "15", "150" on the way to
+                    150 and briefly promise each one.
+                  */}
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    style={{ width: 120 }}
+                    defaultValue={store.shopNowBonusAmount ?? ""}
+                    placeholder="0.00"
+                    onBlur={(e) => {
+                      const raw = e.target.value.trim();
+                      const value = raw === "" ? null : Number(raw);
+                      if (value !== null && !Number.isFinite(value)) return;
+                      if (value === (store.shopNowBonusAmount ?? null)) return;
+                      void saveShopNow(
+                        { shopNowBonusAmount: value },
+                        value
+                          ? `Customers get ${value} ${store.currency} extra for shopping.`
+                          : "Extra credit removed.",
+                      );
+                    }}
+                  />
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

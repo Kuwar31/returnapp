@@ -43,7 +43,7 @@ const RESOLUTION_LABEL: Record<string, string> = {
 };
 
 export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
-  const { order, reasonGroups, eligibility } = loaderData;
+  const { order, reasonGroups, eligibility, shopNow } = loaderData;
   const { slug } = useParams();
   const navigate = useNavigate();
 
@@ -116,6 +116,17 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
   const goToReview = () => {
     saveDraft(order.id, decisions);
     navigate(`/r/${slug}/review`);
+  };
+
+  /**
+   * Same handoff, different destination. The draft lives in component state
+   * until one of these runs, so a route that reads it has to be reached through
+   * a save — leaving this out sent the shopper to an empty shop screen, which
+   * bounced them straight back here having lost their picks.
+   */
+  const goToShop = () => {
+    saveDraft(order.id, decisions);
+    navigate(`/r/${slug}/shop`);
   };
 
   // The drawer works on an article; the product it belongs to comes from its key.
@@ -366,6 +377,20 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
           <span className="portal__bar-label">
             {count} item{count === 1 ? "" : "s"} selected
           </span>
+          {/*
+            Offered beside the ordinary way forward rather than as a modal that
+            interrupts it. The shopper has just decided what they want; asking
+            "are you sure you wouldn't rather have credit?" over the top of that
+            decision is the pattern this deliberately isn't.
+          */}
+          {shopNow?.enabled && (
+            <button
+              className="btn btn--secondary"
+              onClick={goToShop}
+            >
+              Shop with your credit
+            </button>
+          )}
           <button className="btn" onClick={goToReview}>
             Continue with return
           </button>

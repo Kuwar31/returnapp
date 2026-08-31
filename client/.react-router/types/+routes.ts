@@ -24,6 +24,11 @@ type Pages = {
       "slug": string;
     };
   };
+  "/r/:slug/shop": {
+    params: {
+      "slug": string;
+    };
+  };
   "/r/:slug/review": {
     params: {
       "slug": string;
@@ -77,7 +82,7 @@ type Pages = {
 type RouteFiles = {
   "root.tsx": {
     id: "root";
-    page: "/" | "/r/:slug" | "/r/:slug/items" | "/r/:slug/review" | "/r/:slug/status/:reference" | "/admin/login" | "/admin" | "/admin/:store" | "/admin/:store/returns" | "/admin/:store/returns/:id" | "/admin/:store/settings" | "/admin/:store/settings/reasons" | "/*";
+    page: "/" | "/r/:slug" | "/r/:slug/items" | "/r/:slug/shop" | "/r/:slug/review" | "/r/:slug/status/:reference" | "/admin/login" | "/admin" | "/admin/:store" | "/admin/:store/returns" | "/admin/:store/returns/:id" | "/admin/:store/settings" | "/admin/:store/settings/reasons" | "/*";
   };
   "Home.tsx": {
     id: "Home";
@@ -85,7 +90,7 @@ type RouteFiles = {
   };
   "portal/PortalLayout.tsx": {
     id: "portal/PortalLayout";
-    page: "/r/:slug" | "/r/:slug/items" | "/r/:slug/review" | "/r/:slug/status/:reference";
+    page: "/r/:slug" | "/r/:slug/items" | "/r/:slug/shop" | "/r/:slug/review" | "/r/:slug/status/:reference";
   };
   "portal/LookupPage.tsx": {
     id: "portal/LookupPage";
@@ -94,6 +99,10 @@ type RouteFiles = {
   "portal/SelectItemsPage.tsx": {
     id: "portal/SelectItemsPage";
     page: "/r/:slug/items";
+  };
+  "portal/ShopPage.tsx": {
+    id: "portal/ShopPage";
+    page: "/r/:slug/shop";
   };
   "portal/ReviewPage.tsx": {
     id: "portal/ReviewPage";
@@ -151,6 +160,7 @@ type RouteModules = {
   "portal/PortalLayout": typeof import("./src/portal/PortalLayout.tsx");
   "portal/LookupPage": typeof import("./src/portal/LookupPage.tsx");
   "portal/SelectItemsPage": typeof import("./src/portal/SelectItemsPage.tsx");
+  "portal/ShopPage": typeof import("./src/portal/ShopPage.tsx");
   "portal/ReviewPage": typeof import("./src/portal/ReviewPage.tsx");
   "portal/StatusPage": typeof import("./src/portal/StatusPage.tsx");
   "admin/AuthLayout": typeof import("./src/admin/AuthLayout.tsx");

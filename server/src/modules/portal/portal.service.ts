@@ -344,7 +344,9 @@ const resolveSelections = async (
   let shopNow: { cartTotal: Prisma.Decimal; bonus: Prisma.Decimal } | null = null;
   let shopBasket: Array<{ variantId: string; quantity: number }> = [];
 
-  if (shopItems.length > 0) {
+  // Presence, not length — an empty basket still prices the credit pool, which
+  // is what the shop screen shows before anything has been added.
+  if (input.shopItems !== undefined) {
     const merchant = await prisma.merchant.findUniqueOrThrow({
       where: { id: merchantId },
       select: { shopNowEnabled: true, shopNowBonusAmount: true },
@@ -353,10 +355,9 @@ const resolveSelections = async (
       throw badRequest("This store isn't offering shopping with return credit.");
     }
 
-    const shopVariants = await resolveVariants(
-      merchantId,
-      shopItems.map((i) => i.variantId),
-    );
+    const shopVariants = shopItems.length
+      ? await resolveVariants(merchantId, shopItems.map((i) => i.variantId))
+      : new Map<string, { price: number }>();
     const cartTotal = round2(
       shopItems.reduce((sum, item) => {
         const variant = shopVariants.get(item.variantId);

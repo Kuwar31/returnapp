@@ -63,7 +63,12 @@ const namesItsReplacement = (v: {
   items: Array<{ resolution: string; exchange?: unknown }>;
   shopItems?: unknown[];
 }) =>
-  Boolean(v.shopItems?.length) ||
+  /**
+   * Presence, not length. An empty basket is a real question — "what would my
+   * credit be if I shopped?" — which the shop screen asks before anything is
+   * added, and which has no per-line replacement to name.
+   */
+  v.shopItems !== undefined ||
   v.items.every(
     (i) =>
       !["EXCHANGE", "INSTANT_EXCHANGE"].includes(i.resolution) ||
@@ -95,7 +100,7 @@ const allLinesFeedTheBasket = (v: {
   items: Array<{ resolution: string }>;
   shopItems?: unknown[];
 }) =>
-  !v.shopItems?.length ||
+  v.shopItems === undefined ||
   v.items.every((i) => ["EXCHANGE", "INSTANT_EXCHANGE"].includes(i.resolution));
 
 export const quoteSchema = z

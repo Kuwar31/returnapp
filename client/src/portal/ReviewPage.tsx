@@ -13,12 +13,17 @@ import {
   clearDraft,
   exchangePriceIn,
   hydrateExchangeDetails,
+  cartTotal,
+  clearCart,
   lineIdOf,
+  loadCart,
   loadDraft,
   loadSubmitted,
   rememberSubmitted,
   saveDraft,
   toSelections,
+  toShopSelections,
+  type CartLine,
   type Draft,
 } from "./draft";
 import type { Route } from "./+types/ReviewPage";
@@ -71,6 +76,8 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
   const navigate = useNavigate();
 
   const [draft, setDraft] = useState<Draft>({});
+  /** The "shop now" basket, if the shopper filled one. */
+  const [cart] = useState<CartLine[]>(() => loadCart(order.id));
   const [quote, setQuote] = useState<Quote | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -78,6 +85,20 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
   const [surplusMethod, setSurplusMethod] = useState<SurplusMethod>("REFUND");
   /** The "checkout opens in a new page" confirmation, for an upsell exchange. */
   const [payPrompt, setPayPrompt] = useState(false);
+
+  /**
+   * A basket turns every returned line into an exchange: the value is pooled
+   * and spent, so nothing is being refunded. The server enforces the same rule,
+   * which is why the resolutions are rewritten here rather than hoped for.
+   */
+  const shopping = cart.length > 0;
+  const shopPayload = shopping
+    ? { shopItems: cart.map((l) => ({ variantId: l.variantId, quantity: l.quantity })) }
+    : {};
+  // Effects can't depend on a fresh object, so depend on what it says instead.
+  const shopPayloadKey = cart
+    .map((l) => `${l.variantId}x${l.quantity}`)
+    .join(",");
 
   /**
    * Read from whatever payload the amounts on screen came from, never from the
@@ -143,10 +164,14 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
     const items = toSelections(draft);
     if (items.length === 0) return;
     api
-      .post<Quote>("/portal/session/quote", { items }, { auth: "portal" })
+      .post<Quote>(
+        "/portal/session/quote",
+        { items: shopping ? toShopSelections(draft) : items, ...shopPayload },
+        { auth: "portal" },
+      )
       .then(setQuote)
       .catch((e) => setError(e instanceof Error ? e.message : null));
-  }, [draft]);
+  }, [draft, shopping, shopPayloadKey]);
 
   const remove = (id: string) => {
     const next = { ...draft };
@@ -175,10 +200,15 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
     try {
       const created = await api.post<ReturnDetail>(
         "/portal/session/returns",
-        { items: toSelections(draft), exchangeSurplusMethod: surplusMethod },
+        {
+          items: shopping ? toShopSelections(draft) : toSelections(draft),
+          ...shopPayload,
+          exchangeSurplusMethod: surplusMethod,
+        },
         { auth: "portal" },
       );
       clearDraft(order.id);
+      clearCart(order.id);
       // Before the checkout tab is pointed anywhere: from here on, any return
       // to this order in this browser should land on the summary.
       rememberSubmitted(order.id, {
@@ -306,7 +336,49 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
               })}
             </div>
 
-            {exchanges.length > 0 && (
+            {/*
+              The basket, when the shopper spent their value in the catalogue.
+              Rendered separately from the per-line swaps below because it isn't
+              one: these items answer to the whole return, not to any single
+              item going back.
+            */}
+            {shopping && (
+              <>
+                <h2 style={{ marginTop: 28 }}>What you're getting</h2>
+                <div className="review__grid">
+                  {cart.map((line) => (
+                    <div key={line.variantId} className="review__tile">
+                      {line.imageUrl ? (
+                        <img src={line.imageUrl} alt="" />
+                      ) : (
+                        <div className="review__tile-blank" />
+                      )}
+                      <div className="review__tile-title">{line.title}</div>
+                      {line.variantTitle && (
+                        <div className="muted">{line.variantTitle}</div>
+                      )}
+                      <div className="muted">
+                        {line.quantity > 1 && `${line.quantity} × `}
+                        {money(line.price, line.currency)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="review__shop-total">
+                  {cart.length} item{cart.length === 1 ? "" : "s"} ·{" "}
+                  {money(cartTotal(cart), currency)}{" "}
+                  <button
+                    type="button"
+                    className="linkish"
+                    onClick={() => navigate(`/r/${slug}/shop`)}
+                  >
+                    Edit basket
+                  </button>
+                </p>
+              </>
+            )}
+
+            {!shopping && exchanges.length > 0 && (
               <>
                 <h2 style={{ marginTop: 28 }}>What you're getting</h2>
                 <div className="review__grid">

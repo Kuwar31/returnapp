@@ -150,6 +150,23 @@ export const toSelections = (draft: Draft) =>
   }));
 
 /**
+ * The same selections, but with every line marked as an exchange.
+ *
+ * A basket is bought with the pooled value of everything coming back, so no
+ * line can be a refund — the server refuses the mix, and rewriting here rather
+ * than asking the shopper to re-pick each item keeps the choice where they made
+ * it: once, on the offer.
+ */
+export const toShopSelections = (draft: Draft) =>
+  toSelections(draft).map((selection) => {
+    const { exchange, ...rest } = selection as typeof selection & {
+      exchange?: unknown;
+    };
+    void exchange; // a per-line swap is replaced by the basket
+    return { ...rest, resolution: "EXCHANGE" as const };
+  });
+
+/**
  * Fills in exchange display details a stored draft is missing.
  *
  * Drafts survive deploys, so one saved before a field existed carries no
@@ -207,3 +224,53 @@ export const hydrateExchangeDetails = async (
     return null;
   }
 };
+
+/**
+ * The "shop now" basket.
+ *
+ * Kept apart from the returned-items draft rather than folded into it: a
+ * basket belongs to the return as a whole, while every entry in `Draft` is one
+ * returned article with its own reason and resolution. Storing a pooled thing
+ * inside a per-article map would mean inventing an article to hang it on.
+ */
+export interface CartLine {
+  variantId: string;
+  quantity: number;
+  /** Display only — the server reprices everything from Shopify on submit. */
+  title: string;
+  variantTitle: string | null;
+  imageUrl: string | null;
+  price: number;
+  currency: string;
+}
+
+const cartKey = (orderId: string) => `returns.cart.${orderId}`;
+
+export const loadCart = (orderId: string): CartLine[] => {
+  try {
+    const raw = sessionStorage.getItem(cartKey(orderId));
+    return raw ? (JSON.parse(raw) as CartLine[]) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const saveCart = (orderId: string, cart: CartLine[]): void => {
+  try {
+    sessionStorage.setItem(cartKey(orderId), JSON.stringify(cart));
+  } catch {
+    /* private browsing; the basket just won't survive a reload */
+  }
+};
+
+export const clearCart = (orderId: string): void => {
+  try {
+    sessionStorage.removeItem(cartKey(orderId));
+  } catch {
+    /* nothing to clean up */
+  }
+};
+
+/** What the basket costs, for the running total on the shop screen. */
+export const cartTotal = (cart: CartLine[]): number =>
+  Math.round(cart.reduce((sum, l) => sum + l.price * l.quantity, 0) * 100) / 100;

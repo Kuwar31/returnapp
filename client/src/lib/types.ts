@@ -83,6 +83,13 @@ export interface OrderSession {
     restockingFeePercent: number;
   };
   reasonGroups: ReasonGroup[];
+  /**
+   * The store's "shop now" offer, already in this order's display currency.
+   * `enabled: false` on its own when the merchant has it switched off.
+   */
+  shopNow?:
+    | { enabled: false }
+    | { enabled: true; mode: ShopNowMode; bonus: number; currency: string };
   eligibility: {
     withinWindow: boolean;
     windowDays: number;
@@ -370,9 +377,16 @@ export type DisplayCurrency = "SHOP" | "PRESENTMENT";
  */
 export type ExchangeMethod = "DRAFT_ORDER" | "SHOPIFY_NATIVE";
 
+/** Where a shopper spends their return credit under "shop now". */
+export type ShopNowMode = "RETURNS_PAGE" | "STOREFRONT";
+
 export interface StoreSettings {
   name: string;
   slug: string;
+  shopNowEnabled: boolean;
+  shopNowMode: ShopNowMode;
+  /** A flat sweetener on top of the policy's percentage. Null for none. */
+  shopNowBonusAmount: number | null;
   /**
    * The full, shareable portal address. Built server-side from
    * PORTAL_BASE_URL: the admin can be open somewhere the portal isn't served
