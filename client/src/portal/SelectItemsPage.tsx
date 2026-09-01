@@ -35,8 +35,16 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   }
 }
 
+/**
+ * How a chosen item's outcome reads back on the picker.
+ *
+ * "Return" rather than "Refund" for the plain case: at this point the shopper
+ * has said what they're sending back, not how they want paying — that choice
+ * comes on the review step, where the label is the fuller "Refund to original
+ * payment method". Naming it here pre-empted a decision they hadn't made.
+ */
 const RESOLUTION_LABEL: Record<string, string> = {
-  REFUND: "Refund",
+  REFUND: "Return",
   STORE_CREDIT: "Store credit",
   GIFT_CARD: "Gift card",
   EXCHANGE: "Exchange",
