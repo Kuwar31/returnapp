@@ -28,14 +28,39 @@ interface Policy {
   autoApproveUnder: number | null;
 }
 
+/** Blank clears the flat bonus; anything unparseable is left as-is. */
+const parseBonus = (raw: string): number | null => {
+  const trimmed = raw.trim();
+  if (trimmed === "") return null;
+  const value = Number(trimmed);
+  return Number.isFinite(value) && value >= 0 ? value : null;
+};
+
 export default function SettingsPage() {
   const { session } = useAuth();
-  const [policy, setPolicy] = useState<Policy | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [store, setStore] = useState<StoreSettings | null>(null);
+
+  /**
+   * What the server last confirmed, kept apart from what the merchant has
+   * typed since.
+   *
+   * These settings used to write themselves the moment a dropdown moved, which
+   * made changing the exchange mechanism or switching shop now on indistinguish-
+   * able from browsing the page. Holding the edits separately is what lets the
+   * page offer a save — and a way back out of a change not yet committed.
+   */
+  const [savedPolicy, setSavedPolicy] = useState<Policy | null>(null);
+  const [savedStore, setSavedStore] = useState<StoreSettings | null>(null);
+  const [policyEdits, setPolicyEdits] = useState<Partial<Policy>>({});
+  const [storeEdits, setStoreEdits] = useState<Partial<StoreSettings>>({});
+  /**
+   * The bonus field is text while it's being typed. Bound to a number, "1."
+   * on the way to "1.5" would render back as "1" and eat the keystroke.
+   */
+  const [bonusText, setBonusText] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -43,14 +68,18 @@ export default function SettingsPage() {
       .get<Policy[]>("/admin/settings/policies", { auth: "admin" })
       .then((policies) => {
         if (!active) return;
-        setPolicy(policies.find((p) => p.isDefault) ?? policies[0] ?? null);
+        setSavedPolicy(policies.find((p) => p.isDefault) ?? policies[0] ?? null);
       })
       .catch((e) => active && setError(e.message))
       .finally(() => active && setLoading(false));
 
     api
       .get<StoreSettings>("/admin/settings/store", { auth: "admin" })
-      .then((s) => active && setStore(s))
+      .then((s) => {
+        if (!active) return;
+        setSavedStore(s);
+        setBonusText(s.shopNowBonusAmount === null ? "" : String(s.shopNowBonusAmount));
+      })
       .catch(() => undefined);
 
     return () => {
@@ -58,109 +87,81 @@ export default function SettingsPage() {
     };
   }, []);
 
-  /**
-   * Saved on change rather than with the policy form.
-   *
-   * It's a view preference, not policy — batching it behind "Save changes"
-   * would make a toggle that only affects what you're looking at feel like a
-   * change to how returns are handled.
-   */
-  const setDisplayCurrency = async (displayCurrency: DisplayCurrency) => {
-    if (!store) return;
-    setStore({ ...store, displayCurrency });
-    setError(null);
-    try {
-      await api.patch(
-        "/admin/settings/store",
-        { displayCurrency },
-        { auth: "admin" },
-      );
-      setStatus(
-        displayCurrency === "SHOP"
-          ? `Now showing amounts in ${store.currency}.`
-          : `Now showing amounts as charged${store.presentmentCurrency ? ` (${store.presentmentCurrency})` : ""}.`,
-      );
-    } catch (e) {
-      setStore(store);
-      setError(e instanceof Error ? e.message : "Couldn't change the currency.");
-    }
-  };
+  /** What the screen shows: what was saved, with anything unsaved layered on. */
+  const policy = savedPolicy ? { ...savedPolicy, ...policyEdits } : null;
+  const store = savedStore ? { ...savedStore, ...storeEdits } : null;
 
-  /**
-   * Shop-now has three settings that move together, so this saves whatever it
-   * is handed rather than growing a third near-identical single-field saver.
-   * Optimistic like the others, and rolled back on failure.
-   */
-  const saveShopNow = async (
-    patch: Partial<
-      Pick<
-        StoreSettings,
-        "shopNowEnabled" | "shopNowMode" | "shopNowBonusAmount"
-      >
-    >,
-    message: string,
+  const editStore = <K extends keyof StoreSettings>(
+    key: K,
+    value: StoreSettings[K],
   ) => {
-    if (!store) return;
-    const previous = store;
-    setStore({ ...store, ...patch });
+    setStatus(null);
+    setStoreEdits((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const bonusEdited =
+    savedStore !== null &&
+    parseBonus(bonusText) !== (savedStore.shopNowBonusAmount ?? null);
+
+  const dirty =
+    Object.keys(policyEdits).length > 0 ||
+    Object.keys(storeEdits).length > 0 ||
+    bonusEdited;
+
+  const discard = () => {
+    setPolicyEdits({});
+    setStoreEdits({});
+    setBonusText(
+      savedStore?.shopNowBonusAmount === null || savedStore === null
+        ? ""
+        : String(savedStore.shopNowBonusAmount),
+    );
     setError(null);
-    try {
-      await api.patch("/admin/settings/store", patch, { auth: "admin" });
-      setStatus(message);
-    } catch (e) {
-      setStore(previous);
-      setError(e instanceof Error ? e.message : "Couldn't save that setting.");
-    }
+    setStatus(null);
+  };
+
+  const update = <K extends keyof Policy>(key: K, value: Policy[K]) => {
+    setStatus(null);
+    setPolicyEdits((prev) => ({ ...prev, [key]: value }));
   };
 
   /**
-   * Also saved on change, but for the opposite reason to the currency toggle:
-   * this one genuinely does change how returns are handled, and burying it
-   * behind the policy form's "Save changes" would make it easy to alter the
-   * exchange mechanism while meaning to edit a return window.
+   * Commits everything the merchant has changed, in one go.
+   *
+   * Only what actually differs is sent: the two halves live behind different
+   * endpoints, and a page that PATCHed both on every save would rewrite a
+   * policy because someone flipped a display currency.
    */
-  const setExchangeMethod = async (exchangeMethod: ExchangeMethod) => {
-    if (!store) return;
-    const previous = store;
-    setStore({ ...store, exchangeMethod });
-    setError(null);
-    try {
-      await api.patch(
-        "/admin/settings/store",
-        { exchangeMethod },
-        { auth: "admin" },
-      );
-      setStatus(
-        exchangeMethod === "DRAFT_ORDER"
-          ? "New exchanges will reserve stock and be paid through a checkout link."
-          : "New exchanges will be added to the original order.",
-      );
-    } catch (e) {
-      setStore(previous);
-      setError(
-        e instanceof Error ? e.message : "Couldn't change the exchange method.",
-      );
-    }
-  };
-
-  const update = <K extends keyof Policy>(key: K, value: Policy[K]) =>
-    setPolicy((prev) => (prev ? { ...prev, [key]: value } : prev));
-
-  const save = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!policy) return;
+  const save = async (event?: React.FormEvent) => {
+    event?.preventDefault();
+    if (!savedPolicy || saving) return;
     setSaving(true);
     setError(null);
     setStatus(null);
     try {
-      const { id, isDefault, ...body } = policy;
-      void isDefault;
-      const updated = await api.patch<Policy>(
-        `/admin/settings/policies/${id}`,
-        body,
-        { auth: "admin" },
-      );
-      setPolicy(updated);
+      const storeBody: Record<string, unknown> = { ...storeEdits };
+      if (bonusEdited) storeBody.shopNowBonusAmount = parseBonus(bonusText);
+
+      if (Object.keys(storeBody).length > 0) {
+        await api.patch("/admin/settings/store", storeBody, { auth: "admin" });
+        setSavedStore((prev) =>
+          prev ? ({ ...prev, ...storeBody } as StoreSettings) : prev,
+        );
+        setStoreEdits({});
+      }
+
+      if (Object.keys(policyEdits).length > 0) {
+        const { id, isDefault, ...body } = { ...savedPolicy, ...policyEdits };
+        void isDefault;
+        const updated = await api.patch<Policy>(
+          `/admin/settings/policies/${id}`,
+          body,
+          { auth: "admin" },
+        );
+        setSavedPolicy(updated);
+        setPolicyEdits({});
+      }
+
       setStatus("Saved.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't save your changes.");
@@ -232,7 +233,7 @@ export default function SettingsPage() {
               <select
                 value={store.displayCurrency}
                 onChange={(e) =>
-                  void setDisplayCurrency(e.target.value as DisplayCurrency)
+                  editStore("displayCurrency", e.target.value as DisplayCurrency)
                 }
               >
                 <option value="SHOP">{store.currency} — shop currency</option>
@@ -269,7 +270,7 @@ export default function SettingsPage() {
               <select
                 value={store.exchangeMethod}
                 onChange={(e) =>
-                  void setExchangeMethod(e.target.value as ExchangeMethod)
+                  editStore("exchangeMethod", e.target.value as ExchangeMethod)
                 }
               >
                 <option value="DRAFT_ORDER">
@@ -304,12 +305,7 @@ export default function SettingsPage() {
               <select
                 value={store.shopNowEnabled ? "on" : "off"}
                 onChange={(e) =>
-                  void saveShopNow(
-                    { shopNowEnabled: e.target.value === "on" },
-                    e.target.value === "on"
-                      ? "Customers can now shop with their return credit."
-                      : "Shop now is off; returns behave as before.",
-                  )
+                  editStore("shopNowEnabled", e.target.value === "on")
                 }
               >
                 <option value="off">Off</option>
@@ -333,9 +329,9 @@ export default function SettingsPage() {
                   <select
                     value={store.shopNowMode}
                     onChange={(e) =>
-                      void saveShopNow(
-                        { shopNowMode: e.target.value as StoreSettings["shopNowMode"] },
-                        "Saved.",
+                      editStore(
+                        "shopNowMode",
+                        e.target.value as StoreSettings["shopNowMode"],
                       )
                     }
                   >
@@ -353,29 +349,16 @@ export default function SettingsPage() {
                       {store.currency}; leave empty for none.
                     </div>
                   </div>
-                  {/*
-                    Committed on blur rather than on every keystroke — saving
-                    per character would write "1", "15", "150" on the way to
-                    150 and briefly promise each one.
-                  */}
                   <input
                     type="number"
                     min={0}
                     step="0.01"
                     style={{ width: 120 }}
-                    defaultValue={store.shopNowBonusAmount ?? ""}
+                    value={bonusText}
                     placeholder="0.00"
-                    onBlur={(e) => {
-                      const raw = e.target.value.trim();
-                      const value = raw === "" ? null : Number(raw);
-                      if (value !== null && !Number.isFinite(value)) return;
-                      if (value === (store.shopNowBonusAmount ?? null)) return;
-                      void saveShopNow(
-                        { shopNowBonusAmount: value },
-                        value
-                          ? `Customers get ${value} ${store.currency} extra for shopping.`
-                          : "Extra credit removed.",
-                      );
+                    onChange={(e) => {
+                      setStatus(null);
+                      setBonusText(e.target.value);
                     }}
                   />
                 </div>
@@ -546,10 +529,40 @@ export default function SettingsPage() {
           )}
         </div>
 
-        <button className="btn" type="submit" disabled={saving}>
-          {saving ? "Saving…" : "Save changes"}
-        </button>
       </form>
+
+      {/*
+        Appears only once something has actually changed, and stays put while
+        the merchant scrolls — these panels are long, and a save button at the
+        bottom of one of them is invisible from the setting it commits.
+
+        The spacer keeps the bar from covering the last row it would otherwise
+        sit on top of.
+      */}
+      {dirty && (
+        <>
+          <div className="settings-bar__spacer" />
+          <div className="settings-bar" role="status">
+            <span className="settings-bar__label">Unsaved changes</span>
+            <button
+              type="button"
+              className="btn btn--secondary btn--sm"
+              onClick={discard}
+              disabled={saving}
+            >
+              Discard
+            </button>
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={() => void save()}
+              disabled={saving}
+            >
+              {saving ? "Saving…" : "Save changes"}
+            </button>
+          </div>
+        </>
+      )}
     </>
   );
 }

@@ -1447,3 +1447,44 @@ table.data tbody tr:hover {
   align-items: stretch;
   gap: 12px;
 }
+
+/* Unsaved-changes bar.
+   Pinned rather than placed at the foot of the form: the settings panels run
+   well past a screen, so a button at the bottom of one is nowhere near the
+   control it commits. Only rendered while something is actually unsaved. */
+.settings-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: 0 -6px 24px rgb(0 0 0 / 10%);
+}
+
+.settings-bar__label {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* Height of the bar, so the last setting can still be scrolled clear of it. */
+.settings-bar__spacer {
+  height: 68px;
+}
+
+@media (max-width: 600px) {
+  .settings-bar {
+    padding: 12px 14px;
+    gap: 8px;
+  }
+
+  .settings-bar__label {
+    font-size: 13px;
+  }
+}
