@@ -263,7 +263,7 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
    * there is no non-exchange line whose resolution could carry the answer.
    */
   const surplus =
-    returning.length === 0 && exchanges.length > 0 && quote
+    (shopping || (returning.length === 0 && exchanges.length > 0)) && quote
       ? quote.estimatedTotal
       : 0;
   const choosingForSurplus = surplus > 0;
@@ -508,59 +508,93 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
               )}
             </div>
 
-            {exchanges.length > 0 && (
+            {/*
+              What's being bought, from either route: a per-line swap, or one
+              basket paid for with every line's credit pooled. The basket has
+              no line to hang from, so keying this off the per-line decisions
+              alone left it invisible for the whole of shop now.
+            */}
+            {(shopping || exchanges.length > 0) && (
               <div className="summary__section">
                 <div className="summary__heading">
-                  <span>Purchasing ({exchanges.length})</span>
                   <span>
-                    {quote
-                      ? money(
-                          quote.lines.reduce(
-                            (s, l) => s + l.exchangeValue,
-                            0,
-                          ),
-                          currency,
-                        )
-                      : "—"}
+                    Purchasing ({shopping ? cart.length : exchanges.length})
+                  </span>
+                  <span>
+                    {quote ? money(quote.purchaseSubtotal, currency) : "—"}
                   </span>
                 </div>
-                {exchanges.map(([id, d]) => (
-                  <div key={`sx-${id}`} className="summary__row">
-                    {/* Same picture the tile opposite shows — this row was the
-                        last place still rendering a permanent grey square. */}
-                    {d.exchangeImageUrl ? (
-                      <img src={d.exchangeImageUrl} alt="" />
-                    ) : (
-                      <span className="summary__blank" />
-                    )}
-                    <span className="summary__label">
-                      {d.exchangeProductTitle ?? d.exchangeLabel}
-                      {d.exchangeVariantTitle && (
-                        <span className="muted">{d.exchangeVariantTitle}</span>
-                      )}
-                    </span>
-                    <span>
-                      {exchangePriceIn(d, currency) !== null
-                        ? money(exchangePriceIn(d, currency)!, currency)
-                        : ""}
-                    </span>
-                  </div>
-                ))}
+
+                {shopping
+                  ? cart.map((line) => (
+                      <div key={`sc-${line.variantId}`} className="summary__row">
+                        {line.imageUrl ? (
+                          <img src={line.imageUrl} alt="" />
+                        ) : (
+                          <span className="summary__blank" />
+                        )}
+                        <span className="summary__label">
+                          {line.title}
+                          {line.variantTitle && (
+                            <span className="muted">{line.variantTitle}</span>
+                          )}
+                          {line.quantity > 1 && (
+                            <span className="muted">
+                              Quantity: {line.quantity}
+                            </span>
+                          )}
+                        </span>
+                        <span>
+                          {/* Stored when it was added, so only shown while it
+                              is still in the money this page is rendering. */}
+                          {line.currency === currency
+                            ? money(line.price * line.quantity, currency)
+                            : ""}
+                        </span>
+                      </div>
+                    ))
+                  : exchanges.map(([id, d]) => (
+                      <div key={`sx-${id}`} className="summary__row">
+                        {/* Same picture the tile opposite shows — this row was
+                            the last place still rendering a grey square. */}
+                        {d.exchangeImageUrl ? (
+                          <img src={d.exchangeImageUrl} alt="" />
+                        ) : (
+                          <span className="summary__blank" />
+                        )}
+                        <span className="summary__label">
+                          {d.exchangeProductTitle ?? d.exchangeLabel}
+                          {d.exchangeVariantTitle && (
+                            <span className="muted">
+                              {d.exchangeVariantTitle}
+                            </span>
+                          )}
+                        </span>
+                        <span>
+                          {exchangePriceIn(d, currency) !== null
+                            ? money(exchangePriceIn(d, currency)!, currency)
+                            : ""}
+                        </span>
+                      </div>
+                    ))}
+
                 {quote && (
                   <div className="summary__line summary__line--subtotal">
                     <span>Purchase subtotal</span>
-                    <span>
-                      {money(
-                        quote.lines.reduce((s, l) => s + l.exchangeValue, 0),
-                        currency,
-                      )}
-                    </span>
+                    <span>{money(quote.purchaseSubtotal, currency)}</span>
                   </div>
                 )}
               </div>
             )}
 
-            {(returning.length > 0 || choosingForSurplus) && (
+            {/*
+              Two different questions wear the same control. Normally it asks
+              how the shopper wants to be paid; when everything has gone into a
+              basket there is nothing to be paid *for*, so it can only be about
+              the leftover — and a basket has no line whose resolution could
+              carry that answer, which is why it has its own state.
+            */}
+            {(choosingForSurplus || (!shopping && returning.length > 0)) && (
               <div className="summary__section">
                 <h3 className="summary__subheading">
                   {choosingForSurplus

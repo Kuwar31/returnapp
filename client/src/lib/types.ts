@@ -120,6 +120,11 @@ export interface Quote {
   restockingFee: number;
   estimatedTotal: number;
   amountDue: number;
+  /**
+   * What the replacements cost. Server-reported rather than added up from the
+   * browser's own copy of the prices, which can be stale.
+   */
+  purchaseSubtotal: number;
   lines: QuoteLine[];
 }
 

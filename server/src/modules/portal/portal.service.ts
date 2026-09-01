@@ -628,6 +628,17 @@ export const quoteSelection = async (
   const display = await resolveDisplayMode(merchantId);
   const fx = displayConverter(order, display, order.currency);
 
+  /**
+   * What the replacements cost, whichever way they were chosen.
+   *
+   * Reported by the server so the review screen never has to add up prices it
+   * stored in the browser: a basket saved before a currency change carries
+   * stale money, and this figure is printed beside the authoritative totals.
+   */
+  const purchaseSubtotal = shopNow
+    ? shopNow.cartTotal
+    : quote.lines.reduce((sum, l) => sum.add(l.exchangeValue), ZERO);
+
   return {
     currency: fx.currency,
     itemsSubtotal: fx.money(quote.itemsSubtotal),
@@ -635,6 +646,7 @@ export const quoteSelection = async (
     restockingFee: fx.money(quote.restockingFee),
     estimatedTotal: fx.money(quote.estimatedTotal),
     amountDue: fx.money(quote.amountDue),
+    purchaseSubtotal: fx.money(purchaseSubtotal),
     // Per-item breakdown so the portal can show each line's own outcome.
     lines: quote.lines.map((l, i) => ({
       orderLineItemId: resolved[i].selection.orderLineItemId,
