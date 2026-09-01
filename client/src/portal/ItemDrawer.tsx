@@ -49,7 +49,12 @@ export interface ItemDecision {
  * mean answering the same question repeatedly and could produce a return that
  * pays out three different ways for no reason.
  */
-type Step = "reason" | "resolution" | "size" | "browse";
+/**
+ * "size" and "product" render the same panel — a chosen replacement, its
+ * options and what the swap costs. They differ only in where the product came
+ * from: the item's own siblings, or the catalogue.
+ */
+type Step = "reason" | "resolution" | "size" | "browse" | "product";
 
 /**
  * The per-item decision flow: why it's coming back, then how to make it right.
@@ -85,6 +90,8 @@ export function ItemDrawer({
 
   const [options, setOptions] = useState<ExchangeOptions | null>(null);
   const [products, setProducts] = useState<ExchangeProduct[] | null>(null);
+  /** The catalogue product being confirmed, once one is opened from the grid. */
+  const [picked, setPicked] = useState<ExchangeProduct | null>(null);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   /**
@@ -102,25 +109,49 @@ export function ItemDrawer({
     reasons.find((r) => r.id === reasonId) ??
     reasons.flatMap((r) => r.children ?? []).find((c) => c.id === reasonId);
   /** Options actually worth offering: in stock, and not the one they own. */
-  const swappableVariants = (options?.variants ?? []).filter(
-    (v) => v.available && v.id !== options?.currentVariantId,
+  /**
+   * What the confirm panel is about.
+   *
+   * A product picked out of the catalogue is adapted into the same shape the
+   * item's own variants arrive in, so one panel serves both — the shopper gets
+   * the same picture, price, options and consequence either way, rather than a
+   * considered screen for a size change and a bare grid of chips for anything
+   * else.
+   */
+  const swap: ExchangeOptions | null =
+    step === "product" && picked
+      ? {
+          product: {
+            id: picked.id,
+            title: picked.title,
+            images: picked.imageUrl ? [picked.imageUrl] : [],
+          },
+          variants: picked.variants,
+          // Nothing is "the one you already have" when it's a different product.
+          currentVariantId: null,
+          currency: picked.currency || currency,
+        }
+      : options;
+
+  const swappableVariants = (swap?.variants ?? []).filter(
+    (v) => v.available && v.id !== swap?.currentVariantId,
   );
-  const chosen = options?.variants.find((v) => v.id === chosenId) ?? null;
+  const chosen = swap?.variants.find((v) => v.id === chosenId) ?? null;
   /** Positive means they owe the difference; negative means they're owed it. */
   const delta = chosen ? chosen.price - item.unitPrice : 0;
-  const gallery = options?.product?.images?.length
-    ? options.product.images
-    : [chosen?.imageUrl ?? options?.variants[0]?.imageUrl ?? item.imageUrl].filter(
+  const gallery = swap?.product?.images?.length
+    ? swap.product.images
+    : [chosen?.imageUrl ?? swap?.variants[0]?.imageUrl ?? item.imageUrl].filter(
         (url): url is string => Boolean(url),
       );
-  const heading = options?.product?.title ?? item.title;
+  const heading = swap?.product?.title ?? item.title;
   /**
    * The returned item's own variant, named. Prefers the server's label and
    * falls back to the bare title for an order synced before names were stored.
    */
   const variantLabel = item.variantLabel ?? item.variantTitle;
   /** The media pane shows the replacement only once there is one to show. */
-  const showGallery = step === "size" && gallery.length > 0;
+  const showGallery = (step === "size" || step === "product") && gallery.length > 0;
 
   /**
    * What the replacement costs, before a size narrows it down.
@@ -157,7 +188,7 @@ export function ItemDrawer({
    * name anyone chose, so it is never shown. Capitalised because merchants type
    * these by hand and this store has one entered as "size".
    */
-  const rawOptionName = options?.variants[0]?.options?.[0]?.name ?? "";
+  const rawOptionName = swap?.variants[0]?.options?.[0]?.name ?? "";
   const optionName =
     !rawOptionName || rawOptionName.toLowerCase() === "title"
       ? "Options"
@@ -363,7 +394,11 @@ export function ItemDrawer({
             <button
               className="drawer__back"
               onClick={() =>
-                setStep(step === "resolution" ? "reason" : "resolution")
+                /* One step back, not one screen back to the start: confirming a
+                   catalogue product belongs to the grid it was opened from. */
+                step === "product"
+                  ? (setPicked(null), setChosenId(null), setStep("browse"))
+                  : setStep(step === "resolution" ? "reason" : "resolution")
               }
               aria-label="Back"
             >
@@ -520,17 +555,17 @@ export function ItemDrawer({
           )}
 
 
-          {step === "size" && (
+          {(step === "size" || step === "product") && (
             <>
               {loading && <p className="muted">Loading options…</p>}
-              {!loading && options && options.variants.length === 0 && (
+              {!loading && swap && swap.variants.length === 0 && (
                 <div className="alert alert--info">
                   This item has no other options. Try exchanging for another
                   product instead.
                 </div>
               )}
 
-              {options && options.variants.length > 0 && (
+              {swap && swap.variants.length > 0 && (
                 <div className="swapper__panel">
                   {/* What they're giving up, so the swap reads as a comparison. */}
                   <div className="swapper__current-heading">Returning</div>
@@ -565,7 +600,7 @@ export function ItemDrawer({
                   */}
                   {displayPrice !== null && (
                     <div className="swapper__price">
-                      {money(displayPrice, options.currency)}
+                      {money(displayPrice, swap.currency)}
                     </div>
                   )}
 
@@ -588,17 +623,17 @@ export function ItemDrawer({
                   {chosen && (
                     <p className="swapper__delta">
                       {delta > 0.005
-                        ? `You'll pay ${money(delta, options.currency)} more.`
+                        ? `You'll pay ${money(delta, swap.currency)} more.`
                         : delta < -0.005
-                          ? `You'll receive a credit of ${money(-delta, options.currency)}.`
+                          ? `You'll receive a credit of ${money(-delta, swap.currency)}.`
                           : "An even swap — nothing more to pay."}
                     </p>
                   )}
 
                   <h3 className="swapper__label">{optionName}</h3>
                   <div className="swapper__sizes">
-                    {options.variants.map((v) => {
-                      const isCurrent = v.id === options.currentVariantId;
+                    {swap.variants.map((v) => {
+                      const isCurrent = v.id === swap.currentVariantId;
                       const isChosen = v.id === chosenId;
                       return (
                         <button
@@ -614,7 +649,7 @@ export function ItemDrawer({
                             isCurrent
                               ? "This is the option you have"
                               : v.available
-                                ? money(v.price, options.currency)
+                                ? money(v.price, swap.currency)
                                 : "Out of stock"
                           }
                         >
@@ -627,7 +662,9 @@ export function ItemDrawer({
                   <button
                     className="btn btn--block swapper__confirm"
                     disabled={!chosen}
-                    onClick={() => chosen && finish("EXCHANGE", chosen)}
+                    onClick={() =>
+                      chosen && finish("EXCHANGE", chosen, picked?.title)
+                    }
                   >
                     {chosen ? "Confirm item" : `Choose a ${optionName.toLowerCase()}`}
                   </button>
@@ -647,11 +684,30 @@ export function ItemDrawer({
                 />
               </div>
               {loading && <p className="muted">Loading…</p>}
+              {/*
+                Pictures and prices only. Every variant used to be a chip under
+                its product, which turned a browse into a wall of buttons and
+                committed the shopper the instant they touched one — no price
+                for that variant, no sense of what the swap would cost. Opening
+                the product instead gives the same confirm panel a size change
+                already gets.
+              */}
               <div className="product-grid">
                 {products?.map((p) => (
-                  <div key={p.id} className="product">
+                  <button
+                    key={p.id}
+                    type="button"
+                    className="product"
+                    onClick={() => {
+                      setPicked(p);
+                      setChosenId(
+                        p.variants.length === 1 ? p.variants[0].id : null,
+                      );
+                      setStep("product");
+                    }}
+                  >
                     {p.imageUrl ? (
-                      <img src={p.imageUrl} alt={p.title} />
+                      <img src={p.imageUrl} alt="" />
                     ) : (
                       <div className="product__placeholder" />
                     )}
@@ -660,18 +716,7 @@ export function ItemDrawer({
                       {money(p.minPrice, p.currency || currency)}
                       {p.maxPrice > p.minPrice && "+"}
                     </div>
-                    <div className="product__variants">
-                      {p.variants.map((v) => (
-                        <button
-                          key={v.id}
-                          className="variant variant--sm"
-                          onClick={() => finish("EXCHANGE", v, p.title)}
-                        >
-                          {v.title}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                  </button>
                 ))}
               </div>
               {products?.length === 0 && !loading && (

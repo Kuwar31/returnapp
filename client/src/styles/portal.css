@@ -537,53 +537,30 @@
   font-size: 18px;
 }
 
-.variant-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-  gap: 10px;
-}
-
-.variant {
-  padding: 12px 10px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  font: inherit;
-  cursor: pointer;
-  text-align: center;
-}
-
-.variant:hover:not(:disabled) {
-  border-color: var(--accent);
-}
-
-.variant:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.variant__title {
-  display: block;
-  font-weight: 600;
-  font-size: 14px;
-}
-
-.variant__meta {
-  display: block;
-  margin-top: 2px;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.variant--sm {
-  padding: 6px 10px;
-  font-size: 13px;
-}
-
 .product-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 16px;
+}
+
+/* The card is one button now, so it needs to look tappable and reset the
+   styles a <button> brings with it. */
+.product {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.product:hover {
+  border-color: var(--border-strong);
+  background: var(--surface);
 }
 
 .product img,
@@ -606,12 +583,6 @@
   color: var(--text-muted);
 }
 
-.product__variants {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
-}
 
 @media (max-width: 760px) {
   .drawer__panel {
