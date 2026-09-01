@@ -1967,12 +1967,19 @@
 }
 
 .shop-card {
-  border: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
   background: none;
-  padding: 0;
+  padding: 10px;
   text-align: left;
   cursor: pointer;
   font: inherit;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.shop-card:hover {
+  border-color: var(--border-strong);
+  background: var(--surface);
 }
 
 .shop-card__img {
@@ -2070,14 +2077,111 @@
 .shop-picker {
   position: relative;
   z-index: 1;
-  width: min(440px, 92vw);
+  width: min(460px, 92vw);
+}
+
+.shop-picker__head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.shop-picker__head img {
+  width: 64px;
+  height: 64px;
+  flex: none;
+  object-fit: contain;
+  border-radius: 10px;
+  background: #f6f6f7;
+}
+
+.shop-picker__head h2 {
+  font-size: 18px;
+  line-height: 1.25;
 }
 
 .shop-picker__options {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 8px;
-  margin: 14px 0 18px;
+  margin-bottom: 6px;
+}
+
+/*
+ * A full-width row, not a chip.
+ *
+ * The chip it replaces was a 24px-tall target holding the option, the price
+ * and the only action on the screen — three jobs in something the size of a
+ * label. These are ordinary tappable rows: name on the left, price beside it,
+ * and the action named on the right so it reads as a button rather than as
+ * text that happens to be clickable.
+ */
+.shop-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.shop-option:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: #fafafa;
+}
+
+.shop-option:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.shop-option__name {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.shop-option__in-cart {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--success-fg);
+}
+
+.shop-option__price {
+  font-size: 15px;
+  color: var(--text-muted);
+}
+
+.shop-option__add {
+  flex: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.shop-option:disabled .shop-option__add {
+  background: var(--border);
+  color: var(--text-subtle);
+}
+
+/* Secondary to the point of being an escape hatch: the options above are what
+   this dialog is for, and a full-width button gave Cancel equal billing. */
+.shop-picker__cancel {
+  display: block;
+  margin: 16px auto 0;
 }
 
 .review__shop-total {

@@ -143,6 +143,20 @@ export default function ShopPage({ loaderData }: Route.ComponentProps) {
     setOpenProduct(null);
   };
 
+  /**
+   * Opening a product. A single-variant product has no decision in it, so it
+   * goes straight into the basket — putting "Choose an option" in front of one
+   * unnamed button is a step that asks nothing and costs a tap.
+   */
+  const choose = (product: ExchangeProduct) => {
+    const only = product.variants.length === 1 ? product.variants[0] : null;
+    if (only && only.available) {
+      add(product, only.id);
+      return;
+    }
+    setOpenProduct(product);
+  };
+
   const setQuantity = (variantId: string, quantity: number) =>
     write(
       quantity <= 0
@@ -200,7 +214,7 @@ export default function ShopPage({ loaderData }: Route.ComponentProps) {
                 key={product.id}
                 type="button"
                 className="shop-card"
-                onClick={() => setOpenProduct(product)}
+                onClick={() => choose(product)}
               >
                 {product.imageUrl ? (
                   <img src={product.imageUrl} alt="" className="shop-card__img" />
@@ -218,30 +232,60 @@ export default function ShopPage({ loaderData }: Route.ComponentProps) {
         )}
       </div>
 
-      {/* Variant picker. A product with one variant skips straight to the cart. */}
+      {/*
+        Only ever opened for a product that genuinely has options — see
+        `choose`. A modal headed "Choose an option" above a single nameless
+        button asks the shopper to make a decision that doesn't exist.
+      */}
       {openProduct && (
         <div className="drawer" role="dialog" aria-modal="true">
           <div className="drawer__backdrop" onClick={() => setOpenProduct(null)} />
           <div className="card shop-picker">
-            <h2>{openProduct.title}</h2>
-            <p className="muted">Choose an option</p>
-            <div className="shop-picker__options">
-              {openProduct.variants.map((variant) => (
-                <button
-                  key={variant.id}
-                  type="button"
-                  className="chip"
-                  disabled={!variant.available}
-                  onClick={() => add(openProduct, variant.id)}
-                >
-                  {describeVariant(variant.options, variant.title) ?? "Add"} ·{" "}
-                  {money(variant.price, openProduct.currency)}
-                </button>
-              ))}
+            <div className="shop-picker__head">
+              {openProduct.imageUrl && (
+                <img src={openProduct.imageUrl} alt="" />
+              )}
+              <div>
+                <h2>{openProduct.title}</h2>
+                <p className="muted">Choose an option</p>
+              </div>
             </div>
+
+            <div className="shop-picker__options">
+              {openProduct.variants.map((variant) => {
+                const inCart =
+                  cart.find((l) => l.variantId === variant.id)?.quantity ?? 0;
+                return (
+                  <button
+                    key={variant.id}
+                    type="button"
+                    className="shop-option"
+                    disabled={!variant.available}
+                    onClick={() => add(openProduct, variant.id)}
+                  >
+                    <span className="shop-option__name">
+                      {describeVariant(variant.options, variant.title) ??
+                        openProduct.title}
+                      {inCart > 0 && (
+                        <span className="shop-option__in-cart">
+                          {inCart} in cart
+                        </span>
+                      )}
+                    </span>
+                    <span className="shop-option__price">
+                      {money(variant.price, openProduct.currency)}
+                    </span>
+                    <span className="shop-option__add" aria-hidden="true">
+                      {variant.available ? "Add" : "Sold out"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
             <button
               type="button"
-              className="btn btn--secondary btn--block"
+              className="linkish shop-picker__cancel"
               onClick={() => setOpenProduct(null)}
             >
               Cancel
