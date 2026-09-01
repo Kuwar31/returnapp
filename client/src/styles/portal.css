@@ -11,6 +11,14 @@
   margin-bottom: 28px;
 }
 
+/* Framed inside a merchant's theme: no page padding, no backdrop, and never a
+   scrollbar of its own — the host page grows to fit instead. */
+.portal--embedded {
+  padding: 0 0 24px;
+  background: none;
+  min-height: 0;
+}
+
 .portal__logo {
   height: 36px;
   margin-bottom: 14px;

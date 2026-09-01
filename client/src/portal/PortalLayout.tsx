@@ -1,6 +1,7 @@
 import { Outlet, useRouteLoaderData } from "react-router";
 import { api } from "../lib/api";
 import type { PortalConfig } from "../lib/types";
+import { isEmbedded, useReportHeight } from "./useEmbedded";
 import type { Route } from "./+types/PortalLayout";
 
 /**
@@ -30,12 +31,21 @@ export const usePortal = (): PortalConfig => {
 
 export default function PortalLayout({ loaderData }: Route.ComponentProps) {
   const config = loaderData;
+  /**
+   * Embedded in the merchant's storefront, the theme around this already shows
+   * their logo, their name and a footer. Repeating all three inside the frame
+   * is the same store introducing itself twice on one page.
+   */
+  const embedded = isEmbedded();
+  useReportHeight(embedded);
 
   return (
     <>
       {/* The merchant's accent colour cascades to buttons and highlights. */}
       <div
-        className={`portal${config.branding.heroImageUrl ? " portal--hero" : ""}`}
+        className={`portal${config.branding.heroImageUrl && !embedded ? " portal--hero" : ""}${
+          embedded ? " portal--embedded" : ""
+        }`}
         style={
           {
             "--accent": config.branding.accentColor,
@@ -45,6 +55,7 @@ export default function PortalLayout({ loaderData }: Route.ComponentProps) {
           } as React.CSSProperties
         }
       >
+        {!embedded && (
         <header className="portal__header">
           {/*
             The store identifies itself before the page explains itself.
@@ -63,9 +74,11 @@ export default function PortalLayout({ loaderData }: Route.ComponentProps) {
           <h1>{config.branding.headline}</h1>
           <p className="muted">{config.branding.subheadline}</p>
         </header>
+        )}
 
         <Outlet />
 
+        {!embedded && (
         <footer className="portal__footer">
           {config.branding.supportEmail && (
             <>
@@ -78,6 +91,7 @@ export default function PortalLayout({ loaderData }: Route.ComponentProps) {
           )}
           {config.merchant.name}
         </footer>
+        )}
       </div>
     </>
   );

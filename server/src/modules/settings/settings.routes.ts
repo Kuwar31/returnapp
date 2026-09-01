@@ -113,6 +113,7 @@ settingsRouter.get(
         shopNowEnabled: true,
         shopNowMode: true,
         shopNowBonusAmount: true,
+        domain: true,
       },
     });
 
@@ -143,6 +144,14 @@ settingsRouter.get(
        * the admin happens to be open.
        */
       portalUrl: portalUrl(merchant.slug),
+      /**
+       * The same portal, reached through Shopify's app proxy so it renders
+       * inside the merchant's own theme. Null until a store is connected,
+       * since there is no storefront to serve it from.
+       */
+      storefrontUrl: merchant.domain
+        ? `https://${merchant.domain}/apps/returns`
+        : null,
     });
   }),
 );

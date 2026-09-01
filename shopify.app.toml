@@ -41,6 +41,21 @@ embedded = false
 # Add read_all_orders to reach orders older than 60 days (needs Shopify approval).
 scopes = "read_orders,read_fulfillments,read_products,read_customers,write_customers,read_returns,write_returns,read_locations,read_store_credit_accounts,read_store_credit_account_transactions,write_store_credit_account_transactions,read_gift_cards,write_gift_cards,read_draft_orders,write_draft_orders,read_merchant_managed_fulfillment_orders,write_merchant_managed_fulfillment_orders,read_third_party_fulfillment_orders,write_third_party_fulfillment_orders"
 
+# The storefront app proxy.
+#
+# Shopify forwards https://<shop>.myshopify.com/apps/returns to the URL below
+# and renders the reply inside the merchant's own theme when it comes back as
+# application/liquid. That is how the portal appears on the store's own domain,
+# wrapped in their header and footer, with no DNS, no certificate and no
+# subdomain to arrange — the same mechanism Loop uses.
+#
+# Requests are signed; see verifyProxySignature. Without that check this URL
+# would let anyone ask the server to render any store's portal.
+[app_proxy]
+url = "https://returnapp-yxkl.onrender.com/api/proxy"
+subpath = "returns"
+prefix = "apps"
+
 [auth]
 redirect_urls = [
   "https://returnapp-yxkl.onrender.com/api/shopify/callback"

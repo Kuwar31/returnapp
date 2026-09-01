@@ -211,6 +211,22 @@ export default function SettingsPage() {
             url={store?.portalUrl ?? session?.merchant.portalUrl ?? ""}
             label="Returns page"
           />
+
+          {/*
+            The same portal through Shopify's app proxy. Offered second because
+            it only works once a store is connected, but it's the one most
+            merchants want: it opens on their own domain, inside their own
+            theme, so the shopper never appears to leave the shop.
+          */}
+          {store?.storefrontUrl && (
+            <div style={{ marginTop: 18 }}>
+              <CopyLink url={store.storefrontUrl} label="On your storefront" />
+              <p className="settings-row__hint" style={{ marginTop: 8 }}>
+                Add this one to your store's navigation or footer and the
+                returns page opens inside your theme, on your own domain.
+              </p>
+            </div>
+          )}
         </div>
 
         <ShopifyPanel />

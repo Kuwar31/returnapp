@@ -6,6 +6,7 @@ import { authRouter } from "./modules/auth/auth.routes.js";
 import { portalRouter } from "./modules/portal/portal.routes.js";
 import { returnsRouter } from "./modules/returns/returns.routes.js";
 import { settingsRouter } from "./modules/settings/settings.routes.js";
+import { proxyRouter } from "./modules/shopify/proxy.routes.js";
 import { shopifyRouter } from "./modules/shopify/shopify.routes.js";
 
 export const apiRouter = Router();
@@ -22,6 +23,13 @@ apiRouter.get(
 // Shopify OAuth and webhooks. Authenticates via Shopify's own signatures,
 // so it sits outside both the admin and portal auth schemes.
 apiRouter.use("/shopify", shopifyRouter);
+
+/**
+ * The storefront app proxy: Shopify forwards <shop>/apps/returns here and
+ * renders the reply inside the merchant's theme. Signed by Shopify, like the
+ * routes above, and outside every other auth scheme.
+ */
+apiRouter.use("/proxy", proxyRouter);
 
 // Shopper-facing. No admin auth; sessions are scoped to one order.
 apiRouter.use("/portal", portalRouter);

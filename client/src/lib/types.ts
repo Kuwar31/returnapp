@@ -398,6 +398,11 @@ export interface StoreSettings {
    * from, so the client must not assemble this from its own origin.
    */
   portalUrl: string;
+  /**
+   * The same portal through Shopify's app proxy, so it renders inside the
+   * store's own theme. Null until a Shopify store is connected.
+   */
+  storefrontUrl: string | null;
   /** The merchant's own books — what every figure is stored in. */
   currency: string;
   displayCurrency: DisplayCurrency;

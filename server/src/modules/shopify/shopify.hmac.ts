@@ -53,6 +53,40 @@ export const verifyOAuthHmac = (
 };
 
 /**
+ * Verifies the `signature` Shopify appends to an app-proxy request.
+ *
+ * Close to the OAuth check above but not the same, and the differences are the
+ * whole game: the parameter is `signature` rather than `hmac`, the pairs are
+ * concatenated with nothing between them rather than joined by "&", and a
+ * repeated parameter has its values joined by commas. Getting any of those
+ * wrong yields a mismatch indistinguishable from a forged request.
+ *
+ * This is the only thing standing between the proxy route and the open
+ * internet: the URL is public, so without it anyone could ask this server to
+ * render any store's portal.
+ */
+export const verifyProxySignature = (
+  query: Record<string, unknown>,
+): boolean => {
+  const { signature, ...rest } = query;
+  if (typeof signature !== "string") return false;
+
+  const message = Object.keys(rest)
+    .sort()
+    .map((key) => {
+      const value = rest[key];
+      return `${key}=${Array.isArray(value) ? value.join(",") : String(value)}`;
+    })
+    .join("");
+
+  const digest = createHmac("sha256", secret()).update(message).digest();
+  const provided = Buffer.from(signature, "hex");
+  return (
+    provided.length === digest.length && timingSafeEqual(digest, provided)
+  );
+};
+
+/**
  * Verifies the X-Shopify-Hmac-Sha256 header on a webhook. Must run against the
  * exact raw request body — any JSON re-serialization changes the bytes and
  * invalidates the signature.
