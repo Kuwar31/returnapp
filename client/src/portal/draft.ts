@@ -98,37 +98,69 @@ export const clearDraft = (orderId: string): void => {
 export interface SubmittedReturn {
   reference: string;
   email: string;
+  /** When it was submitted, so a forgotten breadcrumb can be aged out. */
+  at?: string;
 }
 
 const submittedKey = (orderId: string) => `returns.submitted.${orderId}`;
 
 /**
+ * How long a "you have a return in progress" pointer is worth keeping. Long
+ * enough to outlast any return's journey, short enough that a device doesn't
+ * carry a pointer to something settled last winter.
+ */
+const SUBMITTED_TTL_MS = 90 * 24 * 60 * 60 * 1000;
+
+/**
  * Remembers the return just created for an order.
  *
- * Paying for an upsell exchange takes the shopper off to Shopify's checkout,
- * and coming back — a new tab, the back button, a reopened link — used to land
- * them on the item picker with everything greyed out as "already returned".
- * That reads like the return failed. This is the breadcrumb that lets the
- * portal put them back on their own summary instead.
+ * localStorage rather than sessionStorage, deliberately: sessionStorage dies
+ * with the tab, which is precisely the case this exists for — a shopper who
+ * closes the page and comes back later, or who is sent off to Shopify's
+ * checkout for an upsell. Without it they land on the item picker with their
+ * own items greyed out as "already returned", which reads like a failure.
+ *
+ * The reference and the email are the shopper's own, on the shopper's own
+ * device, and are the same pair their confirmation email carries.
  */
 export const rememberSubmitted = (
   orderId: string,
   submitted: SubmittedReturn,
 ): void => {
   try {
-    sessionStorage.setItem(submittedKey(orderId), JSON.stringify(submitted));
+    localStorage.setItem(
+      submittedKey(orderId),
+      JSON.stringify({ ...submitted, at: submitted.at ?? new Date().toISOString() }),
+    );
   } catch {
     /* the shopper just doesn't get the shortcut back */
   }
 };
 
 export const loadSubmitted = (orderId: string): SubmittedReturn | null => {
-  try {
-    const raw = sessionStorage.getItem(submittedKey(orderId));
-    return raw ? (JSON.parse(raw) as SubmittedReturn) : null;
-  } catch {
+  const read = (store: Storage) => {
+    try {
+      const raw = store.getItem(submittedKey(orderId));
+      return raw ? (JSON.parse(raw) as SubmittedReturn) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  // sessionStorage is read as a fallback so anyone mid-flow when this moved
+  // isn't stranded on the picker with no way back to their own return.
+  const found = read(localStorage) ?? read(sessionStorage);
+  if (!found?.reference) return null;
+
+  if (found.at && Date.now() - Date.parse(found.at) > SUBMITTED_TTL_MS) {
+    try {
+      localStorage.removeItem(submittedKey(orderId));
+    } catch {
+      /* nothing to clean up */
+    }
     return null;
   }
+  return found;
 };
 
 /**

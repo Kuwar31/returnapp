@@ -970,14 +970,37 @@
   margin-bottom: 18px;
 }
 
-/* The way back to a return already in flight for this order. */
+/*
+ * The way back to a return already in flight for this order.
+ *
+ * Given real weight rather than a line of grey text: a shopper who closed the
+ * page and came back is looking at their own items greyed out as "already
+ * returned", and this is the only thing on screen that explains why and offers
+ * a way to their summary.
+ */
 .picker__submitted {
-  margin: 0 0 16px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  background: rgb(0 0 0 / 4%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 0 18px;
+  padding: 14px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
   font-size: 14px;
-  text-align: center;
+  text-align: left;
+}
+
+.picker__submitted strong {
+  display: block;
+  font-size: 15px;
+}
+
+.picker__submitted .muted {
+  margin-top: 2px;
+  font-size: 13px;
 }
 
 .picker__until {

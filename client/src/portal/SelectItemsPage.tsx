@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, redirect, useNavigate, useParams } from "react-router";
 import { api, ApiError, getToken } from "../lib/api";
-import { money } from "../lib/format";
+import { money, shortDate } from "../lib/format";
 import type { OrderSession, Quote, ResolutionType } from "../lib/types";
 import { ErrorAlert } from "../components/Feedback";
 import { ItemDrawer, type ItemDecision } from "./ItemDrawer";
@@ -201,17 +201,23 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
           failure, so give them the way back to the summary that says otherwise.
         */}
         {submitted && (
-          <p className="picker__submitted">
-            You've already started return{" "}
+          <div className="picker__submitted">
+            <div>
+              <strong>You already have a return for this order</strong>
+              <div className="muted">
+                {submitted.reference}
+                {submitted.at && ` · started ${shortDate(submitted.at)}`}
+              </div>
+            </div>
             <Link
+              className="btn btn--secondary btn--sm"
               to={`/r/${slug}/status/${submitted.reference}?email=${encodeURIComponent(
                 submitted.email,
               )}`}
             >
-              {submitted.reference}
-            </Link>{" "}
-            for this order.
-          </p>
+              View it
+            </Link>
+          </div>
         )}
 
         {/*
