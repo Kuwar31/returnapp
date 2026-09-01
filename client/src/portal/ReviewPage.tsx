@@ -364,17 +364,25 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
                     </div>
                   ))}
                 </div>
-                <p className="review__shop-total">
-                  {cart.length} item{cart.length === 1 ? "" : "s"} ·{" "}
-                  {money(cartTotal(cart), currency)}{" "}
+                {/*
+                  Going back to change the basket is a real action, not an
+                  aside — it was set in the same underlined grey as the count
+                  beside it, which read as a footnote rather than the way back
+                  into the catalogue.
+                */}
+                <div className="review__shop-total">
+                  <span>
+                    {cart.length} item{cart.length === 1 ? "" : "s"} ·{" "}
+                    <strong>{money(cartTotal(cart), currency)}</strong>
+                  </span>
                   <button
                     type="button"
-                    className="linkish"
+                    className="btn btn--secondary btn--sm"
                     onClick={() => navigate(`/r/${slug}/shop`)}
                   >
                     Edit basket
                   </button>
-                </p>
+                </div>
               </>
             )}
 

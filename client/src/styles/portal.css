@@ -2184,10 +2184,23 @@
   margin: 16px auto 0;
 }
 
+/* The basket's running total, and the way back to change it. Given its own
+   band so the button reads as an action rather than as trailing text. */
 .review__shop-total {
-  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
   font-size: 14px;
   color: var(--text-muted);
+}
+
+.review__shop-total strong {
+  color: var(--text);
 }
 
 /* One column on a phone: a 340px cart beside a product grid leaves neither
