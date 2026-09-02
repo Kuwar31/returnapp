@@ -157,6 +157,12 @@ export interface ExchangeOptions {
   currency: string;
 }
 
+/** One of the merchant's collections, for the browse rail. */
+export interface ExchangeCollection {
+  id: string;
+  title: string;
+}
+
 export interface ExchangeProduct {
   id: string;
   title: string;

@@ -2,6 +2,7 @@ import { badRequest } from "../../lib/errors.js";
 import { logger } from "../../lib/logger.js";
 import { queryShop } from "./shopify.client.js";
 import {
+  BROWSE_COLLECTIONS,
   BROWSE_PRODUCTS,
   PRODUCT_VARIANTS,
   VARIANT_IMAGES,
@@ -127,13 +128,59 @@ export const getProductVariants = async (
 };
 
 /** Browsable catalogue for "exchange for another product". */
+export interface ExchangeCollection {
+  id: string;
+  title: string;
+}
+
+/**
+ * The collections a shopper can filter the catalogue by.
+ *
+ * Empty ones are dropped: a rail entry that leads to "no products" is worse
+ * than not offering it. Failures return nothing rather than throwing — the
+ * rail is navigation, and losing it should never cost the shopper the grid.
+ */
+export const browseCollections = async (
+  merchantId: string,
+): Promise<ExchangeCollection[]> => {
+  try {
+    const data = await queryShop<{
+      collections: {
+        nodes: Array<{
+          id: string;
+          title: string;
+          productsCount: { count: number } | null;
+        }>;
+      };
+    }>(merchantId, BROWSE_COLLECTIONS, { first: 30 });
+
+    return data.collections.nodes
+      .filter((c) => (c.productsCount?.count ?? 0) > 0)
+      .map((c) => ({ id: c.id, title: c.title }));
+  } catch (error) {
+    logger.warn({ merchantId, error }, "Could not read collections");
+    return [];
+  }
+};
+
 export const browseProducts = async (
   merchantId: string,
-  { search, cursor, limit = 24 }: { search?: string; cursor?: string; limit?: number },
+  {
+    search,
+    cursor,
+    collectionId,
+    limit = 24,
+  }: { search?: string; cursor?: string; collectionId?: string; limit?: number },
 ): Promise<{ products: ExchangeProduct[]; nextCursor: string | null }> => {
   // Only offer what a shopper could actually buy right now.
   const query = ["status:active", "published_status:published"]
     .concat(search ? [`title:*${search.replace(/[*"\\]/g, "")}*`] : [])
+    // Shopify's product search takes the numeric id, not the GID.
+    .concat(
+      collectionId
+        ? [`collection_id:${collectionId.split("/").pop()}`]
+        : [],
+    )
     .join(" AND ");
 
   const data = await queryShop<{

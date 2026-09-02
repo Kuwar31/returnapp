@@ -17,6 +17,7 @@ import {
 } from "../policy/quote.service.js";
 import { notifyInBackground } from "../email/notifications.js";
 import {
+  browseCollections,
   browseProducts,
   describeVariants,
   getProductVariants,
@@ -554,14 +555,22 @@ export const describeExchangeVariants = async (
 export const browseExchangeProducts = async (
   merchantId: string,
   orderId: string,
-  { search, cursor }: { search?: string; cursor?: string },
+  {
+    search,
+    cursor,
+    collectionId,
+  }: { search?: string; cursor?: string; collectionId?: string },
 ) => {
-  const [result, fx] = await Promise.all([
-    browseProducts(merchantId, { search, cursor }),
+  const [result, collections, fx] = await Promise.all([
+    browseProducts(merchantId, { search, cursor, collectionId }),
+    // Sent alongside the products so the rail and the grid can't disagree
+    // about which collections exist.
+    browseCollections(merchantId),
     catalogueConverter(merchantId, orderId),
   ]);
   return {
     ...result,
+    collections,
     products: result.products.map((p) => ({
       ...p,
       minPrice: fx.price(p.minPrice),

@@ -119,3 +119,22 @@ export const VARIANT_IMAGES = `#graphql
     }
   }
 `;
+
+/**
+ * The merchant's own collections, for the browse rail.
+ *
+ * Only what a shopper could actually browse: a collection with nothing
+ * published in it is a dead end, so the product count comes back too and an
+ * empty one is dropped before it reaches the portal.
+ */
+export const BROWSE_COLLECTIONS = `#graphql
+  query BrowseCollections($first: Int!) {
+    collections(first: $first, sortKey: TITLE) {
+      nodes {
+        id
+        title
+        productsCount { count }
+      }
+    }
+  }
+`;

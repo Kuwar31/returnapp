@@ -178,12 +178,17 @@ portalRouter.get(
     z.object({
       search: z.string().trim().max(100).optional(),
       cursor: z.string().optional(),
+      collectionId: z.string().trim().max(120).optional(),
     }),
     "query",
   ),
   asyncHandler(async (req, res) => {
     const { merchantId, orderId } = req.portal!;
-    const query = req.query as { search?: string; cursor?: string };
+    const query = req.query as {
+      search?: string;
+      cursor?: string;
+      collectionId?: string;
+    };
     // Scoped to the order, not just the merchant: catalogue prices convert at
     // that order's own rate, so the browse needs to know which one.
     const result = await portalService.browseExchangeProducts(

@@ -2,7 +2,12 @@ import { useEffect, useState } from "react";
 import { redirect, useNavigate, useParams } from "react-router";
 import { api, ApiError, getToken } from "../lib/api";
 import { money } from "../lib/format";
-import type { ExchangeProduct, OrderSession } from "../lib/types";
+import type {
+  ExchangeCollection,
+  ExchangeProduct,
+  ExchangeVariant,
+  OrderSession,
+} from "../lib/types";
 import { ErrorAlert } from "../components/Feedback";
 import {
   cartTotal,
@@ -33,10 +38,10 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
  * Spending a return's value across the catalogue, rather than swapping one item
  * for another.
  *
- * The credit is pooled — every item being sent back pays into one balance — so
- * this screen deliberately shows a single running figure rather than a per-item
- * one. What the shopper needs to know at every moment is how much of their
- * credit is left and whether they have gone past it.
+ * Laid out as a shop, because that is what it is: collections down the side,
+ * products in the middle, and the one number that governs every decision —
+ * what's left of the credit — floating over the whole thing where it can't be
+ * scrolled away from.
  */
 export default function ShopPage({ loaderData }: Route.ComponentProps) {
   const { order, shopNow } = loaderData;
@@ -44,12 +49,15 @@ export default function ShopPage({ loaderData }: Route.ComponentProps) {
   const navigate = useNavigate();
 
   const [products, setProducts] = useState<ExchangeProduct[]>([]);
+  const [collections, setCollections] = useState<ExchangeCollection[]>([]);
+  const [collectionId, setCollectionId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cart, setCart] = useState<CartLine[]>(() => loadCart(order.id));
   const [credit, setCredit] = useState<number | null>(null);
   const [openProduct, setOpenProduct] = useState<ExchangeProduct | null>(null);
+  const [cartOpen, setCartOpen] = useState(false);
 
   const offer = shopNow?.enabled ? shopNow : null;
   const currency = offer?.currency ?? order.currency;
@@ -101,37 +109,53 @@ export default function ShopPage({ loaderData }: Route.ComponentProps) {
     let active = true;
     setLoading(true);
     api
-      .get<{ products: ExchangeProduct[] }>("/portal/session/exchange/products", {
-        auth: "portal",
-        query: { search: search || undefined },
+      .get<{ products: ExchangeProduct[]; collections: ExchangeCollection[] }>(
+        "/portal/session/exchange/products",
+        {
+          auth: "portal",
+          query: {
+            search: search || undefined,
+            collectionId: collectionId ?? undefined,
+          },
+        },
+      )
+      .then((r) => {
+        if (!active) return;
+        setProducts(r.products);
+        // The rail comes back with every page; keeping the last non-empty list
+        // stops it flickering away while a filtered page loads.
+        if (r.collections?.length) setCollections(r.collections);
       })
-      .then((r) => active && setProducts(r.products))
       .catch((e) => active && setError(e instanceof Error ? e.message : null))
       .finally(() => active && setLoading(false));
     return () => {
       active = false;
     };
-  }, [search]);
+  }, [search, collectionId]);
 
   const write = (next: CartLine[]) => {
     setCart(next);
     saveCart(order.id, next);
   };
 
-  const add = (product: ExchangeProduct, variantId: string) => {
-    const variant = product.variants.find((v) => v.id === variantId);
-    if (!variant) return;
-    const existing = cart.find((l) => l.variantId === variantId);
+  const add = (
+    product: ExchangeProduct,
+    variant: ExchangeVariant,
+    quantity = 1,
+  ) => {
+    const existing = cart.find((l) => l.variantId === variant.id);
     write(
       existing
         ? cart.map((l) =>
-            l.variantId === variantId ? { ...l, quantity: l.quantity + 1 } : l,
+            l.variantId === variant.id
+              ? { ...l, quantity: l.quantity + quantity }
+              : l,
           )
         : [
             ...cart,
             {
-              variantId,
-              quantity: 1,
+              variantId: variant.id,
+              quantity,
               title: product.title,
               variantTitle: describeVariant(variant.options, variant.title),
               imageUrl: variant.imageUrl ?? product.imageUrl,
@@ -143,20 +167,6 @@ export default function ShopPage({ loaderData }: Route.ComponentProps) {
     setOpenProduct(null);
   };
 
-  /**
-   * Opening a product. A single-variant product has no decision in it, so it
-   * goes straight into the basket — putting "Choose an option" in front of one
-   * unnamed button is a step that asks nothing and costs a tap.
-   */
-  const choose = (product: ExchangeProduct) => {
-    const only = product.variants.length === 1 ? product.variants[0] : null;
-    if (only && only.available) {
-      add(product, only.id);
-      return;
-    }
-    setOpenProduct(product);
-  };
-
   const setQuantity = (variantId: string, quantity: number) =>
     write(
       quantity <= 0
@@ -165,204 +175,350 @@ export default function ShopPage({ loaderData }: Route.ComponentProps) {
     );
 
   const basket = cartTotal(cart);
-  const remaining = credit === null ? null : Math.round((credit - basket) * 100) / 100;
+  const remaining =
+    credit === null ? null : Math.round((credit - basket) * 100) / 100;
   const owed = remaining !== null && remaining < 0 ? Math.abs(remaining) : 0;
+  const count = cart.reduce((n, l) => n + l.quantity, 0);
 
   return (
     <div className="shop">
       <header className="shop__bar">
-        <button
-          type="button"
-          className="shop__back"
-          onClick={() => navigate(`/r/${slug}/review`)}
-          aria-label="Back to your return"
-        >
-          ←
-        </button>
-        <p className="shop__credit">
-          {credit === null ? (
-            "Loading your credit…"
-          ) : (
-            <>
-              Use your <strong>{money(credit, currency)}</strong> credit to find
-              something new.
-              {offer && offer.bonus > 0 && (
-                <> (Extra {money(offer.bonus, currency)} included)</>
-              )}
-            </>
-          )}
-        </p>
         <input
           className="shop__search"
           value={search}
-          placeholder="Search by product name"
+          placeholder="Search for product…"
           onChange={(e) => setSearch(e.target.value)}
         />
+        <div className="shop__bar-actions">
+          <button
+            type="button"
+            className="shop__icon"
+            onClick={() => setCartOpen(true)}
+            aria-label={`Cart, ${count} item${count === 1 ? "" : "s"}`}
+          >
+            <span aria-hidden="true">🛍</span>
+            {count > 0 && <span className="shop__badge">{count}</span>}
+          </button>
+          <button
+            type="button"
+            className="shop__icon"
+            onClick={() => navigate(`/r/${slug}/review`)}
+            aria-label="Close and go back to your return"
+          >
+            <span aria-hidden="true">✕</span>
+          </button>
+        </div>
       </header>
 
-      <div className="shop__body">
-        <ErrorAlert message={error} />
+      <div className="shop__layout">
+        {/* Collections, so a big catalogue is navigable without searching. */}
+        <nav className="shop__rail" aria-label="Collections">
+          <button
+            type="button"
+            className={`shop__rail-item${collectionId === null ? " is-active" : ""}`}
+            onClick={() => setCollectionId(null)}
+          >
+            All products
+          </button>
+          {collections.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              className={`shop__rail-item${collectionId === c.id ? " is-active" : ""}`}
+              onClick={() => setCollectionId(c.id)}
+            >
+              {c.title}
+            </button>
+          ))}
+        </nav>
 
-        {loading ? (
-          <p className="muted">Loading products…</p>
-        ) : products.length === 0 ? (
-          <p className="muted">Nothing matched "{search}".</p>
-        ) : (
-          <div className="shop__grid">
-            {products.map((product) => (
-              <button
-                key={product.id}
-                type="button"
-                className="shop-card"
-                onClick={() => choose(product)}
-              >
-                {product.imageUrl ? (
-                  <img src={product.imageUrl} alt="" className="shop-card__img" />
-                ) : (
-                  <div className="shop-card__img shop-card__img--empty" />
-                )}
-                <div className="shop-card__title">{product.title}</div>
-                <div className="shop-card__price">
-                  {money(product.minPrice, product.currency)}
-                  {product.maxPrice > product.minPrice && "+"}
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="shop__body">
+          <ErrorAlert message={error} />
+          <h2 className="shop__heading">
+            {collections.find((c) => c.id === collectionId)?.title ??
+              "All products"}
+          </h2>
+
+          {loading ? (
+            <p className="muted">Loading products…</p>
+          ) : products.length === 0 ? (
+            <p className="muted">
+              {search ? `Nothing matched "${search}".` : "Nothing here yet."}
+            </p>
+          ) : (
+            <div className="shop__grid">
+              {products.map((product) => (
+                <button
+                  key={product.id}
+                  type="button"
+                  className="shop-card"
+                  onClick={() => setOpenProduct(product)}
+                >
+                  {product.imageUrl ? (
+                    <img src={product.imageUrl} alt="" className="shop-card__img" />
+                  ) : (
+                    <div className="shop-card__img shop-card__img--empty" />
+                  )}
+                  {/*
+                    Says up front that a choice is coming, the way a storefront
+                    grid does, rather than springing it in the dialog. The line
+                    is always rendered, even when empty: letting it collapse
+                    left every title in the row at a different height.
+                  */}
+                  <div className="shop-card__variants">
+                    {product.variants.length > 1
+                      ? `${product.variants.length} variants`
+                      : ""}
+                  </div>
+                  <div className="shop-card__title">{product.title}</div>
+                  <div className="shop-card__price">
+                    {money(product.minPrice, product.currency)}
+                    {product.maxPrice > product.minPrice &&
+                      ` – ${money(product.maxPrice, product.currency)}`}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/*
-        Only ever opened for a product that genuinely has options — see
-        `choose`. A modal headed "Choose an option" above a single nameless
-        button asks the shopper to make a decision that doesn't exist.
-      */}
       {openProduct && (
+        <ProductDialog
+          product={openProduct}
+          cart={cart}
+          onAdd={add}
+          onClose={() => setOpenProduct(null)}
+        />
+      )}
+
+      {cartOpen && (
         <div className="drawer" role="dialog" aria-modal="true">
-          <div className="drawer__backdrop" onClick={() => setOpenProduct(null)} />
-          <div className="card shop-picker">
-            <div className="shop-picker__head">
-              {openProduct.imageUrl && (
-                <img src={openProduct.imageUrl} alt="" />
-              )}
-              <div>
-                <h2>{openProduct.title}</h2>
-                <p className="muted">Choose an option</p>
+          <div className="drawer__backdrop" onClick={() => setCartOpen(false)} />
+          <aside className="card shop-cart">
+            <div className="shop-cart__head">
+              <h2>Cart ({count})</h2>
+              <button
+                type="button"
+                className="shop__icon"
+                onClick={() => setCartOpen(false)}
+                aria-label="Close cart"
+              >
+                <span aria-hidden="true">✕</span>
+              </button>
+            </div>
+
+            {cart.length === 0 ? (
+              <p className="muted">Nothing added yet.</p>
+            ) : (
+              <ul className="shop-cart__lines">
+                {cart.map((line) => (
+                  <li key={line.variantId} className="shop-cart__line">
+                    {line.imageUrl && <img src={line.imageUrl} alt="" />}
+                    <div className="shop-cart__body">
+                      <div className="shop-cart__title">{line.title}</div>
+                      {line.variantTitle && (
+                        <div className="muted">{line.variantTitle}</div>
+                      )}
+                      <div className="shop-cart__price">
+                        {money(line.price, line.currency)}
+                      </div>
+                      <button
+                        type="button"
+                        className="linkish"
+                        onClick={() => setQuantity(line.variantId, 0)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                    <Stepper
+                      value={line.quantity}
+                      onChange={(q) => setQuantity(line.variantId, q)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <div className="shop-cart__summary">
+              <div className="summary__line">
+                <span>New items</span>
+                <span>{money(basket, currency)}</span>
+              </div>
+              <div className="summary__line">
+                <span>Your return credit</span>
+                <span>−{money(credit ?? 0, currency)}</span>
+              </div>
+              <div
+                className={`summary__total ${
+                  owed > 0 ? "summary__total--due" : "summary__total--paid"
+                }`}
+              >
+                <span>{owed > 0 ? "Left to pay" : "Credit remaining"}</span>
+                <strong>
+                  {money(owed > 0 ? owed : (remaining ?? 0), currency)}
+                </strong>
               </div>
             </div>
-
-            <div className="shop-picker__options">
-              {openProduct.variants.map((variant) => {
-                const inCart =
-                  cart.find((l) => l.variantId === variant.id)?.quantity ?? 0;
-                return (
-                  <button
-                    key={variant.id}
-                    type="button"
-                    className="shop-option"
-                    disabled={!variant.available}
-                    onClick={() => add(openProduct, variant.id)}
-                  >
-                    <span className="shop-option__name">
-                      {describeVariant(variant.options, variant.title) ??
-                        openProduct.title}
-                      {inCart > 0 && (
-                        <span className="shop-option__in-cart">
-                          {inCart} in cart
-                        </span>
-                      )}
-                    </span>
-                    <span className="shop-option__price">
-                      {money(variant.price, openProduct.currency)}
-                    </span>
-                    <span className="shop-option__add" aria-hidden="true">
-                      {variant.available ? "Add" : "Sold out"}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            <button
-              type="button"
-              className="linkish shop-picker__cancel"
-              onClick={() => setOpenProduct(null)}
-            >
-              Cancel
-            </button>
-          </div>
+          </aside>
         </div>
       )}
 
-      <aside className="shop__cart">
-        <h2>Cart ({cart.reduce((n, l) => n + l.quantity, 0)})</h2>
-        {cart.length === 0 ? (
-          <p className="muted">Nothing added yet.</p>
-        ) : (
-          <ul className="shop-cart__lines">
-            {cart.map((line) => (
-              <li key={line.variantId} className="shop-cart__line">
-                {line.imageUrl && <img src={line.imageUrl} alt="" />}
-                <div className="shop-cart__body">
-                  <div className="shop-cart__title">{line.title}</div>
-                  {line.variantTitle && (
-                    <div className="muted">{line.variantTitle}</div>
-                  )}
-                  <div className="shop-cart__price">
-                    {money(line.price, line.currency)}
-                  </div>
-                </div>
-                <div className="shop-cart__qty">
-                  <button
-                    type="button"
-                    onClick={() => setQuantity(line.variantId, line.quantity - 1)}
-                    aria-label="One fewer"
-                  >
-                    −
-                  </button>
-                  <span>{line.quantity}</span>
-                  <button
-                    type="button"
-                    onClick={() => setQuantity(line.variantId, line.quantity + 1)}
-                    aria-label="One more"
-                  >
-                    +
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <div className="shop-cart__summary">
-          <div className="summary__line">
-            <span>New items</span>
-            <span>{money(basket, currency)}</span>
-          </div>
-          <div className="summary__line">
-            <span>Your return credit</span>
-            <span>−{money(credit ?? 0, currency)}</span>
-          </div>
-          <div
-            className={`summary__total ${
-              owed > 0 ? "summary__total--due" : "summary__total--paid"
-            }`}
-          >
-            <span>{owed > 0 ? "Left to pay" : "Credit remaining"}</span>
-            <strong>
-              {money(owed > 0 ? owed : (remaining ?? 0), currency)}
-            </strong>
-          </div>
-        </div>
-
+      {/*
+        The running balance, floated over the grid rather than parked in a
+        column beside it. It is the number every tap on this screen is measured
+        against, so it follows the shopper down the page.
+      */}
+      <div className="shop__pill">
+        <span className="shop__pill-amount">
+          {credit === null
+            ? "…"
+            : money(owed > 0 ? owed : (remaining ?? 0), currency)}
+        </span>
+        <span className="shop__pill-label">
+          {owed > 0 ? "more to pay" : "to spend from your return"}
+        </span>
         <button
-          className="btn btn--block"
+          className="btn shop__pill-btn"
           disabled={cart.length === 0}
           onClick={() => navigate(`/r/${slug}/review`)}
         >
-          Next
+          Continue ({count})
         </button>
-      </aside>
+      </div>
+    </div>
+  );
+}
+
+/** A quantity control, shared by the cart and the product dialog. */
+function Stepper({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (next: number) => void;
+}) {
+  return (
+    <div className="stepper">
+      <button
+        type="button"
+        onClick={() => onChange(value - 1)}
+        aria-label="One fewer"
+      >
+        −
+      </button>
+      <span>{value}</span>
+      <button
+        type="button"
+        onClick={() => onChange(value + 1)}
+        aria-label="One more"
+      >
+        +
+      </button>
+    </div>
+  );
+}
+
+/**
+ * The product, opened.
+ *
+ * Picture on the left, decision on the right — quantity, and the option to
+ * choose when there is one. A product with a single variant shows no chooser,
+ * because there is nothing to choose.
+ */
+function ProductDialog({
+  product,
+  cart,
+  onAdd,
+  onClose,
+}: {
+  product: ExchangeProduct;
+  cart: CartLine[];
+  onAdd: (
+    product: ExchangeProduct,
+    variant: ExchangeVariant,
+    quantity: number,
+  ) => void;
+  onClose: () => void;
+}) {
+  const [variantId, setVariantId] = useState(
+    () => product.variants.find((v) => v.available)?.id ?? product.variants[0]?.id,
+  );
+  const [quantity, setQuantity] = useState(1);
+
+  const variant = product.variants.find((v) => v.id === variantId);
+  const inCart = cart.find((l) => l.variantId === variantId)?.quantity ?? 0;
+  const image = variant?.imageUrl ?? product.imageUrl;
+
+  return (
+    <div className="drawer" role="dialog" aria-modal="true">
+      <div className="drawer__backdrop" onClick={onClose} />
+      <div className="card shop-pdp">
+        <button
+          type="button"
+          className="shop-pdp__close shop__icon"
+          onClick={onClose}
+          aria-label="Close"
+        >
+          <span aria-hidden="true">✕</span>
+        </button>
+
+        <div className="shop-pdp__media">
+          {image ? (
+            <img src={image} alt="" />
+          ) : (
+            <div className="shop-pdp__media-empty" />
+          )}
+        </div>
+
+        <div className="shop-pdp__detail">
+          <h2>{product.title}</h2>
+          <div className="shop-pdp__price">
+            {variant
+              ? money(variant.price, product.currency)
+              : money(product.minPrice, product.currency)}
+          </div>
+          <p className="muted shop-pdp__stock">
+            {variant?.available ? "In stock" : "Sold out"}
+            {inCart > 0 && ` · ${inCart} already in your cart`}
+          </p>
+
+          {product.variants.length > 1 && (
+            <>
+              <h3 className="shop-pdp__label">Options</h3>
+              <div className="shop-pdp__options">
+                {product.variants.map((v) => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    className={`size${v.id === variantId ? " is-selected" : ""}${
+                      v.available ? "" : " is-out"
+                    }`}
+                    disabled={!v.available}
+                    onClick={() => setVariantId(v.id)}
+                  >
+                    {describeVariant(v.options, v.title) ?? v.title}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          <h3 className="shop-pdp__label">Quantity</h3>
+          <Stepper
+            value={quantity}
+            onChange={(q) => setQuantity(Math.max(1, q))}
+          />
+
+          <button
+            className="btn btn--block shop-pdp__add"
+            disabled={!variant?.available}
+            onClick={() => variant && onAdd(product, variant, quantity)}
+          >
+            {variant?.available ? "Add to cart" : "Sold out"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
