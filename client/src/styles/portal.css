@@ -2279,6 +2279,17 @@
   padding-top: 14px;
 }
 
+/* Pinned to the foot of the drawer so a long basket can't push the way
+   forward below the fold. */
+.shop-cart__actions {
+  position: sticky;
+  bottom: 0;
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+  background: var(--surface);
+}
+
 .review__shop-total {
   display: flex;
   align-items: center;

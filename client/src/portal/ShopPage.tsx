@@ -165,6 +165,13 @@ export default function ShopPage({ loaderData }: Route.ComponentProps) {
           ],
     );
     setOpenProduct(null);
+    /**
+     * Slide the cart open on every add, like a storefront does. It confirms
+     * the thing actually landed, shows what the credit now stands at, and puts
+     * the way forward in front of the shopper — who may well be done after one
+     * item. Closing it is one tap, and browsing carries on underneath.
+     */
+    setCartOpen(true);
   };
 
   const setQuantity = (variantId: string, quantity: number) =>
@@ -359,6 +366,28 @@ export default function ShopPage({ loaderData }: Route.ComponentProps) {
                   {money(owed > 0 ? owed : (remaining ?? 0), currency)}
                 </strong>
               </div>
+            </div>
+
+            {/*
+              The drawer is where a shopper lands after adding something, so
+              the way forward has to be here too — not only on the pill behind
+              it, which the drawer is covering.
+            */}
+            <div className="shop-cart__actions">
+              <button
+                className="btn btn--block"
+                disabled={cart.length === 0}
+                onClick={() => navigate(`/r/${slug}/review`)}
+              >
+                Continue ({count})
+              </button>
+              <button
+                type="button"
+                className="btn btn--secondary btn--block"
+                onClick={() => setCartOpen(false)}
+              >
+                Keep shopping
+              </button>
             </div>
           </aside>
         </div>
