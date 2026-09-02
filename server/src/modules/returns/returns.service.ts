@@ -25,6 +25,7 @@ import {
 import { releaseExchangeFulfillment } from "../shopify/fulfillment-hold.js";
 import {
   resolveDisplayMode,
+  resolveExchangeBonus,
   resolveExchangeMethod,
   resolveVariantDifference,
 } from "../settings/merchant-settings.js";
@@ -320,7 +321,9 @@ const shopNowPool = (request: {
             (sum, ex) => sum.add(toDecimal(ex.unitPrice).mul(ex.quantity)),
             toDecimal(0),
           ),
-          bonus: toDecimal(request.shopNowBonus),
+          // Resolved to an amount when the return was submitted; see the note
+          // on ReturnRequest.shopNowBonus.
+          bonus: { type: "FIXED" as const, value: toDecimal(request.shopNowBonus) },
         },
       }
     : {};
@@ -350,6 +353,7 @@ const recalculateTotals = async (merchantId: string, id: string) => {
     policy: request.policy,
     // Same rule the shopper was quoted under; see priceExchange.
     variantDifference: await resolveVariantDifference(merchantId),
+    exchangeBonus: await resolveExchangeBonus(merchantId),
     lines: request.lineItems.map((li) => ({
       unitPrice: toDecimal(li.unitPrice),
       quantity: li.acceptedQuantity ?? li.quantity,
@@ -454,6 +458,7 @@ const payoutSplit = async (merchantId: string, id: string) => {
     policy: request.policy,
     // Same rule the shopper was quoted under; see priceExchange.
     variantDifference: await resolveVariantDifference(merchantId),
+    exchangeBonus: await resolveExchangeBonus(merchantId),
     lines: request.lineItems.map((li) => ({
       unitPrice: toDecimal(li.unitPrice),
       // Pay for what was accepted. An uninspected line falls back to what the

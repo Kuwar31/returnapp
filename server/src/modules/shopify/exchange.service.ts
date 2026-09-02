@@ -11,6 +11,7 @@ import {
 } from "../../lib/money.js";
 import { quoteReturn } from "../policy/quote.service.js";
 import {
+  resolveExchangeBonus,
   resolveExchangeMethod,
   resolveVariantDifference,
 } from "../settings/merchant-settings.js";
@@ -110,6 +111,7 @@ export const priceExchange = async (
      * would show as free on the portal and still arrive as an invoice.
      */
     variantDifference: await resolveVariantDifference(merchantId),
+    exchangeBonus: await resolveExchangeBonus(merchantId),
     lines: request.lineItems.map((li) => ({
       unitPrice: toDecimal(li.unitPrice),
       quantity: li.quantity,
@@ -134,7 +136,9 @@ export const priceExchange = async (
       ? {
           shopNow: {
             cartTotal,
-            bonus: toDecimal(request.shopNowBonus),
+            // Already resolved to an amount when the return was submitted, so
+            // it is fixed by definition however the setting reads today.
+            bonus: { type: "FIXED" as const, value: toDecimal(request.shopNowBonus) },
           },
         }
       : {}),

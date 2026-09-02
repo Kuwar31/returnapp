@@ -61,6 +61,8 @@ export default function SettingsPage() {
    * on the way to "1.5" would render back as "1" and eat the keystroke.
    */
   const [bonusText, setBonusText] = useState("");
+  /** The exchange sweetener, likewise text while it's being typed. */
+  const [exchangeBonusText, setExchangeBonusText] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -79,6 +81,9 @@ export default function SettingsPage() {
         if (!active) return;
         setSavedStore(s);
         setBonusText(s.shopNowBonusAmount === null ? "" : String(s.shopNowBonusAmount));
+        setExchangeBonusText(
+          s.exchangeBonusValue === null ? "" : String(s.exchangeBonusValue),
+        );
       })
       .catch(() => undefined);
 
@@ -102,11 +107,15 @@ export default function SettingsPage() {
   const bonusEdited =
     savedStore !== null &&
     parseBonus(bonusText) !== (savedStore.shopNowBonusAmount ?? null);
+  const exchangeBonusEdited =
+    savedStore !== null &&
+    parseBonus(exchangeBonusText) !== (savedStore.exchangeBonusValue ?? null);
 
   const dirty =
     Object.keys(policyEdits).length > 0 ||
     Object.keys(storeEdits).length > 0 ||
-    bonusEdited;
+    bonusEdited ||
+    exchangeBonusEdited;
 
   const discard = () => {
     setPolicyEdits({});
@@ -115,6 +124,11 @@ export default function SettingsPage() {
       savedStore?.shopNowBonusAmount === null || savedStore === null
         ? ""
         : String(savedStore.shopNowBonusAmount),
+    );
+    setExchangeBonusText(
+      savedStore?.exchangeBonusValue === null || savedStore === null
+        ? ""
+        : String(savedStore.exchangeBonusValue),
     );
     setError(null);
     setStatus(null);
@@ -141,6 +155,9 @@ export default function SettingsPage() {
     try {
       const storeBody: Record<string, unknown> = { ...storeEdits };
       if (bonusEdited) storeBody.shopNowBonusAmount = parseBonus(bonusText);
+      if (exchangeBonusEdited) {
+        storeBody.exchangeBonusValue = parseBonus(exchangeBonusText);
+      }
 
       if (Object.keys(storeBody).length > 0) {
         await api.patch("/admin/settings/store", storeBody, { auth: "admin" });
@@ -341,6 +358,49 @@ export default function SettingsPage() {
           </div>
 
           <div className="panel">
+            <h2>Exchange bonus</h2>
+            <p className="settings-row__hint" style={{ marginBottom: 14 }}>
+              A sweetener for exchanging rather than taking the money — size
+              swaps and your advanced exchange lists alike. A flat amount is
+              added once per return, not once per item.
+            </p>
+            <div className="settings-row">
+              <div>
+                <div className="settings-row__label">Bonus</div>
+                <div className="settings-row__hint">
+                  Leave empty to use the {policy.bonusCreditPercent}% credit
+                  bonus from your return policy below.
+                </div>
+              </div>
+              <div className="bonus-field">
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={exchangeBonusText}
+                  placeholder="Policy default"
+                  onChange={(e) => {
+                    setStatus(null);
+                    setExchangeBonusText(e.target.value);
+                  }}
+                />
+                <select
+                  value={store.exchangeBonusType}
+                  onChange={(e) =>
+                    editStore(
+                      "exchangeBonusType",
+                      e.target.value as StoreSettings["exchangeBonusType"],
+                    )
+                  }
+                >
+                  <option value="PERCENT">%</option>
+                  <option value="FIXED">{store.currency}</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div className="panel">
             <h2>Shop now</h2>
             <p className="settings-row__hint" style={{ marginBottom: 14 }}>
               Instead of swapping one item for another, the customer's whole
@@ -397,23 +457,35 @@ export default function SettingsPage() {
                   <div>
                     <div className="settings-row__label">Extra credit</div>
                     <div className="settings-row__hint">
-                      A flat bonus for spending it with you, on top of the{" "}
-                      {policy.bonusCreditPercent}% in your policy below. In{" "}
-                      {store.currency}; leave empty for none.
+                      A bonus for spending it with you rather than taking the
+                      money, added once per return. Leave empty for none.
                     </div>
                   </div>
-                  <input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    style={{ width: 120 }}
-                    value={bonusText}
-                    placeholder="0.00"
-                    onChange={(e) => {
-                      setStatus(null);
-                      setBonusText(e.target.value);
-                    }}
-                  />
+                  <div className="bonus-field">
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={bonusText}
+                      placeholder="0.00"
+                      onChange={(e) => {
+                        setStatus(null);
+                        setBonusText(e.target.value);
+                      }}
+                    />
+                    <select
+                      value={store.shopNowBonusType}
+                      onChange={(e) =>
+                        editStore(
+                          "shopNowBonusType",
+                          e.target.value as StoreSettings["shopNowBonusType"],
+                        )
+                      }
+                    >
+                      <option value="FIXED">{store.currency}</option>
+                      <option value="PERCENT">%</option>
+                    </select>
+                  </div>
                 </div>
               </>
             )}

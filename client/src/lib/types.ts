@@ -421,6 +421,9 @@ export type ShopNowMode = "RETURNS_PAGE" | "STOREFRONT";
  * order's own exchange rate while the catalogue is priced at today's, so the
  * same item in another size can look worth a little more or less than itself.
  */
+/** How a credit bonus is expressed: a share of the return, or a flat sum. */
+export type BonusType = "PERCENT" | "FIXED";
+
 export type VariantExchangeDifference =
   | "SAME_PRICE_ONLY"
   | "CHARGE"
@@ -433,6 +436,10 @@ export interface StoreSettings {
   shopNowMode: ShopNowMode;
   /** A flat sweetener on top of the policy's percentage. Null for none. */
   shopNowBonusAmount: number | null;
+  shopNowBonusType: BonusType;
+  /** Null falls back to the policy's percentage below. */
+  exchangeBonusValue: number | null;
+  exchangeBonusType: BonusType;
   variantExchangeDifference: VariantExchangeDifference;
   /**
    * The full, shareable portal address. Built server-side from

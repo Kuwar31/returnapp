@@ -30,6 +30,31 @@ export interface QuoteLine {
  */
 export type ExchangeDifference = "SAME_PRICE_ONLY" | "CHARGE" | "ABSORB";
 
+/**
+ * A credit sweetener, expressed either way.
+ *
+ * PERCENT scales with what came back and can therefore be applied per line.
+ * FIXED cannot: a flat 10 is an incentive to exchange, not a multiplier on how
+ * many items were in the parcel, so it is added once per return.
+ */
+export interface BonusRule {
+  type: "PERCENT" | "FIXED";
+  value: Prisma.Decimal;
+}
+
+const EXCHANGE_RESOLUTIONS: ResolutionType[] = ["EXCHANGE", "INSTANT_EXCHANGE"];
+
+/** What a bonus is worth against a given base. Zero for an unset or empty one. */
+export const bonusAmount = (
+  rule: BonusRule | undefined,
+  base: Prisma.Decimal,
+): Prisma.Decimal =>
+  !rule || toDecimal(rule.value).lessThanOrEqualTo(0)
+    ? ZERO
+    : rule.type === "PERCENT"
+      ? percentOf(base, rule.value)
+      : round2(toDecimal(rule.value));
+
 /** Per-line breakdown, so the portal can show the maths item by item. */
 export interface QuoteLineResult {
   resolution: ResolutionType;
@@ -94,6 +119,7 @@ export const quoteReturn = ({
   lines,
   policy,
   shopNow,
+  exchangeBonus,
   variantDifference = "CHARGE",
 }: {
   lines: QuoteLine[];
@@ -105,6 +131,12 @@ export const quoteReturn = ({
    */
   variantDifference?: ExchangeDifference;
   /**
+   * The bonus for exchanging rather than taking the money — size swaps and the
+   * merchant's advanced-exchange lists alike. Omitted, the policy's percentage
+   * applies, which is what happened before this existed.
+   */
+  exchangeBonus?: BonusRule;
+  /**
    * "Shop now": one basket bought with every line's credit pooled together,
    * rather than each line netting against its own replacement.
    *
@@ -113,15 +145,24 @@ export const quoteReturn = ({
    * expressed as three per-line swaps. Omitted, every figure below is computed
    * exactly as it was before this existed.
    */
-  shopNow?: { cartTotal: Prisma.Decimal; bonus: Prisma.Decimal };
+  shopNow?: { cartTotal: Prisma.Decimal; bonus: BonusRule };
 }): Quote => {
   const results: QuoteLineResult[] = lines.map((line) => {
     const subtotal = round2(toDecimal(line.unitPrice).mul(line.quantity));
     const takesCredit = keepsMoneyInStore(line.resolution);
 
-    const bonusCredit = takesCredit
-      ? percentOf(subtotal, policy.bonusCreditPercent)
-      : ZERO;
+    const isExchange = EXCHANGE_RESOLUTIONS.includes(line.resolution);
+    /**
+     * A percentage exchange bonus replaces the policy's for exchange lines; a
+     * flat one contributes nothing here and is added once to the return below.
+     */
+    const bonusCredit = !takesCredit
+      ? ZERO
+      : isExchange && exchangeBonus
+        ? exchangeBonus.type === "PERCENT"
+          ? bonusAmount(exchangeBonus, subtotal)
+          : ZERO
+        : percentOf(subtotal, policy.bonusCreditPercent);
     const restockingFee = percentOf(subtotal, policy.restockingFeePercent);
 
     const gross = subtotal.add(bonusCredit).sub(restockingFee);
@@ -183,18 +224,34 @@ export const quoteReturn = ({
    * percentage does, so it shows up in the same place on every screen and in
    * the same total the shopper is promised.
    */
-  const bonusCredit = round2(
-    sum((r) => r.bonusCredit).add(shopping ? shopNow.bonus : ZERO),
-  );
+  /**
+   * Bonuses that belong to the return rather than to any one line.
+   *
+   * A flat exchange bonus lands here for the reason given on BonusRule, and a
+   * shop-now bonus always has: both are one sweetener per return. A percentage
+   * shop-now bonus is taken against what came back, the same base the policy's
+   * percentage uses, so the two are comparable.
+   */
+  const flatExchangeBonus =
+    exchangeBonus?.type === "FIXED" &&
+    results.some(
+      (r) =>
+        EXCHANGE_RESOLUTIONS.includes(r.resolution) &&
+        r.exchangeValue.greaterThan(0),
+    )
+      ? bonusAmount(exchangeBonus, itemsSubtotal)
+      : ZERO;
+  const shopBonus = shopping ? bonusAmount(shopNow.bonus, itemsSubtotal) : ZERO;
+  const extraCredit = round2(flatExchangeBonus.add(shopBonus));
+
+  const bonusCredit = round2(sum((r) => r.bonusCredit).add(extraCredit));
 
   /**
-   * One pool against one basket. Everything the lines credit — plus the flat
-   * bonus — buys the cart; what's left over is still paid out, and what's short
-   * is owed at checkout.
+   * One pool against one basket. Everything the lines credit — plus the extra —
+   * buys the cart; what's left over is still paid out, and what's short is owed
+   * at checkout.
    */
-  const pool = shopping
-    ? round2(creditedTotal.add(shopNow.bonus))
-    : creditedTotal;
+  const pool = shopping ? round2(creditedTotal.add(extraCredit)) : creditedTotal;
   const shortfall = shopping
     ? round2(
         shopNow.cartTotal.sub(pool).greaterThan(0)
@@ -202,15 +259,28 @@ export const quoteReturn = ({
           : ZERO,
       )
     : ZERO;
+
+  const lineDue = sum((r) => r.due);
+  /**
+   * Off a swap's balance first, and only then into the payout. A shopper owed
+   * 20 on an upgrade and given a flat 10 should owe 10, not owe 20 and be
+   * handed 10 separately.
+   */
+  const dueOffset = shopping
+    ? ZERO
+    : lineDue.lessThan(extraCredit)
+      ? lineDue
+      : extraCredit;
+
   const leftover = shopping
     ? round2(
         pool.sub(shopNow.cartTotal).greaterThan(0)
           ? pool.sub(shopNow.cartTotal)
           : ZERO,
       )
-    : creditedTotal;
+    : round2(creditedTotal.add(extraCredit.sub(dueOffset)));
 
-  const amountDue = round2(sum((r) => r.due).add(shortfall));
+  const amountDue = round2(lineDue.sub(dueOffset).add(shortfall));
   const absorbedDifference = sum((r) => r.absorbed);
   const estimatedTotal = leftover.lessThan(0) ? ZERO : round2(leftover);
 

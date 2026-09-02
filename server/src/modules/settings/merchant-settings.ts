@@ -1,4 +1,6 @@
+import { Prisma } from "@prisma/client";
 import type {
+  BonusType,
   DisplayCurrency,
   ExchangeMethod,
   VariantExchangeDifference,
@@ -25,6 +27,10 @@ interface MerchantSettings {
   displayCurrency: DisplayCurrency;
   exchangeMethod: ExchangeMethod;
   variantExchangeDifference: VariantExchangeDifference;
+  /** The sweetener for exchanging; null means "use the policy percentage". */
+  exchangeBonus: { type: BonusType; value: Prisma.Decimal } | null;
+  /** The sweetener for spending a return in the catalogue. */
+  shopNowBonus: { type: BonusType; value: Prisma.Decimal };
 }
 
 const DEFAULTS: MerchantSettings = {
@@ -33,6 +39,8 @@ const DEFAULTS: MerchantSettings = {
   // What the app did before the setting existed, so nothing changes for a
   // store that never opens the page.
   variantExchangeDifference: "CHARGE",
+  exchangeBonus: null,
+  shopNowBonus: { type: "FIXED", value: new Prisma.Decimal(0) },
 };
 
 const cache = new Map<string, { value: MerchantSettings; expires: number }>();
@@ -49,6 +57,10 @@ export const getMerchantSettings = async (
       displayCurrency: true,
       exchangeMethod: true,
       variantExchangeDifference: true,
+      exchangeBonusType: true,
+      exchangeBonusValue: true,
+      shopNowBonusType: true,
+      shopNowBonusAmount: true,
     },
   });
   const value: MerchantSettings = {
@@ -57,6 +69,19 @@ export const getMerchantSettings = async (
     variantExchangeDifference:
       merchant?.variantExchangeDifference ??
       DEFAULTS.variantExchangeDifference,
+    // Null value, not null column: an unset bonus falls back to the policy's
+    // percentage rather than silently paying nothing.
+    exchangeBonus:
+      merchant?.exchangeBonusValue == null
+        ? null
+        : {
+            type: merchant.exchangeBonusType,
+            value: merchant.exchangeBonusValue,
+          },
+    shopNowBonus: {
+      type: merchant?.shopNowBonusType ?? "FIXED",
+      value: merchant?.shopNowBonusAmount ?? new Prisma.Decimal(0),
+    },
   };
   cache.set(merchantId, { value, expires: Date.now() + TTL_MS });
   return value;
@@ -77,6 +102,14 @@ export const resolveVariantDifference = async (
   merchantId: string,
 ): Promise<VariantExchangeDifference> =>
   (await getMerchantSettings(merchantId)).variantExchangeDifference;
+
+/** The sweetener for exchanging, or null to use the policy's percentage. */
+export const resolveExchangeBonus = async (merchantId: string) =>
+  (await getMerchantSettings(merchantId)).exchangeBonus ?? undefined;
+
+/** The sweetener for spending a return in the catalogue. */
+export const resolveShopNowBonus = async (merchantId: string) =>
+  (await getMerchantSettings(merchantId)).shopNowBonus;
 
 /** Called when any of these change, so the change is visible immediately. */
 export const clearMerchantSettingsCache = (merchantId: string): void => {

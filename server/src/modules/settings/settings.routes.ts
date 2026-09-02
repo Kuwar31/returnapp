@@ -117,6 +117,9 @@ settingsRouter.get(
         shopNowBonusAmount: true,
         domain: true,
         variantExchangeDifference: true,
+        shopNowBonusType: true,
+        exchangeBonusType: true,
+        exchangeBonusValue: true,
       },
     });
 
@@ -140,6 +143,10 @@ settingsRouter.get(
         merchant.shopNowBonusAmount === null
           ? null
           : Number(merchant.shopNowBonusAmount),
+      exchangeBonusValue:
+        merchant.exchangeBonusValue === null
+          ? null
+          : Number(merchant.exchangeBonusValue),
       /**
        * The whole link, not the slug. The merchant pastes this into a footer or
        * a policy page, so the client shouldn't be assembling it out of a path
@@ -173,6 +180,10 @@ settingsRouter.patch(
         variantExchangeDifference: z
           .enum(["SAME_PRICE_ONLY", "CHARGE", "ABSORB"])
           .optional(),
+        shopNowBonusType: z.enum(["PERCENT", "FIXED"]).optional(),
+        exchangeBonusType: z.enum(["PERCENT", "FIXED"]).optional(),
+        /** Null clears it, which falls back to the policy's percentage. */
+        exchangeBonusValue: z.number().min(0).max(100000).nullable().optional(),
       })
       .refine((v) => Object.keys(v).length > 0, {
         message: "Nothing to update.",
@@ -200,6 +211,15 @@ settingsRouter.patch(
         ...(req.body.variantExchangeDifference
           ? { variantExchangeDifference: req.body.variantExchangeDifference }
           : {}),
+        ...(req.body.shopNowBonusType
+          ? { shopNowBonusType: req.body.shopNowBonusType }
+          : {}),
+        ...(req.body.exchangeBonusType
+          ? { exchangeBonusType: req.body.exchangeBonusType }
+          : {}),
+        ...(req.body.exchangeBonusValue === undefined
+          ? {}
+          : { exchangeBonusValue: req.body.exchangeBonusValue }),
       },
       select: {
         currency: true,
@@ -208,6 +228,8 @@ settingsRouter.patch(
         shopNowEnabled: true,
         shopNowMode: true,
         variantExchangeDifference: true,
+        shopNowBonusType: true,
+        exchangeBonusType: true,
       },
     });
     // The resolver caches for 30s; drop it so the change shows immediately.

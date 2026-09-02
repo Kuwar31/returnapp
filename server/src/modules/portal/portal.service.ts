@@ -10,6 +10,8 @@ import {
 } from "../settings/reasons.service.js";
 import {
   resolveDisplayMode,
+  resolveExchangeBonus,
+  resolveShopNowBonus,
   resolveVariantDifference,
 } from "../settings/merchant-settings.js";
 import { rulesForLine } from "../settings/exchange-rules.service.js";
@@ -18,6 +20,8 @@ import {
   qualifiesForAutoApproval,
   quoteReturn,
   summaryResolution,
+  bonusAmount,
+  type BonusRule,
 } from "../policy/quote.service.js";
 import { notifyInBackground } from "../email/notifications.js";
 import {
@@ -380,7 +384,7 @@ const resolveSelections = async (
   }
 
   const shopItems = input.shopItems ?? [];
-  let shopNow: { cartTotal: Prisma.Decimal; bonus: Prisma.Decimal } | null = null;
+  let shopNow: { cartTotal: Prisma.Decimal; bonus: BonusRule } | null = null;
   let shopBasket: Array<{ variantId: string; quantity: number }> = [];
 
   // Presence, not length — an empty basket still prices the credit pool, which
@@ -388,7 +392,7 @@ const resolveSelections = async (
   if (input.shopItems !== undefined) {
     const merchant = await prisma.merchant.findUniqueOrThrow({
       where: { id: merchantId },
-      select: { shopNowEnabled: true, shopNowBonusAmount: true },
+      select: { shopNowEnabled: true },
     });
     if (!merchant.shopNowEnabled) {
       throw badRequest("This store isn't offering shopping with return credit.");
@@ -407,10 +411,7 @@ const resolveSelections = async (
       }, ZERO),
     );
 
-    shopNow = {
-      cartTotal,
-      bonus: toDecimal(merchant.shopNowBonusAmount ?? 0),
-    };
+    shopNow = { cartTotal, bonus: await resolveShopNowBonus(merchantId) };
     shopBasket = shopItems;
     for (const [id, variant] of shopVariants) variants.set(id, variant);
   }
@@ -762,6 +763,7 @@ export const quoteSelection = async (
     lines: toQuoteLines(resolved, variants, Boolean(shopNow)),
     policy,
     variantDifference,
+    exchangeBonus: await resolveExchangeBonus(merchantId),
     ...(shopNow ? { shopNow } : {}),
   });
 
@@ -816,6 +818,7 @@ export const submitReturn = async (
   const quote = quoteReturn({
     lines: toQuoteLines(resolved, variants, Boolean(shopNow)),
     variantDifference,
+    exchangeBonus: await resolveExchangeBonus(merchantId),
     ...(shopNow ? { shopNow } : {}),
     policy,
   });
@@ -863,9 +866,15 @@ export const submitReturn = async (
         customerNote: input.customerNote ?? null,
         exchangeSurplusMethod: input.exchangeSurplusMethod ?? "REFUND",
         shopNow: Boolean(shopNow),
-        // Pinned at submission: the merchant can change the sweetener later,
-        // and it must not restate what this shopper was already promised.
-        shopNowBonus: shopNow?.bonus ?? ZERO,
+        /**
+         * The resolved amount, not the rule that produced it. Pinned at
+         * submission because the merchant can change the sweetener — or switch
+         * it from a percentage to a flat sum — and neither must restate what
+         * this shopper was already promised.
+         */
+        shopNowBonus: shopNow
+          ? bonusAmount(shopNow.bonus, quote.itemsSubtotal)
+          : ZERO,
         currency: order.currency,
         itemsSubtotal: quote.itemsSubtotal,
         bonusCredit: quote.bonusCredit,

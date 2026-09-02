@@ -1530,3 +1530,17 @@ table.data tbody tr:hover {
   display: flex;
   gap: 8px;
 }
+
+/* An amount and the unit it's in, read as one control. */
+.bonus-field {
+  display: flex;
+  gap: 6px;
+}
+
+.settings-row .bonus-field input[type="number"] {
+  width: 110px;
+}
+
+.settings-row .bonus-field select {
+  width: 84px;
+}
