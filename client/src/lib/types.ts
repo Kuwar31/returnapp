@@ -167,7 +167,8 @@ export interface ExchangeOptions {
  * whole catalogue is on offer.
  */
 export interface AdvancedExchange {
-  ruleId: string;
+  /** Every rule that matched — all of them contribute their options. */
+  ruleIds: string[];
   showProductTitles: boolean;
   currency: string;
   options: Array<{

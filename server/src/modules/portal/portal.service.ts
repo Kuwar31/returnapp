@@ -12,7 +12,7 @@ import {
   resolveDisplayMode,
   resolveVariantDifference,
 } from "../settings/merchant-settings.js";
-import { ruleForLine } from "../settings/exchange-rules.service.js";
+import { rulesForLine } from "../settings/exchange-rules.service.js";
 import { signShopToken } from "../../lib/tokens.js";
 import {
   qualifiesForAutoApproval,
@@ -590,8 +590,22 @@ export const getAdvancedExchange = async (
   });
   if (!line) throw notFound("That item isn't part of this order.");
 
-  const rule = await ruleForLine(merchantId, line);
-  if (!rule) return null;
+  const rules = await rulesForLine(merchantId, line);
+  if (rules.length === 0) return null;
+
+  /**
+   * Every matching rule's options, in rule order, with duplicates dropped.
+   * Two rules pointing at the same collection is a merchant mistake, not an
+   * instruction to show the same list twice.
+   */
+  const seen = new Set<string>();
+  const ruleOptions = rules
+    .flatMap((rule) => rule.options)
+    .filter((option) => {
+      if (seen.has(option.collectionId)) return false;
+      seen.add(option.collectionId);
+      return true;
+    });
 
   const fx = await catalogueConverter(merchantId, orderId);
 
@@ -601,7 +615,7 @@ export const getAdvancedExchange = async (
    * with it.
    */
   const options = await Promise.all(
-    rule.options.map(async (option) => {
+    ruleOptions.map(async (option) => {
       let preview: Array<{ id: string; title: string; imageUrl: string | null }> = [];
       try {
         const { products } = await browseProducts(merchantId, {
@@ -629,8 +643,9 @@ export const getAdvancedExchange = async (
   );
 
   return {
-    ruleId: rule.id,
-    showProductTitles: rule.showProductTitles,
+    ruleIds: rules.map((r) => r.id),
+    // A display nicety, so the most permissive matching rule decides.
+    showProductTitles: rules.some((r) => r.showProductTitles),
     currency: fx.currency,
     // An option whose collection is gone or empty is not worth offering.
     options: options.filter((o) => o.preview.length > 0),

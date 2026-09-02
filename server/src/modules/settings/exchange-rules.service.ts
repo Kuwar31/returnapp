@@ -47,7 +47,8 @@ export const createRule = async (merchantId: string, input: RuleInput) => {
       merchantId,
       name: input.name,
       active: input.active ?? true,
-      // New rules land at the bottom, where they can't shadow existing ones.
+      // New rules land at the bottom, so their options appear after the ones
+      // already configured rather than jumping the queue.
       sortOrder: count,
       matchBy: input.matchBy ?? "PRODUCT_TAG",
       matchValues: input.matchValues ?? [],
@@ -107,7 +108,7 @@ export const deleteRule = async (merchantId: string, id: string) => {
   await prisma.exchangeRule.delete({ where: { id } });
 };
 
-/** Reorders the whole set, since priority is only meaningful as an order. */
+/** Reorders the whole set, since order is only meaningful across all of them. */
 export const reorderRules = async (merchantId: string, ids: string[]) => {
   const owned = await prisma.exchangeRule.findMany({
     where: { merchantId, id: { in: ids } },
@@ -127,14 +128,20 @@ export const reorderRules = async (merchantId: string, ids: string[]) => {
 };
 
 /**
- * The rule that governs one returned item, if any.
+ * Every rule that governs one returned item.
  *
- * First match wins, by the merchant's own ordering, so a specific rule can sit
- * above a general one. Matching runs against the snapshot taken when the order
- * synced — the tags and title as they were then — because a shopper's options
- * shouldn't change because a product was retagged after they bought it.
+ * All matches contribute, in the merchant's own order, rather than the first
+ * one winning outright. Two rules that both match used to leave the second
+ * silently doing nothing — with no sign of it anywhere in the admin — and a
+ * rule that quietly never fires is worse than one that fires too often. The
+ * ordering now decides what the shopper sees first; exclusivity is expressed
+ * by writing rules that don't overlap.
+ *
+ * Matching runs against the snapshot taken when the order synced — the tags
+ * and title as they were then — because a shopper's options shouldn't change
+ * because a product was retagged after they bought it.
  */
-export const ruleForLine = async (
+export const rulesForLine = async (
   merchantId: string,
   line: { productTags: string[]; title: string },
 ) => {
@@ -147,15 +154,15 @@ export const ruleForLine = async (
   const tags = line.productTags.map((t) => t.trim().toLowerCase());
   const title = line.title.toLowerCase();
 
-  return (
-    rules.find((rule) => {
-      const values = rule.matchValues
-        .map((v) => v.trim().toLowerCase())
-        .filter(Boolean);
-      if (values.length === 0 || rule.options.length === 0) return false;
-      return rule.matchBy === "PRODUCT_TAG"
-        ? values.some((v) => tags.includes(v))
-        : values.some((v) => title.includes(v));
-    }) ?? null
-  );
+  return rules.filter((rule) => {
+    const values = rule.matchValues
+      .map((v) => v.trim().toLowerCase())
+      .filter(Boolean);
+    // A rule with nothing to match on, or nothing to offer, would only ever
+    // produce an empty menu.
+    if (values.length === 0 || rule.options.length === 0) return false;
+    return rule.matchBy === "PRODUCT_TAG"
+      ? values.some((v) => tags.includes(v))
+      : values.some((v) => title.includes(v));
+  });
 };

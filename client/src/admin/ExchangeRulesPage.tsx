@@ -8,8 +8,9 @@ import { ErrorAlert, Loading } from "../components/Feedback";
  *
  * Without a rule an exchange offers the whole catalogue. A rule names the items
  * it covers — by product tag, or by a fragment of the title — and lists what
- * they may become, each list backed by a collection. First match wins, so a
- * specific rule can sit above a general one.
+ * they may become, each list backed by a collection. Every rule that matches an
+ * item contributes its options; the order here is the order the customer sees
+ * them in.
  */
 
 type MatchBy = "PRODUCT_TAG" | "PRODUCT_NAME";
@@ -130,7 +131,7 @@ export default function ExchangeRulesPage() {
     }
   };
 
-  /** Priority is only meaningful as an order, so it moves one place at a time. */
+  /** Order is only meaningful across the whole set, so it moves one at a time. */
   const move = async (index: number, delta: number) => {
     const next = [...rules];
     const target = index + delta;
@@ -167,7 +168,8 @@ export default function ExchangeRulesPage() {
           <h1>Advanced exchanges</h1>
           <p className="muted" style={{ marginTop: 4 }}>
             Decide what a returned item can be exchanged for. Without a rule,
-            customers can exchange into anything in your catalogue.
+            customers can exchange into anything in your catalogue. Every rule
+            that matches an item contributes its options, in the order below.
           </p>
         </div>
         {!editing && (
@@ -210,7 +212,8 @@ export default function ExchangeRulesPage() {
                   </div>
                 </div>
                 <div className="rule-row__actions">
-                  {/* First match wins, so order is the rule's priority. */}
+                  {/* Every matching rule applies, so this orders the cards the
+                      customer sees rather than deciding which rule wins. */}
                   <button
                     className="btn btn--secondary btn--sm"
                     disabled={index === 0}
@@ -327,7 +330,8 @@ export default function ExchangeRulesPage() {
               <div>
                 <div className="settings-row__label">Active</div>
                 <div className="settings-row__hint">
-                  Disabled rules are skipped, and the next matching one applies.
+                  A disabled rule contributes nothing; any other matching rules
+                  still do.
                 </div>
               </div>
               <input
@@ -344,7 +348,9 @@ export default function ExchangeRulesPage() {
             <h2>Exchange options</h2>
             <p className="settings-row__hint" style={{ marginBottom: 14 }}>
               What a matching item can be exchanged for. Each option is one
-              collection, shown to the customer as its own card.
+              collection, shown to the customer as its own card — add several
+              here to offer several. A collection already offered by an earlier
+              rule isn't shown twice.
             </p>
 
             {collections.length === 0 && (
