@@ -42,6 +42,34 @@ interface RequestOptions {
   query?: Record<string, string | number | undefined>;
 }
 
+/**
+ * The most useful sentence an error response has to offer.
+ *
+ * Validation failures carry per-field messages written for a person — "Enter a
+ * valid .myshopify.com domain", "Nothing to update" — while the top-level
+ * message is always the same "The submitted data is invalid." Showing only the
+ * latter turned every rejected field into the same opaque sentence, which is
+ * exactly as helpful as no message at all.
+ */
+const describeError = (error: {
+  message?: string;
+  details?: unknown;
+}): string => {
+  const generic = error?.message ?? "Something went wrong.";
+  if (!Array.isArray(error?.details)) return generic;
+
+  const reasons = error.details
+    .map((d) =>
+      d && typeof d === "object" && typeof (d as { message?: unknown }).message === "string"
+        ? (d as { message: string }).message
+        : null,
+    )
+    .filter((m): m is string => Boolean(m));
+
+  // Two or three at most: a wall of field errors is its own kind of unreadable.
+  return reasons.length > 0 ? reasons.slice(0, 3).join(" ") : generic;
+};
+
 export async function request<T>(
   path: string,
   options: RequestOptions = {},
@@ -101,7 +129,7 @@ export async function request<T>(
     throw new ApiError(
       response.status,
       error?.code ?? "UNKNOWN",
-      error?.message ?? "Something went wrong.",
+      describeError(error),
       error?.details,
     );
   }
