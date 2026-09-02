@@ -182,21 +182,24 @@ export const toSelections = (draft: Draft) =>
   }));
 
 /**
- * The same selections, but with every line marked as an exchange.
+ * The same selections, with everything not already swapped marked as an
+ * exchange so its value funds the basket.
  *
- * A basket is bought with the pooled value of everything coming back, so no
- * line can be a refund — the server refuses the mix, and rewriting here rather
- * than asking the shopper to re-pick each item keeps the choice where they made
- * it: once, on the offer.
+ * A line the shopper has already exchanged for something specific keeps that
+ * choice: they picked a size, and the basket is being paid for by the *other*
+ * items. Rewriting those too was what let a swapped item's price leak into the
+ * credit on offer — the shopper was shown money they had already spent.
+ *
+ * A basket can't be bought with a refund, so every remaining line becomes an
+ * exchange here rather than asking the shopper to re-pick each one: the choice
+ * stays where they made it, once, on the offer.
  */
 export const toShopSelections = (draft: Draft) =>
-  toSelections(draft).map((selection) => {
-    const { exchange, ...rest } = selection as typeof selection & {
-      exchange?: unknown;
-    };
-    void exchange; // a per-line swap is replaced by the basket
-    return { ...rest, resolution: "EXCHANGE" as const };
-  });
+  toSelections(draft).map((selection) =>
+    "exchange" in selection
+      ? selection
+      : { ...selection, resolution: "EXCHANGE" as const },
+  );
 
 /**
  * Fills in exchange display details a stored draft is missing.

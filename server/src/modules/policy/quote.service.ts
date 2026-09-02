@@ -42,7 +42,11 @@ export interface BonusRule {
   value: Prisma.Decimal;
 }
 
-const EXCHANGE_RESOLUTIONS: ResolutionType[] = ["EXCHANGE", "INSTANT_EXCHANGE"];
+/** The resolutions that hand back goods rather than money. */
+export const EXCHANGE_RESOLUTIONS: ResolutionType[] = [
+  "EXCHANGE",
+  "INSTANT_EXCHANGE",
+];
 
 /** What a bonus is worth against a given base. Zero for an unset or empty one. */
 export const bonusAmount = (
@@ -87,6 +91,12 @@ export interface Quote {
    * follow. This is the missing line.
    */
   absorbedDifference: Prisma.Decimal;
+  /**
+   * The "shop now" sweetener as applied, so submit can persist the figure the
+   * shopper was actually quoted instead of recomputing it from a base this
+   * function may have narrowed.
+   */
+  shopBonus: Prisma.Decimal;
   /** Payout split by destination, so resolution knows what to issue where. */
   byResolution: Map<ResolutionType, Prisma.Decimal>;
   lines: QuoteLineResult[];
@@ -241,7 +251,23 @@ export const quoteReturn = ({
     )
       ? bonusAmount(exchangeBonus, itemsSubtotal)
       : ZERO;
-  const shopBonus = shopping ? bonusAmount(shopNow.bonus, itemsSubtotal) : ZERO;
+  /**
+   * What the basket is actually being bought with.
+   *
+   * Only lines with no replacement of their own fund it — a line already
+   * swapped for a specific item has spent its value there. Basing the
+   * sweetener on the whole return would pay a bonus on goods that never
+   * reached the pool, and would stack on top of the exchange bonus that line
+   * has already earned. With nothing swapped per line, which is the ordinary
+   * case, this is the whole subtotal and nothing changes.
+   */
+  const poolBase = round2(
+    results.reduce(
+      (acc, r) => (r.exchangeValue.greaterThan(0) ? acc : acc.add(r.itemsSubtotal)),
+      ZERO,
+    ),
+  );
+  const shopBonus = shopping ? bonusAmount(shopNow.bonus, poolBase) : ZERO;
   const extraCredit = round2(flatExchangeBonus.add(shopBonus));
 
   const bonusCredit = round2(sum((r) => r.bonusCredit).add(extraCredit));
@@ -314,6 +340,7 @@ export const quoteReturn = ({
     estimatedTotal,
     amountDue,
     absorbedDifference,
+    shopBonus,
     byResolution,
     lines: results,
   };

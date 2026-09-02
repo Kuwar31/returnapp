@@ -15,6 +15,7 @@ import {
   loadCart,
   loadDraft,
   saveCart,
+  toShopSelections,
   type CartLine,
 } from "./draft";
 import type { Route } from "./+types/ShopPage";
@@ -75,14 +76,14 @@ export default function ShopPage({ loaderData }: Route.ComponentProps) {
    */
   useEffect(() => {
     const draft = loadDraft(order.id);
-    const items = Object.entries(draft).map(([key, d]) => ({
-      orderLineItemId: key.split("#")[0],
-      reasonId: d.reasonId,
-      reasonNote: d.reasonNote || undefined,
-      photoUrls: [] as string[],
-      // Spending it is an exchange as far as the money is concerned.
-      resolution: "EXCHANGE" as const,
-    }));
+    /**
+     * The shared builder, not a copy of it made here.
+     *
+     * This used to rewrite every line to an exchange and drop the swaps along
+     * with them, so a shopper who had already picked a replacement for one
+     * item was shown its value as credit to spend again.
+     */
+    const items = toShopSelections(draft);
     if (items.length === 0) {
       navigate(`/r/${slug}/items`, { replace: true });
       return;

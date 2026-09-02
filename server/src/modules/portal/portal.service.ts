@@ -19,10 +19,10 @@ import {
 } from "../settings/exchange-rules.service.js";
 import { signShopToken } from "../../lib/tokens.js";
 import {
+  EXCHANGE_RESOLUTIONS,
   qualifiesForAutoApproval,
   quoteReturn,
   summaryResolution,
-  bonusAmount,
   type BonusRule,
 } from "../policy/quote.service.js";
 import { notifyInBackground } from "../email/notifications.js";
@@ -413,6 +413,21 @@ const resolveSelections = async (
       }, ZERO),
     );
 
+    /**
+     * Every line has to be an exchange for a basket to make sense.
+     *
+     * A refund line's value would otherwise be paid out *and* spent on the
+     * cart. The portal rewrites the lines it pools before it ever asks for a
+     * price, so this only ever catches a request that didn't come from it.
+     */
+    for (const { line, selection } of resolved) {
+      if (!EXCHANGE_RESOLUTIONS.includes(selection.resolution as ResolutionType)) {
+        throw badRequest(
+          `${line.title} is set to be refunded, so its value can't also be spent in the store.`,
+        );
+      }
+    }
+
     shopNow = { cartTotal, bonus: await resolveShopNowBonus(merchantId) };
     shopBasket = shopItems;
     for (const [id, variant] of shopVariants) variants.set(id, variant);
@@ -726,18 +741,20 @@ const toQuoteLines = (
     selection: QuoteInput["items"][number];
   }>,
   variants: Map<string, { price: number; productId?: string | null }>,
-  /**
-   * A basket is priced as a pool against every line at once, so the per-line
-   * replacement value has to stay zero here — leaving it in would charge the
-   * shopper for the same goods twice.
-   */
-  pooled = false,
 ) =>
   resolved.map(({ line, selection }) => {
-    const chosen =
-      !pooled && selection.exchange
-        ? variants.get(selection.exchange.variantId)
-        : undefined;
+    /**
+     * A line either has a replacement of its own or it funds the basket —
+     * never both, which is what stops the same goods being charged twice.
+     *
+     * This used to be decided for the whole return: any basket zeroed every
+     * per-line swap. That made a mixed return impossible to express, and a
+     * shopper who swapped one item for a size and sent another back had the
+     * swapped item's value silently added to what they could spend.
+     */
+    const chosen = selection.exchange
+      ? variants.get(selection.exchange.variantId)
+      : undefined;
     return {
       unitPrice: toDecimal(line.unitPrice),
       quantity: 1,
@@ -762,7 +779,7 @@ export const quoteSelection = async (
     await resolveSelections(merchantId, orderId, input);
 
   const quote = quoteReturn({
-    lines: toQuoteLines(resolved, variants, Boolean(shopNow)),
+    lines: toQuoteLines(resolved, variants),
     policy,
     variantDifference,
     exchangeBonus: await exchangeBonusFor(
@@ -786,9 +803,19 @@ export const quoteSelection = async (
    * stored in the browser: a basket saved before a currency change carries
    * stale money, and this figure is printed beside the authoritative totals.
    */
-  const purchaseSubtotal = shopNow
-    ? shopNow.cartTotal
-    : quote.lines.reduce((sum, l) => sum.add(l.exchangeValue), ZERO);
+  const perLineExchanges = quote.lines.reduce(
+    (sum, l) => sum.add(l.exchangeValue),
+    ZERO,
+  );
+  /**
+   * Both routes at once, because a return can now take both: one item swapped
+   * for a specific size while the rest of the credit fills a basket. Reporting
+   * only the basket left the swapped item priced at nothing on the summary
+   * while the totals below it still charged for it.
+   */
+  const purchaseSubtotal = round2(
+    shopNow ? shopNow.cartTotal.add(perLineExchanges) : perLineExchanges,
+  );
 
   return {
     currency: fx.currency,
@@ -821,7 +848,7 @@ export const submitReturn = async (
     await resolveSelections(merchantId, orderId, input);
 
   const quote = quoteReturn({
-    lines: toQuoteLines(resolved, variants, Boolean(shopNow)),
+    lines: toQuoteLines(resolved, variants),
     variantDifference,
     exchangeBonus: await exchangeBonusFor(
       merchantId,
@@ -880,9 +907,7 @@ export const submitReturn = async (
          * it from a percentage to a flat sum — and neither must restate what
          * this shopper was already promised.
          */
-        shopNowBonus: shopNow
-          ? bonusAmount(shopNow.bonus, quote.itemsSubtotal)
-          : ZERO,
+        shopNowBonus: quote.shopBonus,
         currency: order.currency,
         itemsSubtotal: quote.itemsSubtotal,
         bonusCredit: quote.bonusCredit,
@@ -957,9 +982,12 @@ export const submitReturn = async (
     }
 
     for (const { selection } of resolved) {
-      // A basket replaces per-line choices outright. Writing both would price
-      // the draft at the sum of the two while the shopper was quoted one.
-      if (shopNow) break;
+      /**
+       * Written alongside the basket, not instead of it. A line that kept its
+       * own swap was priced with that swap in the quote, so leaving it out
+       * here would build a draft order missing something the shopper was
+       * already charged for.
+       */
       if (!selection.exchange) continue;
       const variant = variants.get(selection.exchange.variantId)!;
       const line = lineByOrderLineItemId.get(selection.orderLineItemId)!;

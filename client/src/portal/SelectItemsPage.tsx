@@ -147,10 +147,16 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
    * a chosen size swap promised money the shopper doesn't have. The offer is
    * for returns: refund, store credit, gift card.
    */
-  const anyExchange = Object.values(decisions).some(
-    (d) => EXCHANGE_RESOLUTIONS.includes(d.resolution) || d.exchangeVariantId,
+  /**
+   * Lines with nothing chosen for them yet — the ones whose value is still
+   * free to spend. A line already swapped for a specific item has spent its
+   * own value on that replacement, so it funds nothing and is left alone.
+   */
+  const returningLines = Object.values(decisions).filter(
+    (d) => !EXCHANGE_RESOLUTIONS.includes(d.resolution) && !d.exchangeVariantId,
   );
-  const canOfferShopping = Boolean(shopNow?.enabled) && !anyExchange;
+  const canOfferShopping =
+    Boolean(shopNow?.enabled) && returningLines.length > 0;
   /** The flat sweetener, already converted for this order. */
   const flatBonus = shopNow?.enabled ? shopNow.bonus : 0;
   /**

@@ -155,6 +155,21 @@ export function ItemDrawer({
   const swappableVariants = (swap?.variants ?? []).filter(
     (v) => v.available && v.id !== swap?.currentVariantId,
   );
+  /**
+   * A swap within the item's own product, which is the only kind the store
+   * offers to cover.
+   *
+   * Decided by comparing product ids, exactly as the server does when it
+   * prices the return — the panel is shared by size swaps and catalogue picks,
+   * so "which panel am I on" is not the same question. Choosing something else
+   * entirely is a change of mind about what to own, and its price gap is
+   * settled the ordinary way.
+   */
+  const sameProduct = Boolean(
+    options?.product &&
+      swap?.product &&
+      swap.product.id === options.product.id,
+  );
   const chosen = swap?.variants.find((v) => v.id === chosenId) ?? null;
   /** Positive means they owe the difference; negative means they're owed it. */
   const delta = chosen ? chosen.price - item.unitPrice : 0;
@@ -726,7 +741,7 @@ export function ItemDrawer({
                         and nothing coming back, so promising a credit here was
                         simply false — the summary would then show zero.
                       */}
-                      {absorbing && Math.abs(delta) > 0.005
+                      {absorbing && sameProduct && Math.abs(delta) > 0.005
                         ? `No difference to pay — ${merchantName} covers it.`
                         : delta > 0.005
                           ? `You'll pay ${money(delta, swap.currency)} more.`
