@@ -2,7 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, redirect, useNavigate, useParams } from "react-router";
 import { api, ApiError, getToken } from "../lib/api";
 import { money, shortDate } from "../lib/format";
-import type { OrderSession, Quote, ResolutionType } from "../lib/types";
+import type {
+  ExchangeProduct,
+  OrderSession,
+  Quote,
+  ResolutionType,
+} from "../lib/types";
 import { ErrorAlert } from "../components/Feedback";
 import { ItemDrawer, type ItemDecision } from "./ItemDrawer";
 import { usePortal } from "./PortalLayout";
@@ -16,6 +21,7 @@ import {
   saveDraft,
   toSelections,
   toShopSelections,
+  type Draft,
 } from "./draft";
 import type { Route } from "./+types/SelectItemsPage";
 
@@ -44,6 +50,8 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
  * comes on the review step, where the label is the fuller "Refund to original
  * payment method". Naming it here pre-empted a decision they hadn't made.
  */
+const EXCHANGE_RESOLUTIONS = ["EXCHANGE", "INSTANT_EXCHANGE"];
+
 const RESOLUTION_LABEL: Record<string, string> = {
   REFUND: "Return",
   STORE_CREDIT: "Store credit",
@@ -68,6 +76,11 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
   const [error, setError] = useState<string | null>(null);
   /** True while the browser is on its way to the merchant's storefront. */
   const [leaving, setLeaving] = useState(false);
+  /** The "spend it with us instead" offer, and whether it's been answered. */
+  const [offerOpen, setOfferOpen] = useState(false);
+  const [offerSeen, setOfferSeen] = useState(false);
+  const [shopCredit, setShopCredit] = useState<number | null>(null);
+  const [offerProducts, setOfferProducts] = useState<ExchangeProduct[]>([]);
 
 
   /**
@@ -126,8 +139,61 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
    * Hands off to the review step. Nothing is submitted here — the shopper gets
    * a chance to check the whole return, and what they'd be paid, first.
    */
+  /**
+   * Whether shopping with the credit is even on the table.
+   *
+   * A line already being exchanged has spent its value on the replacement, so
+   * there is no credit left to offer — showing "shop with your credit" beside
+   * a chosen size swap promised money the shopper doesn't have. The offer is
+   * for returns: refund, store credit, gift card.
+   */
+  const anyExchange = Object.values(decisions).some(
+    (d) => EXCHANGE_RESOLUTIONS.includes(d.resolution) || d.exchangeVariantId,
+  );
+  const canOfferShopping = Boolean(shopNow?.enabled) && !anyExchange;
+
+  /**
+   * What these items are worth two ways.
+   *
+   * `quote` above is the payout: cash, credit or a gift card. This asks the
+   * same server the same question with the resolutions rewritten to an
+   * exchange and an empty basket, which is what "spend it with us" is worth —
+   * the percentage bonus and the flat sweetener only apply to money kept in
+   * the store, so the two figures genuinely differ.
+   */
+  useEffect(() => {
+    if (!offerOpen || shopCredit !== null) return;
+    const items = toShopSelections(decisions as Draft);
+    api
+      .post<Quote>(
+        "/portal/session/quote",
+        { items, shopItems: [] },
+        { auth: "portal" },
+      )
+      .then((q) => setShopCredit(q.estimatedTotal))
+      // Without a figure there is no offer to make; let the shopper carry on.
+      .catch(() => setOfferOpen(false));
+
+    api
+      .get<{ products: ExchangeProduct[] }>(
+        "/portal/session/exchange/products",
+        { auth: "portal" },
+      )
+      .then((r) => setOfferProducts(r.products.slice(0, 4)))
+      .catch(() => setOfferProducts([]));
+  }, [offerOpen, shopCredit, decisions]);
+
   const goToReview = () => {
     saveDraft(order.id, decisions);
+    /**
+     * The offer is made once, here, rather than sitting permanently in the
+     * bar: it is a choice between two ways of being paid, which only becomes a
+     * real question at the moment the shopper says they're finished.
+     */
+    if (canOfferShopping && !offerSeen) {
+      setOfferOpen(true);
+      return;
+    }
     navigate(`/r/${slug}/review`);
   };
 
@@ -421,24 +487,82 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
           <span className="portal__bar-label">
             {count} item{count === 1 ? "" : "s"} selected
           </span>
-          {/*
-            Offered beside the ordinary way forward rather than as a modal that
-            interrupts it. The shopper has just decided what they want; asking
-            "are you sure you wouldn't rather have credit?" over the top of that
-            decision is the pattern this deliberately isn't.
-          */}
-          {shopNow?.enabled && (
-            <button
-              className="btn btn--secondary"
-              disabled={leaving}
-              onClick={() => void goToShop()}
-            >
-              {leaving ? "Opening the store…" : "Shop with your credit"}
-            </button>
-          )}
           <button className="btn" onClick={goToReview}>
             Continue with return
           </button>
+        </div>
+      )}
+
+      {/*
+        The offer, made once at the moment the shopper says they're finished.
+        Two ways of being paid, side by side, with the difference stated —
+        rather than a permanent button in the bar competing with the way
+        forward.
+      */}
+      {offerOpen && (
+        <div className="drawer" role="dialog" aria-modal="true">
+          <div
+            className="drawer__backdrop"
+            onClick={() => setOfferOpen(false)}
+          />
+          <div className="card offer">
+            <h2 className="offer__title">
+              {shopCredit !== null && quote && shopCredit - quote.estimatedTotal > 0.005
+                ? `Shop now and get ${money(shopCredit - quote.estimatedTotal, currency)} added to your return credit.`
+                : "Spend your return with us instead?"}
+            </h2>
+
+            {offerProducts.length > 0 && (
+              <div className="offer__products">
+                {offerProducts.map((p) => (
+                  <div key={p.id} className="offer__product">
+                    {p.imageUrl ? (
+                      <img src={p.imageUrl} alt="" />
+                    ) : (
+                      <span className="offer__product-blank" />
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="offer__actions">
+              <button
+                type="button"
+                className="btn btn--secondary"
+                onClick={() => {
+                  setOfferSeen(true);
+                  setOfferOpen(false);
+                  navigate(`/r/${slug}/review`);
+                }}
+              >
+                {quote ? `Get ${money(quote.estimatedTotal, currency)}` : "Continue"}
+              </button>
+              <button
+                type="button"
+                className="btn offer__shop"
+                disabled={shopCredit === null || leaving}
+                onClick={() => {
+                  setOfferSeen(true);
+                  void goToShop();
+                }}
+              >
+                {shopCredit === null
+                  ? "Loading…"
+                  : leaving
+                    ? "Opening the store…"
+                    : `Shop now with ${money(shopCredit, currency)}`}
+              </button>
+            </div>
+
+            <button
+              type="button"
+              className="linkish offer__back"
+              onClick={() => setOfferOpen(false)}
+            >
+              Go back
+            </button>
+          </div>
         </div>
       )}
 
