@@ -1488,3 +1488,45 @@ table.data tbody tr:hover {
     font-size: 13px;
   }
 }
+
+/* ---------- advanced exchange rules ---------- */
+
+.rule-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.rule-row__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.rule-row__actions {
+  display: flex;
+  gap: 6px;
+  flex: none;
+}
+
+.rule-option__row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.rule-option__row select {
+  flex: 1;
+}
+
+.rule-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.rule-actions__right {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}

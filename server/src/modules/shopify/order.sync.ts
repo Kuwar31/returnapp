@@ -82,6 +82,7 @@ export const upsertOrder = async (
         variantId: line.variantId,
         sku: line.sku,
         productType: line.productType,
+        productTags: line.productTags ?? [],
         title: line.title,
         variantTitle: line.variantTitle,
         variantOptions: line.variantOptions ?? undefined,
@@ -207,7 +208,7 @@ const SYNC_ORDERS_QUERY = `#graphql
             quantity
             image { url }
             discountedUnitPriceSet { shopMoney { amount } }
-            product { id productType }
+            product { id productType tags }
             variant { id selectedOptions { name value } }
           }
         }

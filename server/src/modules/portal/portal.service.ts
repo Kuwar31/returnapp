@@ -12,6 +12,7 @@ import {
   resolveDisplayMode,
   resolveVariantDifference,
 } from "../settings/merchant-settings.js";
+import { ruleForLine } from "../settings/exchange-rules.service.js";
 import { signShopToken } from "../../lib/tokens.js";
 import {
   qualifiesForAutoApproval,
@@ -568,6 +569,72 @@ export const buildShopSession = async (
   const url = new URL(`https://${merchant.domain}/`);
   url.searchParams.set("rm_credit", token);
   return { url: url.toString() };
+};
+
+/**
+ * The lists this returned item may be exchanged into, when a rule governs it.
+ *
+ * Each option is shown with a handful of real products, because a card headed
+ * "Exchange for a new style" with nothing under it tells the shopper nothing
+ * about whether it is worth opening. Returns null when no rule matches, which
+ * is the signal to offer the ordinary catalogue instead.
+ */
+export const getAdvancedExchange = async (
+  merchantId: string,
+  orderId: string,
+  orderLineItemId: string,
+) => {
+  const line = await prisma.orderLineItem.findFirst({
+    where: { id: orderLineItemId, order: { id: orderId, merchantId } },
+    select: { productTags: true, title: true },
+  });
+  if (!line) throw notFound("That item isn't part of this order.");
+
+  const rule = await ruleForLine(merchantId, line);
+  if (!rule) return null;
+
+  const fx = await catalogueConverter(merchantId, orderId);
+
+  /**
+   * Previews are fetched per option and failures are swallowed per option: one
+   * collection a merchant has since deleted shouldn't take the whole menu down
+   * with it.
+   */
+  const options = await Promise.all(
+    rule.options.map(async (option) => {
+      let preview: Array<{ id: string; title: string; imageUrl: string | null }> = [];
+      try {
+        const { products } = await browseProducts(merchantId, {
+          collectionId: option.collectionId,
+          limit: 5,
+        });
+        preview = products.map((p) => ({
+          id: p.id,
+          title: p.title,
+          imageUrl: p.imageUrl,
+        }));
+      } catch (error) {
+        logger.warn(
+          { merchantId, collectionId: option.collectionId, error },
+          "Could not preview an advanced exchange collection",
+        );
+      }
+      return {
+        id: option.id,
+        label: option.label,
+        collectionId: option.collectionId,
+        preview,
+      };
+    }),
+  );
+
+  return {
+    ruleId: rule.id,
+    showProductTitles: rule.showProductTitles,
+    currency: fx.currency,
+    // An option whose collection is gone or empty is not worth offering.
+    options: options.filter((o) => o.preview.length > 0),
+  };
 };
 
 /**

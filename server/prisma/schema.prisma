@@ -75,6 +75,7 @@ model Merchant {
   memberships    Membership[]
   policies       ReturnPolicy[]
   reasons        ReturnReason[]
+  exchangeRules  ExchangeRule[]
   reasonGroups   ReturnReasonGroup[]
   orders         Order[]
   returnRequests ReturnRequest[]
@@ -101,6 +102,66 @@ model Merchant {
 enum ExchangeMethod {
   DRAFT_ORDER
   SHOPIFY_NATIVE
+}
+
+/**
+ * "Advanced exchanges": what a shopper may swap a given item *for*.
+ *
+ * Without a rule, an exchange offers the item's own other variants and the
+ * whole catalogue. A rule narrows that: returned items matching it are offered
+ * one or more named lists, each backed by a collection — "exchange for a new
+ * style", "pre-order", "clearance" — so the merchant decides what a return can
+ * turn into rather than leaving it open.
+ *
+ * Matching is against a snapshot taken when the order synced, not against the
+ * product as it stands today. A shopper's options shouldn't change because
+ * someone retagged a product last week.
+ */
+model ExchangeRule {
+  id         String   @id @default(cuid())
+  merchantId String
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  /// The merchant's own label, e.g. "department:footwear, brand:alohas".
+  name       String
+  active     Boolean  @default(true)
+  /// First match wins, so a specific rule can sit above a catch-all.
+  sortOrder  Int      @default(0)
+  matchBy    ExchangeRuleMatch @default(PRODUCT_TAG)
+  /// Tags, or fragments of a product title, that identify a returned item.
+  matchValues String[]
+  /// Whether the shopper sees names under the pictures, or just the pictures.
+  showProductTitles Boolean @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  options ExchangeRuleOption[]
+
+  @@index([merchantId, active, sortOrder])
+  @@map("exchange_rules")
+}
+
+enum ExchangeRuleMatch {
+  /// The returned product carries one of the listed tags.
+  PRODUCT_TAG
+  /// The returned product's title contains one of the listed fragments.
+  PRODUCT_NAME
+}
+
+/** One named list a matching item may be exchanged into. */
+model ExchangeRuleOption {
+  id     String @id @default(cuid())
+  ruleId String
+  rule   ExchangeRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  /// What the shopper reads, e.g. "Exchange for a new style".
+  label  String
+  /// The Shopify collection this option draws from.
+  collectionId    String
+  /// Kept alongside the id so the admin can name it without a round trip.
+  collectionTitle String
+  sortOrder       Int @default(0)
+
+  @@index([ruleId, sortOrder])
+  @@map("exchange_rule_options")
 }
 
 /** How a price gap between two variants of the same product is settled. */
@@ -394,6 +455,10 @@ model OrderLineItem {
   productType  String?
   title        String
   variantTitle String?
+  /// The product's tags when the order synced. A snapshot on purpose: advanced
+  /// exchange rules match on these, and retagging a product later shouldn't
+  /// silently change what an existing order may be exchanged for.
+  productTags  String[]
   /// The option axis this variant sits on, e.g. [{name:"Size",value:"37"}].
   /// Shopify's variantTitle carries only the values — "37", or "Blue / M" —
   /// so without the names the portal can only print a bare number at the

@@ -2433,3 +2433,49 @@
   background: rgba(0, 0, 0, 0.72);
   backdrop-filter: blur(4px);
 }
+
+/* ---------- advanced exchanges: the merchant's own lists ---------- */
+
+/*
+ * A choice card that carries a strip of what's inside it. The pictures are the
+ * point — "Exchange for a new style" means nothing on its own, and a shopper
+ * decides whether to open it by seeing whether they like the look of what's
+ * behind it.
+ */
+.choice--list .choice__label {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.choice__strip {
+  display: flex;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.choice__strip-item {
+  flex: 1;
+  min-width: 0;
+  max-width: 84px;
+}
+
+.choice__strip-item img,
+.choice__strip-blank {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #f4f4f5;
+}
+
+.choice__strip-title {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

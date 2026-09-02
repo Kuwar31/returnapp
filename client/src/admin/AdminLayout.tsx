@@ -10,6 +10,7 @@ const NAV = [
   { to: "/returns", label: "Returns", end: false },
   { to: "/settings", label: "Settings", end: true },
   { to: "/settings/reasons", label: "Return reasons", end: false },
+  { to: "/settings/exchanges", label: "Advanced exchanges", end: false },
 ];
 
 /**

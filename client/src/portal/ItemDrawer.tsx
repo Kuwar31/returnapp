@@ -3,6 +3,7 @@ import { api } from "../lib/api";
 import { money } from "../lib/format";
 import { describeVariant } from "./draft";
 import type {
+  AdvancedExchange,
   EligibleLineItem,
   ExchangeOptions,
   ExchangeProduct,
@@ -98,6 +99,15 @@ export function ItemDrawer({
   const [products, setProducts] = useState<ExchangeProduct[] | null>(null);
   /** The catalogue product being confirmed, once one is opened from the grid. */
   const [picked, setPicked] = useState<ExchangeProduct | null>(null);
+  /**
+   * The merchant's own list of what this item may become, if they've set one.
+   * Undefined while unknown, null once we know no rule applies.
+   */
+  const [advanced, setAdvanced] = useState<AdvancedExchange | null | undefined>(
+    undefined,
+  );
+  /** Which collection the browse step is scoped to, if any. */
+  const [collectionId, setCollectionId] = useState<string | null>(null);
   /** Preview lookups that failed. Distinct from "loaded, and empty". */
   const [optionsFailed, setOptionsFailed] = useState(false);
   const [productsFailed, setProductsFailed] = useState(false);
@@ -252,6 +262,18 @@ export function ItemDrawer({
   }, [step, options, optionsFailed, item.id]);
 
   useEffect(() => {
+    if (step !== "resolution" || advanced !== undefined) return;
+    api
+      .get<AdvancedExchange | null>("/portal/session/exchange/advanced", {
+        auth: "portal",
+        query: { orderLineItemId: item.id },
+      })
+      .then((r) => setAdvanced(r ?? null))
+      // No rule is the safe reading: offer the whole catalogue as before.
+      .catch(() => setAdvanced(null));
+  }, [step, advanced, item.id]);
+
+  useEffect(() => {
     if (step !== "resolution" || products || productsFailed) return;
     api
       .get<{ products: ExchangeProduct[] }>("/portal/session/exchange/products", {
@@ -269,14 +291,20 @@ export function ItemDrawer({
       api
         .get<{ products: ExchangeProduct[] }>(
           "/portal/session/exchange/products",
-          { auth: "portal", query: { search: search || undefined } },
+          {
+            auth: "portal",
+            query: {
+              search: search || undefined,
+              collectionId: collectionId ?? undefined,
+            },
+          },
         )
         .then((r) => setProducts(r.products))
         .catch((e) => setError(e.message))
         .finally(() => setLoading(false));
     }, 250);
     return () => clearTimeout(timer);
-  }, [step, search]);
+  }, [step, search, collectionId]);
 
   // A newly picked variant with its own shot should lead the gallery.
   useEffect(() => {
@@ -533,9 +561,61 @@ export function ItemDrawer({
                 </button>
               )}
 
+              {/*
+                The merchant's own lists, when they've narrowed what this item
+                may become. Each shows a few real products: a card headed
+                "Exchange for a new style" with nothing under it says nothing
+                about whether it's worth opening.
+              */}
               {canExchange &&
+                advanced?.options.map((option) => (
+                  <button
+                    key={option.id}
+                    className="choice choice--list"
+                    onClick={() => {
+                      setCollectionId(option.collectionId);
+                      setProducts(null);
+                      setStep("browse");
+                    }}
+                  >
+                    <span className="choice__main">
+                      <span className="choice__label">{option.label}</span>
+                      <span className="choice__strip">
+                        {option.preview.map((p) => (
+                          <span key={p.id} className="choice__strip-item">
+                            {p.imageUrl ? (
+                              <img src={p.imageUrl} alt="" />
+                            ) : (
+                              <span className="choice__strip-blank" />
+                            )}
+                            {advanced.showProductTitles && (
+                              <span className="choice__strip-title">
+                                {p.title}
+                              </span>
+                            )}
+                          </span>
+                        ))}
+                      </span>
+                    </span>
+                    <span className="choice__chevron">›</span>
+                  </button>
+                ))}
+
+              {/*
+                The open catalogue, offered only when no rule governs this item
+                — a merchant who narrowed the choice didn't mean "and also
+                everything else".
+              */}
+              {canExchange &&
+                advanced === null &&
                 (products === null || products.length > 0 || productsFailed) && (
-                <button className="choice" onClick={() => setStep("browse")}>
+                <button
+                  className="choice"
+                  onClick={() => {
+                    setCollectionId(null);
+                    setStep("browse");
+                  }}
+                >
                   <span className="choice__main">
                     <span className="choice__label">
                       Exchange for another product

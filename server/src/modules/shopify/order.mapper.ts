@@ -11,6 +11,8 @@ export interface NormalizedLineItem {
   sku: string | null;
   /// Drives which reason group the portal offers for this line.
   productType: string | null;
+  /// Snapshot for advanced-exchange matching; see the schema.
+  productTags: string[];
   title: string;
   variantTitle: string | null;
   /** Option axis and value, e.g. [{ name: "Size", value: "37" }]. */
@@ -173,6 +175,14 @@ export const mapWebhookOrder = (
           : null,
         sku: line.sku ?? null,
         productType: line.product_type ?? null,
+        /**
+         * Empty from a webhook payload, which carries no product tags at all.
+         * The GraphQL sync is what fills these in, and it is the path every
+         * order actually takes — an order refreshes from Shopify whenever it
+         * is looked up. Left empty rather than guessed, so a rule that matches
+         * on tags simply doesn't fire rather than firing on nothing.
+         */
+        productTags: [],
         title: line.title,
         variantTitle: line.variant_title ?? null,
         // Webhook payloads carry no image; the GraphQL backfill fills it in.
@@ -228,7 +238,11 @@ export interface GraphQLOrderNode {
       quantity: number;
       image: { url: string } | null;
       discountedUnitPriceSet: { shopMoney: { amount: string } } | null;
-      product: { id: string; productType: string | null } | null;
+      product: {
+        id: string;
+        productType: string | null;
+        tags?: string[] | null;
+      } | null;
       variant: {
         id: string;
         selectedOptions?: Array<{ name: string; value: string }> | null;
@@ -272,6 +286,7 @@ export const mapGraphQLOrder = (
       externalId: line.id,
       productId: line.product?.id ?? null,
       productType: line.product?.productType || null,
+      productTags: line.product?.tags ?? [],
       variantId: line.variant?.id ?? null,
       sku: line.sku ?? null,
       title: line.title,

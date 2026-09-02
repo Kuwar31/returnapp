@@ -40,6 +40,7 @@ export default [
       route("returns/:id", "admin/ReturnDetailPage.tsx"),
       route("settings", "admin/SettingsPage.tsx"),
       route("settings/reasons", "admin/ReasonsPage.tsx"),
+      route("settings/exchanges", "admin/ExchangeRulesPage.tsx"),
     ]),
   ]),
 

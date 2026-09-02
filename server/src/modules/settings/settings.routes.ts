@@ -8,6 +8,8 @@ import { requireRole } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
 import { SHOPIFY_RETURN_REASONS } from "../shopify/returns.graphql.js";
 import * as reasonsService from "./reasons.service.js";
+import * as exchangeRules from "./exchange-rules.service.js";
+import { browseCollections } from "../shopify/catalogue.service.js";
 import { clearMerchantSettingsCache } from "./merchant-settings.js";
 
 export const settingsRouter = Router();
@@ -356,5 +358,80 @@ settingsRouter.put(
       create: { merchantId: req.admin!.merchantId, ...req.body },
     });
     res.json(branding);
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// Advanced exchanges — which lists a returned item may be swapped into
+// ---------------------------------------------------------------------------
+
+const ruleSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  active: z.boolean().optional(),
+  matchBy: z.enum(["PRODUCT_TAG", "PRODUCT_NAME"]).optional(),
+  matchValues: z.array(z.string().trim().min(1).max(120)).max(50).optional(),
+  showProductTitles: z.boolean().optional(),
+  options: z
+    .array(
+      z.object({
+        label: z.string().trim().min(1).max(80),
+        collectionId: z.string().trim().min(1).max(200),
+        collectionTitle: z.string().trim().min(1).max(200),
+      }),
+    )
+    .max(10)
+    .optional(),
+});
+
+settingsRouter.get(
+  "/exchange-rules",
+  asyncHandler(async (req, res) => {
+    res.json({
+      rules: await exchangeRules.listRules(req.admin!.merchantId),
+      /** The collections an option can point at, for the editor's picker. */
+      collections: await browseCollections(req.admin!.merchantId),
+    });
+  }),
+);
+
+settingsRouter.post(
+  "/exchange-rules",
+  validate(ruleSchema),
+  asyncHandler(async (req, res) => {
+    res
+      .status(201)
+      .json(await exchangeRules.createRule(req.admin!.merchantId, req.body));
+  }),
+);
+
+settingsRouter.patch(
+  "/exchange-rules/:id",
+  validate(ruleSchema),
+  asyncHandler(async (req, res) => {
+    res.json(
+      await exchangeRules.updateRule(
+        req.admin!.merchantId,
+        req.params.id,
+        req.body,
+      ),
+    );
+  }),
+);
+
+settingsRouter.delete(
+  "/exchange-rules/:id",
+  asyncHandler(async (req, res) => {
+    await exchangeRules.deleteRule(req.admin!.merchantId, req.params.id);
+    res.status(204).end();
+  }),
+);
+
+/** Priority is only meaningful as an order, so it is set for the whole set. */
+settingsRouter.post(
+  "/exchange-rules/reorder",
+  validate(z.object({ ids: z.array(z.string().min(1)).max(100) })),
+  asyncHandler(async (req, res) => {
+    await exchangeRules.reorderRules(req.admin!.merchantId, req.body.ids);
+    res.json({ rules: await exchangeRules.listRules(req.admin!.merchantId) });
   }),
 );

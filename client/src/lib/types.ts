@@ -161,6 +161,24 @@ export interface ExchangeOptions {
   currency: string;
 }
 
+/**
+ * "Advanced exchanges": the lists a returned item may be swapped into, when
+ * the merchant has narrowed them. Null when no rule applies, which means the
+ * whole catalogue is on offer.
+ */
+export interface AdvancedExchange {
+  ruleId: string;
+  showProductTitles: boolean;
+  currency: string;
+  options: Array<{
+    id: string;
+    label: string;
+    collectionId: string;
+    /** A few real products, so the card shows what's behind it. */
+    preview: Array<{ id: string; title: string; imageUrl: string | null }>;
+  }>;
+}
+
 /** One of the merchant's collections, for the browse rail. */
 export interface ExchangeCollection {
   id: string;

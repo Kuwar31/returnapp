@@ -179,6 +179,25 @@ portalRouter.get(
   }),
 );
 
+/**
+ * The lists this item may be exchanged into, when the merchant has narrowed
+ * them. Absent means no rule applies and the whole catalogue is on offer.
+ */
+portalRouter.get(
+  "/session/exchange/advanced",
+  validate(z.object({ orderLineItemId: z.string().min(1) }), "query"),
+  asyncHandler(async (req, res) => {
+    const { merchantId, orderId } = req.portal!;
+    res.json(
+      await portalService.getAdvancedExchange(
+        merchantId,
+        orderId,
+        String(req.query.orderLineItemId),
+      ),
+    );
+  }),
+);
+
 /** Browsable catalogue for "exchange for another product". */
 portalRouter.get(
   "/session/exchange/products",
