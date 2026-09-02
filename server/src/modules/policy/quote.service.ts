@@ -10,6 +10,17 @@ export interface QuoteLine {
   exchangeValue?: Prisma.Decimal;
 }
 
+/**
+ * The merchant covers any gap between a returned item and its replacement.
+ *
+ * The gap on a size swap is frequently not a real price difference at all: the
+ * returned line was charged at the order's own exchange rate, while the
+ * catalogue price is today's, so the same product in another size can appear
+ * to be worth a few rupees more or less than itself. Absorbing settles both
+ * directions — nothing owed, nothing credited.
+ */
+export type ExchangeDifference = "SAME_PRICE_ONLY" | "CHARGE" | "ABSORB";
+
 /** Per-line breakdown, so the portal can show the maths item by item. */
 export interface QuoteLineResult {
   resolution: ResolutionType;
@@ -63,9 +74,16 @@ export const quoteReturn = ({
   lines,
   policy,
   shopNow,
+  variantDifference = "CHARGE",
 }: {
   lines: QuoteLine[];
   policy: ReturnPolicy;
+  /**
+   * How a per-line swap's price gap is settled. Applies only to those: a "shop
+   * now" basket is a deliberate purchase, and absorbing its cost would hand the
+   * shopper anything in the catalogue for free.
+   */
+  variantDifference?: ExchangeDifference;
   /**
    * "Shop now": one basket bought with every line's credit pooled together,
    * rather than each line netting against its own replacement.
@@ -92,18 +110,30 @@ export const quoteReturn = ({
 
     const exchangeValue = round2(toDecimal(line.exchangeValue ?? ZERO));
 
+    /**
+     * Absorbed swaps settle flat: the shopper gets the replacement, pays
+     * nothing and is owed nothing, whichever way the gap runs. The exchange
+     * value itself is left truthful, because the draft order still has to buy
+     * the real item at the real price — only who covers the gap changes.
+     */
+    const absorbed =
+      variantDifference === "ABSORB" && exchangeValue.greaterThan(0);
+
     // An exchange consumes its own line's value. Anything left over is still
     // owed to the shopper; anything short is owed by them.
-    const credited = exchangeValue.greaterThan(0)
-      ? round2(
-          value.sub(exchangeValue).greaterThan(0)
-            ? value.sub(exchangeValue)
-            : ZERO,
-        )
-      : value;
-    const due = exchangeValue.greaterThan(value)
-      ? round2(exchangeValue.sub(value))
-      : ZERO;
+    const credited = absorbed
+      ? ZERO
+      : exchangeValue.greaterThan(0)
+        ? round2(
+            value.sub(exchangeValue).greaterThan(0)
+              ? value.sub(exchangeValue)
+              : ZERO,
+          )
+        : value;
+    const due =
+      !absorbed && exchangeValue.greaterThan(value)
+        ? round2(exchangeValue.sub(value))
+        : ZERO;
 
     return {
       resolution: line.resolution,

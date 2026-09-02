@@ -391,6 +391,18 @@ export type ExchangeMethod = "DRAFT_ORDER" | "SHOPIFY_NATIVE";
 /** Where a shopper spends their return credit under "shop now". */
 export type ShopNowMode = "RETURNS_PAGE" | "STOREFRONT";
 
+/**
+ * How a price gap between two variants of the same product is settled.
+ *
+ * The gap is often not a real difference: the returned line was charged at the
+ * order's own exchange rate while the catalogue is priced at today's, so the
+ * same item in another size can look worth a little more or less than itself.
+ */
+export type VariantExchangeDifference =
+  | "SAME_PRICE_ONLY"
+  | "CHARGE"
+  | "ABSORB";
+
 export interface StoreSettings {
   name: string;
   slug: string;
@@ -398,6 +410,7 @@ export interface StoreSettings {
   shopNowMode: ShopNowMode;
   /** A flat sweetener on top of the policy's percentage. Null for none. */
   shopNowBonusAmount: number | null;
+  variantExchangeDifference: VariantExchangeDifference;
   /**
    * The full, shareable portal address. Built server-side from
    * PORTAL_BASE_URL: the admin can be open somewhere the portal isn't served

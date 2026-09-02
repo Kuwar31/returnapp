@@ -10,7 +10,10 @@ import {
   type OrderRateSource,
 } from "../../lib/money.js";
 import { quoteReturn } from "../policy/quote.service.js";
-import { resolveExchangeMethod } from "../settings/merchant-settings.js";
+import {
+  resolveExchangeMethod,
+  resolveVariantDifference,
+} from "../settings/merchant-settings.js";
 import { queryShop } from "./shopify.client.js";
 import { resolveCustomerId } from "./credit.service.js";
 import { fetchVariantImages } from "./catalogue.service.js";
@@ -101,6 +104,11 @@ export const priceExchange = async (
 
   const quote = quoteReturn({
     policy: request.policy,
+    /**
+     * The same rule the shopper was quoted under. Without it an absorbed swap
+     * would show as free on the portal and still arrive as an invoice.
+     */
+    variantDifference: await resolveVariantDifference(merchantId),
     lines: request.lineItems.map((li) => ({
       unitPrice: toDecimal(li.unitPrice),
       quantity: li.quantity,

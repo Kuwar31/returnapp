@@ -23,7 +23,11 @@ import {
   sendExchangeInvoice,
 } from "../shopify/exchange.service.js";
 import { releaseExchangeFulfillment } from "../shopify/fulfillment-hold.js";
-import { resolveDisplayMode, resolveExchangeMethod } from "../settings/merchant-settings.js";
+import {
+  resolveDisplayMode,
+  resolveExchangeMethod,
+  resolveVariantDifference,
+} from "../settings/merchant-settings.js";
 import { generateCreditCode } from "./reference.js";
 import { quoteReturn } from "../policy/quote.service.js";
 import { assertTransition, STATUS_LABELS } from "./status.js";
@@ -343,6 +347,8 @@ const recalculateTotals = async (merchantId: string, id: string) => {
 
   const quote = quoteReturn({
     policy: request.policy,
+    // Same rule the shopper was quoted under; see priceExchange.
+    variantDifference: await resolveVariantDifference(merchantId),
     lines: request.lineItems.map((li) => ({
       unitPrice: toDecimal(li.unitPrice),
       quantity: li.acceptedQuantity ?? li.quantity,
@@ -437,6 +443,8 @@ const payoutSplit = async (merchantId: string, id: string) => {
 
   const quote = quoteReturn({
     policy: request.policy,
+    // Same rule the shopper was quoted under; see priceExchange.
+    variantDifference: await resolveVariantDifference(merchantId),
     lines: request.lineItems.map((li) => ({
       unitPrice: toDecimal(li.unitPrice),
       // Pay for what was accepted. An uninspected line falls back to what the

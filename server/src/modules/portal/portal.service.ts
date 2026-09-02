@@ -8,7 +8,10 @@ import {
   getReasonTree,
   resolveGroupForProductType,
 } from "../settings/reasons.service.js";
-import { resolveDisplayMode } from "../settings/merchant-settings.js";
+import {
+  resolveDisplayMode,
+  resolveVariantDifference,
+} from "../settings/merchant-settings.js";
 import { signShopToken } from "../../lib/tokens.js";
 import {
   qualifiesForAutoApproval,
@@ -349,6 +352,29 @@ const resolveSelections = async (
    * turning the feature off actually turns it off — a client that keeps
    * sending baskets is refused instead of quietly served.
    */
+  /**
+   * Same-price-only is enforced here as well as hidden in the picker. The
+   * picker is a courtesy; this is the rule. A request naming a differently
+   * priced variant has either gone stale or been edited, and neither should
+   * be allowed to open a gap the merchant said they didn't want.
+   */
+  const variantDifference = await resolveVariantDifference(merchantId);
+  if (variantDifference === "SAME_PRICE_ONLY") {
+    for (const { line, selection } of resolved) {
+      if (!selection.exchange) continue;
+      const variant = variants.get(selection.exchange.variantId);
+      if (!variant) continue;
+      const swapTotal = round2(
+        toDecimal(variant.price).mul(selection.exchange.quantity),
+      );
+      if (!swapTotal.equals(round2(toDecimal(line.unitPrice)))) {
+        throw unprocessable(
+          `${line.title} can only be exchanged for an option of the same price.`,
+        );
+      }
+    }
+  }
+
   const shopItems = input.shopItems ?? [];
   let shopNow: { cartTotal: Prisma.Decimal; bonus: Prisma.Decimal } | null = null;
   let shopBasket: Array<{ variantId: string; quantity: number }> = [];
@@ -385,7 +411,7 @@ const resolveSelections = async (
     for (const [id, variant] of shopVariants) variants.set(id, variant);
   }
 
-  return { order, policy, resolved, variants, shopNow, shopBasket };
+  return { order, policy, resolved, variants, shopNow, shopBasket, variantDifference };
 };
 
 /**
@@ -443,11 +469,30 @@ export const getExchangeOptions = async (
   }
 
   const product = await getProductVariants(merchantId, line.productId);
+
+  /**
+   * Under same-price-only, an option worth something else isn't an option.
+   *
+   * Compared in shop currency, before conversion: the shopper's line was
+   * charged at the order's own rate and the catalogue is quoted at today's, so
+   * comparing converted figures would call two identically-priced sizes
+   * different. That mismatch is the whole reason this setting exists.
+   */
+  const samePriceOnly =
+    (await resolveVariantDifference(merchantId)) === "SAME_PRICE_ONLY";
+  const linePrice = round2(toDecimal(line.unitPrice));
+  const offered = (product?.variants ?? []).filter(
+    (v) =>
+      !samePriceOnly ||
+      v.id === line.variantId ||
+      round2(toDecimal(v.price)).equals(linePrice),
+  );
+
   return {
     product: product
       ? { id: product.id, title: product.title, images: product.images ?? [] }
       : null,
-    variants: (product?.variants ?? []).map((v) => ({
+    variants: offered.map((v) => ({
       ...v,
       price: fx.price(v.price),
     })),
@@ -618,15 +663,13 @@ export const quoteSelection = async (
   orderId: string,
   input: QuoteInput,
 ) => {
-  const { order, policy, resolved, variants, shopNow } = await resolveSelections(
-    merchantId,
-    orderId,
-    input,
-  );
+  const { order, policy, resolved, variants, shopNow, variantDifference } =
+    await resolveSelections(merchantId, orderId, input);
 
   const quote = quoteReturn({
     lines: toQuoteLines(resolved, variants, Boolean(shopNow)),
     policy,
+    variantDifference,
     ...(shopNow ? { shopNow } : {}),
   });
 
@@ -674,11 +717,12 @@ export const submitReturn = async (
   orderId: string,
   input: SubmitInput,
 ) => {
-  const { order, policy, resolved, variants, shopNow, shopBasket } =
+  const { order, policy, resolved, variants, shopNow, shopBasket, variantDifference } =
     await resolveSelections(merchantId, orderId, input);
 
   const quote = quoteReturn({
     lines: toQuoteLines(resolved, variants, Boolean(shopNow)),
+    variantDifference,
     ...(shopNow ? { shopNow } : {}),
     policy,
   });

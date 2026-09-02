@@ -56,6 +56,16 @@ model Merchant {
    * Null means no flat bonus; the percentage still applies.
    */
   shopNowBonusAmount Decimal? @db.Decimal(12, 2)
+  /**
+   * What to do when a size swap isn't worth exactly what came back.
+   *
+   * Separate from "shop now", which is about spending a return's value on
+   * purpose. This is about the gap that appears when a shopper wanted the same
+   * item in another size and the two aren't priced identically — often not a
+   * real difference at all, but the order's historical exchange rate meeting
+   * today's catalogue price.
+   */
+  variantExchangeDifference VariantExchangeDifference @default(CHARGE)
   timezone  String   @default("UTC")
   status    MerchantStatus @default(ACTIVE)
   createdAt DateTime @default(now())
@@ -91,6 +101,16 @@ model Merchant {
 enum ExchangeMethod {
   DRAFT_ORDER
   SHOPIFY_NATIVE
+}
+
+/** How a price gap between two variants of the same product is settled. */
+enum VariantExchangeDifference {
+  /// Only variants of equal value are offered, so no gap can arise.
+  SAME_PRICE_ONLY
+  /// The shopper pays what's owed, or is credited what's left over.
+  CHARGE
+  /// The merchant covers it: the shopper pays nothing and is owed nothing.
+  ABSORB
 }
 
 /** Where a shopper spends their return credit under "shop now". */

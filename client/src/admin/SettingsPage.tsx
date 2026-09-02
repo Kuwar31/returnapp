@@ -304,6 +304,43 @@ export default function SettingsPage() {
           </div>
 
           <div className="panel">
+            <h2>Variant exchange price differences</h2>
+            <p className="settings-row__hint" style={{ marginBottom: 14 }}>
+              What to do when a size swap isn't worth exactly what came back.
+              Often the gap isn't a real price difference: the original was
+              charged at that order's exchange rate while your catalogue is
+              priced at today's, so the same item in another size can look worth
+              a little more or less than itself. This doesn't affect Shop now.
+            </p>
+            <div className="settings-row">
+              <div>
+                <div className="settings-row__label">Price differences</div>
+                <div className="settings-row__hint">
+                  {store.variantExchangeDifference === "SAME_PRICE_ONLY" &&
+                    "Only options of equal value are offered, so no gap can arise."}
+                  {store.variantExchangeDifference === "CHARGE" &&
+                    "The customer pays what's owed, or is credited what's left over."}
+                  {store.variantExchangeDifference === "ABSORB" &&
+                    "You cover the gap either way — the customer pays nothing and is owed nothing."}
+                </div>
+              </div>
+              <select
+                value={store.variantExchangeDifference}
+                onChange={(e) =>
+                  editStore(
+                    "variantExchangeDifference",
+                    e.target.value as StoreSettings["variantExchangeDifference"],
+                  )
+                }
+              >
+                <option value="SAME_PRICE_ONLY">Same price only</option>
+                <option value="CHARGE">Charge the difference</option>
+                <option value="ABSORB">Absorb the difference</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="panel">
             <h2>Shop now</h2>
             <p className="settings-row__hint" style={{ marginBottom: 14 }}>
               Instead of swapping one item for another, the customer's whole

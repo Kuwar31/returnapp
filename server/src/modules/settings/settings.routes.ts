@@ -114,6 +114,7 @@ settingsRouter.get(
         shopNowMode: true,
         shopNowBonusAmount: true,
         domain: true,
+        variantExchangeDifference: true,
       },
     });
 
@@ -167,6 +168,9 @@ settingsRouter.patch(
         shopNowMode: z.enum(["RETURNS_PAGE", "STOREFRONT"]).optional(),
         /** Null clears the flat bonus; the percentage one still applies. */
         shopNowBonusAmount: z.number().min(0).max(100000).nullable().optional(),
+        variantExchangeDifference: z
+          .enum(["SAME_PRICE_ONLY", "CHARGE", "ABSORB"])
+          .optional(),
       })
       .refine((v) => Object.keys(v).length > 0, {
         message: "Nothing to update.",
@@ -191,6 +195,9 @@ settingsRouter.patch(
         ...(req.body.shopNowBonusAmount === undefined
           ? {}
           : { shopNowBonusAmount: req.body.shopNowBonusAmount }),
+        ...(req.body.variantExchangeDifference
+          ? { variantExchangeDifference: req.body.variantExchangeDifference }
+          : {}),
       },
       select: {
         currency: true,
@@ -198,6 +205,7 @@ settingsRouter.patch(
         exchangeMethod: true,
         shopNowEnabled: true,
         shopNowMode: true,
+        variantExchangeDifference: true,
       },
     });
     // The resolver caches for 30s; drop it so the change shows immediately.

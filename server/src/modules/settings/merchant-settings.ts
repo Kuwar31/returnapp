@@ -1,4 +1,8 @@
-import type { DisplayCurrency, ExchangeMethod } from "@prisma/client";
+import type {
+  DisplayCurrency,
+  ExchangeMethod,
+  VariantExchangeDifference,
+} from "@prisma/client";
 import { prisma } from "../../lib/prisma.js";
 
 /**
@@ -20,11 +24,15 @@ const TTL_MS = 30_000;
 interface MerchantSettings {
   displayCurrency: DisplayCurrency;
   exchangeMethod: ExchangeMethod;
+  variantExchangeDifference: VariantExchangeDifference;
 }
 
 const DEFAULTS: MerchantSettings = {
   displayCurrency: "SHOP",
   exchangeMethod: "DRAFT_ORDER",
+  // What the app did before the setting existed, so nothing changes for a
+  // store that never opens the page.
+  variantExchangeDifference: "CHARGE",
 };
 
 const cache = new Map<string, { value: MerchantSettings; expires: number }>();
@@ -37,11 +45,18 @@ export const getMerchantSettings = async (
 
   const merchant = await prisma.merchant.findUnique({
     where: { id: merchantId },
-    select: { displayCurrency: true, exchangeMethod: true },
+    select: {
+      displayCurrency: true,
+      exchangeMethod: true,
+      variantExchangeDifference: true,
+    },
   });
   const value: MerchantSettings = {
     displayCurrency: merchant?.displayCurrency ?? DEFAULTS.displayCurrency,
     exchangeMethod: merchant?.exchangeMethod ?? DEFAULTS.exchangeMethod,
+    variantExchangeDifference:
+      merchant?.variantExchangeDifference ??
+      DEFAULTS.variantExchangeDifference,
   };
   cache.set(merchantId, { value, expires: Date.now() + TTL_MS });
   return value;
@@ -57,7 +72,13 @@ export const resolveExchangeMethod = async (
   merchantId: string,
 ): Promise<ExchangeMethod> => (await getMerchantSettings(merchantId)).exchangeMethod;
 
-/** Called when either setting changes, so the change is visible immediately. */
+/** How a size swap's price gap is settled. */
+export const resolveVariantDifference = async (
+  merchantId: string,
+): Promise<VariantExchangeDifference> =>
+  (await getMerchantSettings(merchantId)).variantExchangeDifference;
+
+/** Called when any of these change, so the change is visible immediately. */
 export const clearMerchantSettingsCache = (merchantId: string): void => {
   cache.delete(merchantId);
 };
