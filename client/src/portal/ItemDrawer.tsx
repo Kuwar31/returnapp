@@ -92,6 +92,9 @@ export function ItemDrawer({
   const [products, setProducts] = useState<ExchangeProduct[] | null>(null);
   /** The catalogue product being confirmed, once one is opened from the grid. */
   const [picked, setPicked] = useState<ExchangeProduct | null>(null);
+  /** Preview lookups that failed. Distinct from "loaded, and empty". */
+  const [optionsFailed, setOptionsFailed] = useState(false);
+  const [productsFailed, setProductsFailed] = useState(false);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   /**
@@ -219,7 +222,7 @@ export function ItemDrawer({
    */
   useEffect(() => {
     if (step !== "resolution" && step !== "size") return;
-    if (options) return;
+    if (options || optionsFailed) return;
     setLoading(step === "size");
     api
       .get<ExchangeOptions>("/portal/session/exchange/variants", {
@@ -227,26 +230,31 @@ export function ItemDrawer({
         query: { orderLineItemId: item.id },
       })
       .then(setOptions)
-      .catch(() =>
-        setOptions({
-          product: null,
-          variants: [],
-          currentVariantId: null,
-          currency,
-        }),
-      )
+      .catch(() => {
+        /**
+         * A failed preview must not look like "there are no other sizes".
+         *
+         * Writing an empty variant list here hid the exchange option outright,
+         * so a shopper whose network hiccuped was quietly told the only thing
+         * they could do was take a refund. The flag stops the effect retrying
+         * forever while leaving the card on offer — the size step fetches
+         * again and can report what actually went wrong.
+         */
+        setOptionsFailed(true);
+      })
       .finally(() => setLoading(false));
-  }, [step, options, item.id]);
+  }, [step, options, optionsFailed, item.id]);
 
   useEffect(() => {
-    if (step !== "resolution" || products) return;
+    if (step !== "resolution" || products || productsFailed) return;
     api
       .get<{ products: ExchangeProduct[] }>("/portal/session/exchange/products", {
         auth: "portal",
       })
       .then((r) => setProducts(r.products))
-      .catch(() => setProducts([]));
-  }, [step, products]);
+      // Same reasoning as above: unknown is not the same as none.
+      .catch(() => setProductsFailed(true));
+  }, [step, products, productsFailed]);
 
   useEffect(() => {
     if (step !== "browse") return;
@@ -492,7 +500,7 @@ export function ItemDrawer({
             <>
               <h2>How would you like to proceed?</h2>
 
-              {canExchange && swappableVariants.length > 0 && (
+              {canExchange && (swappableVariants.length > 0 || optionsFailed) && (
                 <button
                   className="choice choice--feature"
                   onClick={() => setStep("size")}
@@ -505,9 +513,13 @@ export function ItemDrawer({
                         <img src={item.imageUrl} alt="" className="choice__thumb" />
                       )}
                       <span className="choice__desc">
-                        {swappableVariants.length === 1
-                          ? "1 other option available"
-                          : `${swappableVariants.length} size options available`}
+                        {/* Never "0 size options": the count is unknown when
+                            the preview didn't load, not zero. */}
+                        {optionsFailed && swappableVariants.length === 0
+                          ? "See what's available"
+                          : swappableVariants.length === 1
+                            ? "1 other option available"
+                            : `${swappableVariants.length} size options available`}
                       </span>
                     </span>
                   </span>
@@ -515,7 +527,8 @@ export function ItemDrawer({
                 </button>
               )}
 
-              {canExchange && (products === null || products.length > 0) && (
+              {canExchange &&
+                (products === null || products.length > 0 || productsFailed) && (
                 <button className="choice" onClick={() => setStep("browse")}>
                   <span className="choice__main">
                     <span className="choice__label">
