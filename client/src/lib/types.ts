@@ -83,6 +83,8 @@ export interface OrderSession {
     restockingFeePercent: number;
   };
   reasonGroups: ReasonGroup[];
+  /** How a size swap's price gap is settled, for what the picker promises. */
+  variantExchangeDifference?: VariantExchangeDifference;
   /**
    * The store's "shop now" offer, already in this order's display currency.
    * `enabled: false` on its own when the merchant has it switched off.
@@ -125,6 +127,8 @@ export interface Quote {
    * browser's own copy of the prices, which can be stale.
    */
   purchaseSubtotal: number;
+  /** What the store covered so the shopper didn't have to. Zero unless absorbing. */
+  absorbedDifference: number;
   lines: QuoteLine[];
 }
 

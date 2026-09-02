@@ -16,7 +16,10 @@ import {
   submitSchema,
 } from "./portal.schemas.js";
 import * as portalService from "./portal.service.js";
-import { resolveDisplayMode } from "../settings/merchant-settings.js";
+import {
+  resolveDisplayMode,
+  resolveVariantDifference,
+} from "../settings/merchant-settings.js";
 import {
   backfillExchangeItemImages,
   getExchangePaymentUrl,
@@ -147,6 +150,12 @@ portalRouter.get(
        * one thing to check rather than a rule to reimplement.
        */
       shopNow: await portalService.getShopNowOffer(merchantId, orderId),
+      /**
+       * How a size swap's price gap is settled. The picker needs it to say the
+       * right thing before a quote exists — a shopper choosing a size sees the
+       * consequence there, not on the summary.
+       */
+      variantExchangeDifference: await resolveVariantDifference(merchantId),
     });
   }),
 );

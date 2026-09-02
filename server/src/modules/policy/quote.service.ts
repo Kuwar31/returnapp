@@ -32,6 +32,8 @@ export interface QuoteLineResult {
   credited: Prisma.Decimal;
   /** What this line adds to the amount owed, when the swap costs more. */
   due: Prisma.Decimal;
+  /** The gap the merchant covered on this line, when they're absorbing it. */
+  absorbed: Prisma.Decimal;
 }
 
 export interface Quote {
@@ -42,6 +44,15 @@ export interface Quote {
   estimatedTotal: Prisma.Decimal;
   /** Extra the shopper owes when exchange items cost more than the return. */
   amountDue: Prisma.Decimal;
+  /**
+   * What the merchant covered so the shopper didn't have to.
+   *
+   * Reported rather than left implicit: absorbing makes a real gap vanish from
+   * every other figure, and a summary that shows 5,699.88 coming back,
+   * 5,527.43 going out and a 0.00 refund is arithmetic the shopper can't
+   * follow. This is the missing line.
+   */
+  absorbedDifference: Prisma.Decimal;
   /** Payout split by destination, so resolution knows what to issue where. */
   byResolution: Map<ResolutionType, Prisma.Decimal>;
   lines: QuoteLineResult[];
@@ -143,6 +154,8 @@ export const quoteReturn = ({
       exchangeValue,
       credited,
       due,
+      // The gap either way, since absorbing covers both directions.
+      absorbed: absorbed ? round2(exchangeValue.sub(value).abs()) : ZERO,
     };
   });
 
@@ -187,6 +200,7 @@ export const quoteReturn = ({
     : creditedTotal;
 
   const amountDue = round2(sum((r) => r.due).add(shortfall));
+  const absorbedDifference = sum((r) => r.absorbed);
   const estimatedTotal = leftover.lessThan(0) ? ZERO : round2(leftover);
 
   /**
@@ -218,6 +232,7 @@ export const quoteReturn = ({
     restockingFee,
     estimatedTotal,
     amountDue,
+    absorbedDifference,
     byResolution,
     lines: results,
   };

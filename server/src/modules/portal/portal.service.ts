@@ -698,6 +698,7 @@ export const quoteSelection = async (
     restockingFee: fx.money(quote.restockingFee),
     estimatedTotal: fx.money(quote.estimatedTotal),
     amountDue: fx.money(quote.amountDue),
+    absorbedDifference: fx.money(quote.absorbedDifference),
     purchaseSubtotal: fx.money(purchaseSubtotal),
     // Per-item breakdown so the portal can show each line's own outcome.
     lines: quote.lines.map((l, i) => ({

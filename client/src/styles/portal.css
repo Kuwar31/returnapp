@@ -2346,3 +2346,10 @@
     display: none;
   }
 }
+
+/* The gap the store covered. Green because it is money the shopper didn't
+   have to find, even though nothing changes hands. */
+.summary__line--absorbed {
+  color: var(--success-fg);
+  font-weight: 600;
+}

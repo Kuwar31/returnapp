@@ -68,6 +68,8 @@ export function ItemDrawer({
   reasons,
   allowedResolutions,
   currency,
+  absorbing = false,
+  merchantName,
   initial,
   onCancel,
   onConfirm,
@@ -76,6 +78,10 @@ export function ItemDrawer({
   reasons: ReturnReasonOption[];
   allowedResolutions: ResolutionType[];
   currency: string;
+  /** The store covers any gap between the two variants. */
+  absorbing?: boolean;
+  /** Named in the copy, so "we cover it" says who "we" is. */
+  merchantName: string;
   initial: ItemDecision | null;
   onCancel: () => void;
   onConfirm: (decision: ItemDecision) => void;
@@ -635,11 +641,18 @@ export function ItemDrawer({
                   */}
                   {chosen && (
                     <p className="swapper__delta">
-                      {delta > 0.005
-                        ? `You'll pay ${money(delta, swap.currency)} more.`
-                        : delta < -0.005
-                          ? `You'll receive a credit of ${money(-delta, swap.currency)}.`
-                          : "An even swap — nothing more to pay."}
+                      {/*
+                        When the store absorbs the gap there is nothing to pay
+                        and nothing coming back, so promising a credit here was
+                        simply false — the summary would then show zero.
+                      */}
+                      {absorbing && Math.abs(delta) > 0.005
+                        ? `No difference to pay — ${merchantName} covers it.`
+                        : delta > 0.005
+                          ? `You'll pay ${money(delta, swap.currency)} more.`
+                          : delta < -0.005
+                            ? `You'll receive a credit of ${money(-delta, swap.currency)}.`
+                            : "An even swap — nothing more to pay."}
                     </p>
                   )}
 

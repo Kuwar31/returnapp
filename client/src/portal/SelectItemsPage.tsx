@@ -5,6 +5,7 @@ import { money, shortDate } from "../lib/format";
 import type { OrderSession, Quote, ResolutionType } from "../lib/types";
 import { ErrorAlert } from "../components/Feedback";
 import { ItemDrawer, type ItemDecision } from "./ItemDrawer";
+import { usePortal } from "./PortalLayout";
 import {
   articleKey,
   exchangePriceIn,
@@ -53,6 +54,7 @@ const RESOLUTION_LABEL: Record<string, string> = {
 
 export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
   const { order, reasonGroups, eligibility, shopNow } = loaderData;
+  const { merchant } = usePortal();
   const { slug } = useParams();
   const navigate = useNavigate();
 
@@ -450,6 +452,8 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
           }
           allowedResolutions={eligibility.allowedResolutions as ResolutionType[]}
           currency={currency}
+          absorbing={loaderData.variantExchangeDifference === "ABSORB"}
+          merchantName={merchant.name}
           initial={decisions[openArticle] ?? null}
           onCancel={() => setOpenArticle(null)}
           onConfirm={(decision) => {

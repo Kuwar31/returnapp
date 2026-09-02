@@ -9,6 +9,7 @@ import type {
   ReturnDetail,
 } from "../lib/types";
 import { ErrorAlert } from "../components/Feedback";
+import { usePortal } from "./PortalLayout";
 import {
   clearDraft,
   exchangePriceIn,
@@ -72,6 +73,7 @@ type SurplusMethod = "REFUND" | "STORE_CREDIT" | "GIFT_CARD";
 
 export default function ReviewPage({ loaderData }: Route.ComponentProps) {
   const { order, policy, eligibility } = loaderData;
+  const { merchant } = usePortal();
   const { slug } = useParams();
   const navigate = useNavigate();
 
@@ -592,6 +594,20 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
                     <span>{money(quote.purchaseSubtotal, currency)}</span>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/*
+              Where the gap went.
+              Absorbing makes a real difference vanish from every other figure,
+              which leaves a summary showing one number coming back, a smaller
+              one going out, and nothing owed either way — arithmetic the
+              shopper can't follow without this line.
+            */}
+            {quote && quote.absorbedDifference > 0.005 && (
+              <div className="summary__line summary__line--absorbed">
+                <span>Price difference · covered by {merchant.name}</span>
+                <span>{money(quote.absorbedDifference, currency)}</span>
               </div>
             )}
 
