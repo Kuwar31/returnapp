@@ -175,6 +175,7 @@ export default function ExchangeRulesPage() {
     <>
       <div className="admin__header">
         <div>
+          <div className="admin__eyebrow">Settings</div>
           <h1>Advanced exchanges</h1>
           <p className="muted" style={{ marginTop: 4 }}>
             Decide what a returned item can be exchanged for. Without a rule,

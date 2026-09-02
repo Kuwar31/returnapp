@@ -19,21 +19,59 @@ import {
 
 export const returnsRouter = Router();
 
-const listQuerySchema = z.object({
-  status: z
-    .enum([
-      "DRAFT",
-      "SUBMITTED",
-      "APPROVED",
-      "REJECTED",
-      "IN_TRANSIT",
-      "RECEIVED",
-      "RESOLVED",
-      "CANCELLED",
-      "EXPIRED",
-    ])
-    .optional(),
+const STATUSES = [
+  "DRAFT",
+  "SUBMITTED",
+  "APPROVED",
+  "REJECTED",
+  "IN_TRANSIT",
+  "RECEIVED",
+  "RESOLVED",
+  "CANCELLED",
+  "EXPIRED",
+] as const;
+
+const RESOLUTIONS = [
+  "REFUND",
+  "STORE_CREDIT",
+  "EXCHANGE",
+  "GIFT_CARD",
+  "INSTANT_EXCHANGE",
+  "WARRANTY",
+] as const;
+
+/**
+ * A comma-separated list in one query parameter.
+ *
+ * `?status=APPROVED,RECEIVED` rather than repeating the key, because it
+ * survives a round trip through URLSearchParams unchanged — the admin keeps its
+ * filters in the address bar, and a shape that reads back the way it was
+ * written is one less thing to reconcile.
+ */
+const csv = <T extends readonly [string, ...string[]]>(values: T) =>
+  z
+    .string()
+    .optional()
+    .transform((raw) =>
+      raw
+        ? raw
+            .split(",")
+            .map((v) => v.trim().toUpperCase())
+            .filter(Boolean)
+        : undefined,
+    )
+    .pipe(z.array(z.enum(values)).max(values.length).optional());
+
+export const listQuerySchema = z.object({
+  status: csv(STATUSES),
+  resolution: csv(RESOLUTIONS),
   search: z.string().trim().max(100).optional(),
+  from: z.coerce.date().optional(),
+  to: z.coerce.date().optional(),
+  flagged: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((v) => v === "true"),
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(100).default(25),
 });
@@ -43,7 +81,20 @@ returnsRouter.get(
   validate(listQuerySchema, "query"),
   asyncHandler(async (req, res) => {
     const query = req.query as unknown as z.infer<typeof listQuerySchema>;
-    const result = await returnsService.listReturns(req.admin!.merchantId, query);
+    /**
+     * A date with no time means the whole of that day.
+     *
+     * "to: 2 September" reads as "up to and including today", but coercing it
+     * lands on midnight, which would exclude every return submitted since.
+     */
+    const to = query.to;
+    if (to && to.getUTCHours() === 0 && to.getUTCMinutes() === 0) {
+      to.setUTCHours(23, 59, 59, 999);
+    }
+    const result = await returnsService.listReturns(req.admin!.merchantId, {
+      ...query,
+      to,
+    });
     const display = await resolveDisplayMode(req.admin!.merchantId);
     res.json({
       ...result,

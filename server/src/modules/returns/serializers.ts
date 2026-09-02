@@ -256,5 +256,10 @@ export const serializeReturnSummary = (
   estimatedTotal: fx.money(request.estimatedTotal),
   itemCount: request.lineItems.reduce((sum, i) => sum + i.quantity, 0),
   submittedAt: request.submittedAt,
+  // The number the shopper knows the purchase by, so a merchant scanning the
+  // list can match it against the order in front of them.
+  orderNumber: request.order?.orderNumber ?? null,
+  shopNow: request.shopNow,
+  flagged: request.flaggedAt !== null,
   };
 };

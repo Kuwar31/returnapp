@@ -166,6 +166,7 @@ export default function ReasonsPage() {
     <>
       <div className="admin__header">
         <div>
+          <div className="admin__eyebrow">Settings</div>
           <h1>Return reasons</h1>
           <p className="muted" style={{ marginTop: 4 }}>
             What shoppers pick from when they start a return. Group reasons by

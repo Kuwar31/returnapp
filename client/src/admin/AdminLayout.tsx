@@ -5,12 +5,39 @@ import { useAuth } from "./AuthContext";
 import { storePath } from "./store-path";
 import type { AdminSession } from "../lib/types";
 
+/**
+ * The sidebar, in two groups.
+ *
+ * Settings used to be a single entry with everything behind it and three
+ * siblings that were also settings, which read as one flat list of unrelated
+ * words. Grouping them says which screens are the day's work and which are the
+ * store's configuration, and gives each area of configuration a name a merchant
+ * can aim at directly.
+ */
 const NAV = [
-  { to: "", label: "Dashboard", end: true },
-  { to: "/returns", label: "Returns", end: false },
-  { to: "/settings", label: "Settings", end: true },
-  { to: "/settings/reasons", label: "Return reasons", end: false },
-  { to: "/settings/exchanges", label: "Advanced exchanges", end: false },
+  {
+    label: null,
+    items: [
+      { to: "", label: "Dashboard", icon: "▦", end: true },
+      { to: "/returns", label: "Returns", icon: "↩", end: false },
+    ],
+  },
+  {
+    label: "Settings",
+    items: [
+      { to: "/settings", label: "General", icon: "⚙", end: true },
+      { to: "/settings/policy", label: "Return policy", icon: "◷", end: true },
+      { to: "/settings/exchanges", label: "Exchanges", icon: "⇄", end: true },
+      { to: "/settings/shop-now", label: "Shop now", icon: "◈", end: true },
+      { to: "/settings/reasons", label: "Return reasons", icon: "☰", end: false },
+      {
+        to: "/settings/rules",
+        label: "Advanced exchanges",
+        icon: "⌥",
+        end: false,
+      },
+    ],
+  },
 ];
 
 /**
@@ -126,26 +153,41 @@ export default function AdminLayout() {
   return (
     <div className="admin">
       <aside className="admin__sidebar">
-        <div>
-          <div className="admin__brand">Returns Manager</div>
+        <div className="admin__top">
+          <div className="admin__brand">
+            <span className="admin__mark" aria-hidden="true">
+              ↩
+            </span>
+            Returns Manager
+          </div>
           <StoreSwitcher session={session} />
         </div>
 
         <nav className="admin__nav">
-          {NAV.map((item) => (
-            <NavLink
-              key={item.to}
-              to={`${base}${item.to}`}
-              end={item.end}
-              className={({ isActive }) => (isActive ? "is-active" : "")}
-            >
-              {item.label}
-            </NavLink>
+          {NAV.map((group) => (
+            <div key={group.label ?? "main"} className="admin__group">
+              {group.label && (
+                <div className="admin__group-label">{group.label}</div>
+              )}
+              {group.items.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={`${base}${item.to}`}
+                  end={item.end}
+                  className={({ isActive }) => (isActive ? "is-active" : "")}
+                >
+                  <span className="admin__nav-icon" aria-hidden="true">
+                    {item.icon}
+                  </span>
+                  {item.label}
+                </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
 
         <div className="admin__footer">
-          <div className="subtle" style={{ marginBottom: 8 }}>
+          <div className="admin__user" title={session.user.email}>
             {session.user.email}
           </div>
           <button className="btn btn--secondary btn--sm" onClick={logout}>

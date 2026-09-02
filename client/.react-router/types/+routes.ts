@@ -72,12 +72,27 @@ type Pages = {
       "store": string;
     };
   };
-  "/admin/:store/settings/reasons": {
+  "/admin/:store/settings/policy": {
     params: {
       "store": string;
     };
   };
   "/admin/:store/settings/exchanges": {
+    params: {
+      "store": string;
+    };
+  };
+  "/admin/:store/settings/shop-now": {
+    params: {
+      "store": string;
+    };
+  };
+  "/admin/:store/settings/reasons": {
+    params: {
+      "store": string;
+    };
+  };
+  "/admin/:store/settings/rules": {
     params: {
       "store": string;
     };
@@ -92,7 +107,7 @@ type Pages = {
 type RouteFiles = {
   "root.tsx": {
     id: "root";
-    page: "/" | "/r/:slug" | "/r/:slug/items" | "/r/:slug/shop" | "/r/:slug/shop-return" | "/r/:slug/review" | "/r/:slug/status/:reference" | "/admin/login" | "/admin" | "/admin/:store" | "/admin/:store/returns" | "/admin/:store/returns/:id" | "/admin/:store/settings" | "/admin/:store/settings/reasons" | "/admin/:store/settings/exchanges" | "/*";
+    page: "/" | "/r/:slug" | "/r/:slug/items" | "/r/:slug/shop" | "/r/:slug/shop-return" | "/r/:slug/review" | "/r/:slug/status/:reference" | "/admin/login" | "/admin" | "/admin/:store" | "/admin/:store/returns" | "/admin/:store/returns/:id" | "/admin/:store/settings" | "/admin/:store/settings/policy" | "/admin/:store/settings/exchanges" | "/admin/:store/settings/shop-now" | "/admin/:store/settings/reasons" | "/admin/:store/settings/rules" | "/*";
   };
   "Home.tsx": {
     id: "Home";
@@ -128,7 +143,7 @@ type RouteFiles = {
   };
   "admin/AuthLayout.tsx": {
     id: "admin/AuthLayout";
-    page: "/admin/login" | "/admin" | "/admin/:store" | "/admin/:store/returns" | "/admin/:store/returns/:id" | "/admin/:store/settings" | "/admin/:store/settings/reasons" | "/admin/:store/settings/exchanges";
+    page: "/admin/login" | "/admin" | "/admin/:store" | "/admin/:store/returns" | "/admin/:store/returns/:id" | "/admin/:store/settings" | "/admin/:store/settings/policy" | "/admin/:store/settings/exchanges" | "/admin/:store/settings/shop-now" | "/admin/:store/settings/reasons" | "/admin/:store/settings/rules";
   };
   "admin/LoginPage.tsx": {
     id: "admin/LoginPage";
@@ -140,7 +155,7 @@ type RouteFiles = {
   };
   "admin/AdminLayout.tsx": {
     id: "admin/AdminLayout";
-    page: "/admin/:store" | "/admin/:store/returns" | "/admin/:store/returns/:id" | "/admin/:store/settings" | "/admin/:store/settings/reasons" | "/admin/:store/settings/exchanges";
+    page: "/admin/:store" | "/admin/:store/returns" | "/admin/:store/returns/:id" | "/admin/:store/settings" | "/admin/:store/settings/policy" | "/admin/:store/settings/exchanges" | "/admin/:store/settings/shop-now" | "/admin/:store/settings/reasons" | "/admin/:store/settings/rules";
   };
   "admin/DashboardPage.tsx": {
     id: "admin/DashboardPage";
@@ -155,8 +170,17 @@ type RouteFiles = {
     page: "/admin/:store/returns/:id";
   };
   "admin/SettingsPage.tsx": {
-    id: "admin/SettingsPage";
+    id: "settings-general";
     page: "/admin/:store/settings";
+  } | {
+    id: "settings-policy";
+    page: "/admin/:store/settings/policy";
+  } | {
+    id: "settings-exchanges";
+    page: "/admin/:store/settings/exchanges";
+  } | {
+    id: "settings-shop-now";
+    page: "/admin/:store/settings/shop-now";
   };
   "admin/ReasonsPage.tsx": {
     id: "admin/ReasonsPage";
@@ -164,7 +188,7 @@ type RouteFiles = {
   };
   "admin/ExchangeRulesPage.tsx": {
     id: "admin/ExchangeRulesPage";
-    page: "/admin/:store/settings/exchanges";
+    page: "/admin/:store/settings/rules";
   };
   "NotFound.tsx": {
     id: "NotFound";
@@ -189,7 +213,10 @@ type RouteModules = {
   "admin/DashboardPage": typeof import("./src/admin/DashboardPage.tsx");
   "admin/ReturnsListPage": typeof import("./src/admin/ReturnsListPage.tsx");
   "admin/ReturnDetailPage": typeof import("./src/admin/ReturnDetailPage.tsx");
-  "admin/SettingsPage": typeof import("./src/admin/SettingsPage.tsx");
+  "settings-general": typeof import("./src/admin/SettingsPage.tsx");
+  "settings-policy": typeof import("./src/admin/SettingsPage.tsx");
+  "settings-exchanges": typeof import("./src/admin/SettingsPage.tsx");
+  "settings-shop-now": typeof import("./src/admin/SettingsPage.tsx");
   "admin/ReasonsPage": typeof import("./src/admin/ReasonsPage.tsx");
   "admin/ExchangeRulesPage": typeof import("./src/admin/ExchangeRulesPage.tsx");
   "NotFound": typeof import("./src/NotFound.tsx");

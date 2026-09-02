@@ -338,6 +338,9 @@ export interface ReturnSummary {
   estimatedTotal: number;
   itemCount: number;
   submittedAt: string;
+  orderNumber: string | null;
+  shopNow: boolean;
+  flagged: boolean;
 }
 
 /** What resolving a return will pay out, per Shopify. */
@@ -358,6 +361,8 @@ export interface Paginated<T> {
   total: number;
   page: number;
   pageSize: number;
+  /** How many rows each status tab would show under the other filters. */
+  counts?: Record<string, number>;
 }
 
 export interface AdminSession {

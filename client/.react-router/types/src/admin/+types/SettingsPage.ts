@@ -19,7 +19,43 @@ type Matches = [{
   id: "admin/AdminLayout";
   module: typeof import("../AdminLayout.js");
 }, {
-  id: "admin/SettingsPage";
+  id: "settings-general";
+  module: typeof import("../SettingsPage.js");
+}] | [{
+  id: "root";
+  module: typeof import("../../root.js");
+}, {
+  id: "admin/AuthLayout";
+  module: typeof import("../AuthLayout.js");
+}, {
+  id: "admin/AdminLayout";
+  module: typeof import("../AdminLayout.js");
+}, {
+  id: "settings-policy";
+  module: typeof import("../SettingsPage.js");
+}] | [{
+  id: "root";
+  module: typeof import("../../root.js");
+}, {
+  id: "admin/AuthLayout";
+  module: typeof import("../AuthLayout.js");
+}, {
+  id: "admin/AdminLayout";
+  module: typeof import("../AdminLayout.js");
+}, {
+  id: "settings-exchanges";
+  module: typeof import("../SettingsPage.js");
+}] | [{
+  id: "root";
+  module: typeof import("../../root.js");
+}, {
+  id: "admin/AuthLayout";
+  module: typeof import("../AuthLayout.js");
+}, {
+  id: "admin/AdminLayout";
+  module: typeof import("../AdminLayout.js");
+}, {
+  id: "settings-shop-now";
   module: typeof import("../SettingsPage.js");
 }];
 

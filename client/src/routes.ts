@@ -38,9 +38,22 @@ export default [
       index("admin/DashboardPage.tsx"),
       route("returns", "admin/ReturnsListPage.tsx"),
       route("returns/:id", "admin/ReturnDetailPage.tsx"),
-      route("settings", "admin/SettingsPage.tsx"),
+      /*
+        Settings is one page shown a section at a time, rather than one long
+        scroll. Each section is its own address so the sidebar can link
+        straight to it and a merchant can bookmark the screen they keep
+        coming back to.
+      */
+      route("settings", "admin/SettingsPage.tsx", { id: "settings-general" }),
+      route("settings/policy", "admin/SettingsPage.tsx", { id: "settings-policy" }),
+      route("settings/exchanges", "admin/SettingsPage.tsx", {
+        id: "settings-exchanges",
+      }),
+      route("settings/shop-now", "admin/SettingsPage.tsx", {
+        id: "settings-shop-now",
+      }),
       route("settings/reasons", "admin/ReasonsPage.tsx"),
-      route("settings/exchanges", "admin/ExchangeRulesPage.tsx"),
+      route("settings/rules", "admin/ExchangeRulesPage.tsx"),
     ]),
   ]),
 

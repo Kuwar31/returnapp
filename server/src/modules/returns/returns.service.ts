@@ -44,30 +44,67 @@ const detailInclude = {
   policy: true,
 } satisfies Prisma.ReturnRequestInclude;
 
-export const listReturns = async (
+export interface ListFilters {
+  status?: ReturnStatus[];
+  resolution?: ResolutionType[];
+  search?: string;
+  /** Submitted on or after, and on or before — both inclusive. */
+  from?: Date;
+  to?: Date;
+  flagged?: boolean;
+  page: number;
+  pageSize: number;
+}
+
+/**
+ * Everything except the status, so the tab counts can be built from it.
+ *
+ * A count next to "Awaiting review" has to answer "how many would I see if I
+ * clicked this", which means every other filter still applies — a date range or
+ * a search narrows the tabs too. Sharing one builder is what keeps the numbers
+ * from disagreeing with the table underneath them.
+ */
+const listWhere = (
   merchantId: string,
-  filters: {
-    status?: ReturnStatus;
-    search?: string;
-    page: number;
-    pageSize: number;
-  },
-) => {
+  filters: Omit<ListFilters, "page" | "pageSize" | "status">,
+): Prisma.ReturnRequestWhereInput => ({
+  merchantId,
+  ...(filters.resolution?.length ? { resolution: { in: filters.resolution } } : {}),
+  ...(filters.flagged ? { flaggedAt: { not: null } } : {}),
+  ...(filters.from || filters.to
+    ? {
+        submittedAt: {
+          ...(filters.from ? { gte: filters.from } : {}),
+          ...(filters.to ? { lte: filters.to } : {}),
+        },
+      }
+    : {}),
+  ...(filters.search
+    ? {
+        OR: [
+          { reference: { contains: filters.search, mode: "insensitive" } },
+          { customerEmail: { contains: filters.search, mode: "insensitive" } },
+          { customerName: { contains: filters.search, mode: "insensitive" } },
+          // The number the shopper quotes is the order's, not ours: they are
+          // reading it off a confirmation email, so let it find the return.
+          {
+            order: {
+              orderNumber: { contains: filters.search, mode: "insensitive" },
+            },
+          },
+        ],
+      }
+    : {}),
+});
+
+export const listReturns = async (merchantId: string, filters: ListFilters) => {
+  const base = listWhere(merchantId, filters);
   const where: Prisma.ReturnRequestWhereInput = {
-    merchantId,
-    ...(filters.status ? { status: filters.status } : {}),
-    ...(filters.search
-      ? {
-          OR: [
-            { reference: { contains: filters.search, mode: "insensitive" } },
-            { customerEmail: { contains: filters.search, mode: "insensitive" } },
-            { customerName: { contains: filters.search, mode: "insensitive" } },
-          ],
-        }
-      : {}),
+    ...base,
+    ...(filters.status?.length ? { status: { in: filters.status } } : {}),
   };
 
-  const [total, items] = await Promise.all([
+  const [total, items, byStatus] = await Promise.all([
     prisma.returnRequest.count({ where }),
     prisma.returnRequest.findMany({
       where,
@@ -77,9 +114,20 @@ export const listReturns = async (
       skip: (filters.page - 1) * filters.pageSize,
       take: filters.pageSize,
     }),
+    prisma.returnRequest.groupBy({
+      by: ["status"],
+      where: base,
+      _count: { _all: true },
+    }),
   ]);
 
-  return { total, items, page: filters.page, pageSize: filters.pageSize };
+  const counts: Record<string, number> = { all: 0 };
+  for (const row of byStatus) {
+    counts[row.status] = row._count._all;
+    counts.all += row._count._all;
+  }
+
+  return { total, items, counts, page: filters.page, pageSize: filters.pageSize };
 };
 
 /**

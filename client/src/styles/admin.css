@@ -1,34 +1,80 @@
 .admin {
   display: grid;
-  grid-template-columns: 232px 1fr;
+  grid-template-columns: 252px 1fr;
   min-height: 100%;
 }
 
+/* The sidebar stays put while the page scrolls: it's the map, and a map that
+   scrolls away leaves you holding a table with no idea where you are. */
 .admin__sidebar {
   background: var(--surface);
   border-right: 1px solid var(--border);
   padding: 22px 16px;
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 26px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.admin__top {
+  padding: 0 6px;
 }
 
 .admin__brand {
-  font-weight: 700;
-  font-size: 15px;
-  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 650;
+  font-size: 14.5px;
+  letter-spacing: -0.01em;
+}
+
+/* A mark rather than a logo — enough to anchor the name and give the store
+   picker underneath something to sit against. */
+.admin__mark {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 12px;
 }
 
 .admin__nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 22px;
+  overflow-y: auto;
+}
+
+.admin__group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+/* Names the group without competing with the links inside it. */
+.admin__group-label {
+  padding: 0 10px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
 }
 
 .admin__nav a {
-  padding: 9px 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
   border-radius: var(--radius-sm);
-  font-size: 14px;
+  font-size: 13.5px;
   color: var(--text-muted);
   text-decoration: none;
   transition: background 0.12s, color 0.12s;
@@ -45,10 +91,35 @@
   font-weight: 600;
 }
 
+.admin__nav-icon {
+  width: 16px;
+  flex: none;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-subtle);
+  line-height: 1;
+}
+
+.admin__nav a.is-active .admin__nav-icon {
+  color: var(--text);
+}
+
 .admin__footer {
   margin-top: auto;
-  padding: 0 10px;
+  padding: 16px 10px 0;
+  border-top: 1px solid var(--border);
   font-size: 13px;
+}
+
+/* An address can be long and the column is narrow; better one clipped line
+   than three wrapped ones pushing the sign-out button off the fold. */
+.admin__user {
+  margin-bottom: 10px;
+  font-size: 12.5px;
+  color: var(--text-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .admin__main {
@@ -61,11 +132,453 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 22px;
+  margin-bottom: 20px;
 }
 
 .admin__header h1 {
-  font-size: 22px;
+  font-size: 23px;
+}
+
+/* Says which area of the admin a title belongs to, so the heading itself can
+   be the short specific word rather than "Settings — something". */
+.admin__eyebrow {
+  margin-bottom: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+/* ---------- returns board ----------
+   Tabs, filters and the table are one surface rather than three floating
+   pieces: they're a single question — which returns am I looking at — and the
+   answer reads better inside one frame. */
+
+.board {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.tab:hover {
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.tab.is-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.tab__count {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.tab.is-active .tab__count {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+/* The board sits inside the same warm frame as the panels, so its inner rules
+   follow the sidebar rather than the browser's defaults. */
+.admin .board {
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+.board__filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.search {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.search input {
+  width: 100%;
+  padding: 9px 32px 9px 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  font: inherit;
+  font-size: 13.5px;
+}
+
+.search input:focus {
+  outline: none;
+  background: var(--surface);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.search__icon {
+  position: absolute;
+  left: 11px;
+  font-size: 15px;
+  color: var(--text-subtle);
+  pointer-events: none;
+}
+
+.search__clear {
+  position: absolute;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background: var(--border);
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.search__clear:hover {
+  background: var(--border-strong);
+  color: var(--text);
+}
+
+/* ---------- filters ---------- */
+
+.filter-add {
+  position: relative;
+  flex: none;
+}
+
+.filter-menu {
+  position: absolute;
+  z-index: 25;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 210px;
+  max-height: 340px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: 0 12px 28px rgb(0 0 0 / 14%);
+}
+
+.filter-menu__group + .filter-menu__group {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.filter-menu__label {
+  padding: 5px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.filter-menu button {
+  display: block;
+  width: 100%;
+  padding: 7px 8px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.filter-menu button:hover {
+  background: var(--surface-muted);
+}
+
+.board__chips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 0 14px 12px;
+}
+
+.chip-wrap {
+  position: relative;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 13px;
+}
+
+/* A filter that's actually narrowing the list looks different from one that
+   has only been added — otherwise an empty chip reads as an applied one. */
+.chip--set {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.chip__body {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 4px 5px 12px;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.chip__value {
+  font-weight: 600;
+}
+
+.chip__caret {
+  font-size: 10px;
+  color: var(--text-subtle);
+}
+
+.chip__x {
+  padding: 5px 10px 5px 4px;
+  border: none;
+  background: none;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--text-subtle);
+  cursor: pointer;
+}
+
+.chip__x:hover {
+  color: var(--text);
+}
+
+.filter-pop {
+  position: absolute;
+  z-index: 25;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 264px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: 0 12px 28px rgb(0 0 0 / 14%);
+}
+
+.filter-pop__head {
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.filter-pop__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.filter-pop__check {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
+.filter-pop__check:hover {
+  background: var(--surface-muted);
+}
+
+.filter-pop__check input {
+  accent-color: var(--accent);
+}
+
+.filter-pop__preset {
+  padding: 6px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.filter-pop__preset:hover {
+  background: var(--surface-muted);
+}
+
+.filter-pop__dates {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.filter-pop__dates label {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.filter-pop__dates input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.filter-pop__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+/* A button that reads as a link: clearing a filter is a small, reversible
+   thing, and giving it a button's weight would set it against the ones that
+   actually change data. */
+.link-btn {
+  padding: 4px 2px;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.link-btn:hover {
+  color: var(--text);
+}
+
+.board__count {
+  padding: 0 14px 10px;
+  font-size: 12.5px;
+  color: var(--text-subtle);
+}
+
+.board__table {
+  overflow-x: auto;
+  border-top: 1px solid var(--border);
+}
+
+.board__foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--border);
+}
+
+.board__foot .subtle {
+  font-size: 13px;
+}
+
+/* Amounts and counts line up on the right so they can be compared down the
+   column rather than read one at a time. */
+table.data th.num,
+table.data td.num {
+  text-align: right;
+}
+
+table.data td.muted {
+  color: var(--text-muted);
+}
+
+.cell-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.cell-stack__sub {
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+/* Kept on one line: the table scrolls sideways when it has to, and a wrapped
+   tag pushes that row taller than every other one for no gain. */
+.tags {
+  display: inline-flex;
+  gap: 5px;
+  flex-wrap: nowrap;
+}
+
+.tag {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.tag--warn {
+  background: var(--warn-bg);
+  color: var(--warn-fg);
 }
 
 .stat-grid {
@@ -235,7 +748,7 @@ table.data tbody tr:hover {
 }
 
 .settings-form {
-  max-width: 620px;
+  max-width: 720px;
 }
 
 .settings-row {
@@ -263,13 +776,25 @@ table.data tbody tr:hover {
 }
 
 .settings-row input[type="number"],
-.settings-row input[type="text"],
-.settings-row select {
+.settings-row input[type="text"] {
   width: 130px;
   padding: 8px 10px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   font-family: inherit;
+  font-size: 14px;
+}
+
+/* Wider than the number inputs beside them: these options are sentences —
+   "The original order — reports cleanly" — and a control that clips its own
+   answer makes the merchant open it to find out what's selected. */
+.settings-row select {
+  width: 232px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font: inherit;
   font-size: 14px;
 }
 
@@ -289,9 +814,38 @@ table.data tbody tr:hover {
     border-bottom: 1px solid var(--border);
   }
 
+  /* The sidebar becomes a band across the top, so it must not keep the full
+     viewport height it holds when it's a column — that pushes the page's
+     actual content entirely below the fold. */
+  .admin__sidebar {
+    position: static;
+    height: auto;
+    gap: 14px;
+  }
+
   .admin__nav {
     flex-direction: row;
     flex-wrap: wrap;
+    gap: 6px 16px;
+    overflow: visible;
+  }
+
+  /* Groups flow inline too, with their label read as a prefix rather than a
+     heading stacked above two links. */
+  .admin__group {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .admin__group-label {
+    padding: 0 2px 0 0;
+  }
+
+  .admin__footer {
+    margin-top: 0;
+    padding-top: 12px;
   }
 
   .admin__main {
@@ -1465,6 +2019,11 @@ table.data tbody tr:hover {
   border-top: 1px solid var(--border);
   background: var(--surface);
   box-shadow: 0 -6px 24px rgb(0 0 0 / 10%);
+}
+
+.settings-bar--warn {
+  border-top-color: var(--warn-fg);
+  box-shadow: 0 -6px 24px rgb(0 0 0 / 14%);
 }
 
 .settings-bar__label {

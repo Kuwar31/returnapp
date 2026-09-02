@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useBlocker, useLocation } from "react-router";
 import type {
   DisplayCurrency,
   ExchangeMethod,
@@ -28,6 +29,35 @@ interface Policy {
   autoApproveUnder: number | null;
 }
 
+/**
+ * Settings, one screen at a time.
+ *
+ * The same component serves all four, so the save bar, the dirty tracking and
+ * the two endpoints behind them stay in one place — only the panels change.
+ * Which one is showing comes from the URL rather than a piece of state, so the
+ * sidebar can link straight into a section and a merchant can bookmark it.
+ */
+const SECTIONS = {
+  general: {
+    title: "General",
+    blurb: "Where your customers start a return, and how amounts are shown.",
+  },
+  policy: {
+    title: "Return policy",
+    blurb: "How long customers have, what you offer them, and what it costs.",
+  },
+  exchanges: {
+    title: "Exchanges",
+    blurb: "How swaps are fulfilled, priced, and rewarded.",
+  },
+  "shop-now": {
+    title: "Shop now",
+    blurb: "Let a return become credit to spend across your catalogue.",
+  },
+} as const;
+
+type Section = keyof typeof SECTIONS;
+
 /** Blank clears the flat bonus; anything unparseable is left as-is. */
 const parseBonus = (raw: string): number | null => {
   const trimmed = raw.trim();
@@ -38,6 +68,9 @@ const parseBonus = (raw: string): number | null => {
 
 export default function SettingsPage() {
   const { session } = useAuth();
+  const { pathname } = useLocation();
+  const tail = pathname.split("/settings")[1]?.replace("/", "") ?? "";
+  const section: Section = tail in SECTIONS ? (tail as Section) : "general";
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -187,6 +220,13 @@ export default function SettingsPage() {
     }
   };
 
+  /**
+   * Stops a half-made change from vanishing when the sidebar moves to another
+   * section. Splitting settings across four screens made that easy to do by
+   * accident — the save bar is visible, but so is the nav.
+   */
+  const blocker = useBlocker(dirty);
+
   if (loading) return <Loading />;
   if (!policy) {
     return (
@@ -201,9 +241,10 @@ export default function SettingsPage() {
     <>
       <div className="admin__header">
         <div>
-          <h1>Settings</h1>
+          <div className="admin__eyebrow">Settings</div>
+          <h1>{SECTIONS[section].title}</h1>
           <p className="muted" style={{ marginTop: 4 }}>
-            {session?.merchant.name}
+            {SECTIONS[section].blurb}
           </p>
         </div>
       </div>
@@ -211,6 +252,7 @@ export default function SettingsPage() {
       <ErrorAlert message={error} />
       {status && <div className="alert alert--info">{status}</div>}
 
+      {section === "general" && (
       <div className="settings-form">
         {/*
           The portal address comes from the server rather than being built from
@@ -248,8 +290,9 @@ export default function SettingsPage() {
 
         <ShopifyPanel />
       </div>
+      )}
 
-      {store && (
+      {store && section === "general" && (
         <div className="settings-form">
           <div className="panel">
             <h2>Display currency</h2>
@@ -284,7 +327,11 @@ export default function SettingsPage() {
               </p>
             )}
           </div>
+        </div>
+      )}
 
+      {store && section === "exchanges" && (
+        <div className="settings-form">
           <div className="panel">
             <h2>Exchanges</h2>
             <div className="settings-row">
@@ -369,7 +416,7 @@ export default function SettingsPage() {
                 <div className="settings-row__label">Bonus</div>
                 <div className="settings-row__hint">
                   Leave empty to use the {policy.bonusCreditPercent}% credit
-                  bonus from your return policy below.
+                  bonus from your return policy.
                 </div>
               </div>
               <div className="bonus-field">
@@ -399,7 +446,11 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
+        </div>
+      )}
 
+      {store && section === "shop-now" && (
+        <div className="settings-form">
           <div className="panel">
             <h2>Shop now</h2>
             <p className="settings-row__hint" style={{ marginBottom: 14 }}>
@@ -493,6 +544,7 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {section === "policy" && (
       <form className="settings-form" onSubmit={save}>
         <div className="panel">
           <h2>Return window</h2>
@@ -655,6 +707,7 @@ export default function SettingsPage() {
         </div>
 
       </form>
+      )}
 
       {/*
         Appears only once something has actually changed, and stays put while
@@ -664,7 +717,33 @@ export default function SettingsPage() {
         The spacer keeps the bar from covering the last row it would otherwise
         sit on top of.
       */}
-      {dirty && (
+      {blocker.state === "blocked" ? (
+        <>
+          <div className="settings-bar__spacer" />
+          <div className="settings-bar settings-bar--warn" role="alertdialog">
+            <span className="settings-bar__label">
+              Leave without saving your changes?
+            </span>
+            <button
+              type="button"
+              className="btn btn--secondary btn--sm"
+              onClick={() => blocker.reset()}
+            >
+              Stay
+            </button>
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={() => {
+                discard();
+                blocker.proceed();
+              }}
+            >
+              Discard and leave
+            </button>
+          </div>
+        </>
+      ) : dirty ? (
         <>
           <div className="settings-bar__spacer" />
           <div className="settings-bar" role="status">
@@ -687,7 +766,7 @@ export default function SettingsPage() {
             </button>
           </div>
         </>
-      )}
+      ) : null}
     </>
   );
 }
