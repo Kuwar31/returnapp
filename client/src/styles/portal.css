@@ -383,6 +383,7 @@
   .portal__bar {
     gap: 12px;
     padding: 12px 16px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
     font-size: 14px;
   }
 
@@ -412,6 +413,19 @@
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  /*
+   * The row needs constraining as much as the columns do. Without an explicit
+   * track the grid sizes its single row to max-content, so the body grew to
+   * its full height, the panel's max-height merely clipped it, and there was
+   * nothing to scroll. `minmax(0, 1fr)` lets the row shrink to the panel and
+   * hands the overflow to the body.
+   *
+   * This belongs here rather than in a rule of its own further down: as a
+   * later rule of equal specificity it outranked the phone layout's own row
+   * sizing, and went on squeezing the image pane on a stacked panel where
+   * "give the first child what's left" is the wrong instruction entirely.
+   */
+  grid-template-rows: minmax(0, 1fr);
   width: 100%;
   max-width: 900px;
   max-height: 88vh;
@@ -543,6 +557,7 @@
 .choice__chevron {
   color: var(--text-subtle);
   font-size: 18px;
+  flex: none;
 }
 
 .product-grid {
@@ -593,18 +608,79 @@
 
 
 @media (max-width: 760px) {
+  /*
+   * `minmax(0, 1fr)`, not `1fr`.
+   *
+   * A bare `1fr` is `minmax(auto, 1fr)`, and that automatic minimum is the
+   * content's min-content width — so the single column refused to go narrower
+   * than the body's padding plus its widest unbreakable row, and sat 23px
+   * wider than the panel containing it. Everything inside then hung off the
+   * right of the screen: the desktop rule above had the zero minimum all
+   * along, and this override quietly dropped it.
+   */
   .drawer__panel {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    /*
+     * dvh, with vh kept underneath for browsers that don't know it. On iOS
+     * `vh` measures the viewport as if the address bar were hidden, so 92vh
+     * is taller than what the shopper can actually see and the foot of the
+     * panel — the confirm button, usually — sits under Safari's chrome.
+     */
     max-height: 92vh;
+    max-height: 92dvh;
+  }
+
+  /* Every pixel of a 375px screen counts: the drawer's own inset is the
+     cheapest place to find some back. */
+  .drawer {
+    padding: 12px;
   }
 
   .drawer__media {
     padding: 16px;
   }
 
-  .drawer__media img,
+  .drawer__media > img,
   .drawer__placeholder {
     aspect-ratio: 16 / 9;
+  }
+
+  /*
+   * The gallery sizes itself, so it needs capping in its own terms rather than
+   * through the image inside it. Left square, it stood 319px tall on a 375px
+   * screen and the pane around it took two thirds of the panel before the
+   * shopper reached the price, the options or the confirm button.
+   */
+  .swapper__stage {
+    aspect-ratio: 4 / 3;
+    max-height: 26vh;
+  }
+
+  .swapper__stage img {
+    max-height: 100%;
+  }
+
+  /* 28px of side padding is a desktop measure. On a 375px screen it is 15% of
+     the panel spent on nothing, which is what pushed the option cards' own
+     content into wrapping awkwardly. */
+  .drawer__body {
+    padding: 44px 16px 20px;
+  }
+
+  /*
+   * Preview tiles share out the width they have instead of each insisting on
+   * 56px. Four of them plus a "+9 more" chip overran a phone-width card by a
+   * few pixels — just enough to slice the last tile down the middle.
+   */
+  .choice__strip img,
+  .choice__strip-blank,
+  .choice__strip-more {
+    width: auto;
+    height: auto;
+    min-width: 0;
+    max-width: 56px;
+    flex: 1 1 0;
+    aspect-ratio: 1;
   }
 }
 
@@ -908,6 +984,17 @@
   .drawer__panel {
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    /*
+     * Two rows that size to their own content, because there are two rows
+     * here — the desktop layout is one row of two columns, and its
+     * `minmax(0, 1fr)` row meant "give the first child whatever is left".
+     * Stacked, the first child is the picture, so a long body squeezed its
+     * row towards nothing while `overflow: visible` below let the image and
+     * its caption keep painting straight over the options underneath. That
+     * is the overlap: not two elements in one cell, but one element spilling
+     * out of a row collapsed to a sliver.
+     */
+    grid-template-rows: min-content min-content;
   }
 
   .drawer__media,
@@ -915,25 +1002,14 @@
     overflow: visible;
   }
 
-  .drawer__media img,
+  .drawer__media > img,
   .drawer__placeholder {
-    max-height: 34vh;
+    max-height: 24vh;
     width: auto;
     margin: 0 auto;
   }
 }
 
-/*
- * The row needs constraining too, not just the columns.
- *
- * Without an explicit row track the grid sizes its single row to max-content —
- * so the body grew to its full height, the panel's max-height simply *clipped*
- * it, and there was nothing to scroll. `minmax(0, 1fr)` lets the row shrink to
- * the panel, which is what finally hands the overflow to the body.
- */
-.drawer__panel {
-  grid-template-rows: minmax(0, 1fr);
-}
 
 /* ---------- Loop-style item picker ---------- */
 
@@ -1046,6 +1122,45 @@
 .pick-card__price {
   font-size: 15px;
   font-weight: 600;
+}
+
+/*
+ * The picker card on a phone.
+ *
+ * Three columns — picture, everything about the item, price and Remove — is a
+ * desktop shape. At 375px it left the middle column about 130px wide, so a
+ * product name broke over four lines, the "1 of 3" counter split across two,
+ * and the replacement row underneath had so little room its title ellipsised
+ * away to nothing. The price row drops to the foot of the card instead, which
+ * is the whole of that third column handed back to the words.
+ */
+@media (max-width: 560px) {
+  .pick-card {
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .pick-card .line-item__thumb {
+    width: 56px;
+    height: 56px;
+  }
+
+  .pick-card__side {
+    flex-basis: 100%;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 2px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* The counter is two words and a number; breaking it in half reads as two
+     separate labels. */
+  .pick-card__nth {
+    white-space: nowrap;
+  }
+
 }
 
 /* ---------- selectable credit options ---------- */
@@ -1562,6 +1677,38 @@
   font-size: 14px;
   font-weight: 600;
   white-space: nowrap;
+}
+
+/*
+ * The same row on a phone.
+ *
+ * Thumbnail, name and price side by side leaves the name about 45px once the
+ * card has given up its own padding — so the ellipsis ate the whole title and
+ * the shopper was shown "The …" as the thing they had chosen. Letting the row
+ * wrap puts the price on its own line, right-aligned, and gives the name the
+ * full width to wrap into.
+ *
+ * Below the rules it overrides, not above them: at equal specificity the last
+ * one wins, and a media query placed earlier in the file simply loses.
+ */
+@media (max-width: 560px) {
+  .swap__item {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .swap__body {
+    flex: 1 1 130px;
+  }
+
+  .swap__title {
+    white-space: normal;
+    overflow: visible;
+  }
+
+  .swap__price {
+    margin-left: auto;
+  }
 }
 
 /* ---------- the swap screen: gallery beside the decision ---------- */
@@ -2314,6 +2461,19 @@
     grid-template-columns: 1fr;
   }
 
+  /*
+   * The product dialog stacks too. It was two equal columns at every width, so
+   * on a phone the picture and everything said about it were sharing 160px
+   * each — and `1fr`, whose automatic minimum is the content, then pushed the
+   * dialog wider than the screen rather than let either column give way.
+   */
+  .shop-pdp {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+    max-height: 88vh;
+    max-height: 88dvh;
+  }
+
   .shop__rail {
     flex-direction: row;
     border-right: none;
@@ -2450,7 +2610,19 @@
 .choice__strip {
   display: flex;
   gap: 8px;
-  overflow: hidden;
+  /*
+   * Scrolls rather than clips. Fixed-size tiles plus a "+9 more" chip are
+   * wider than a phone-width card, and hiding the overflow sliced the last
+   * one down the middle — which reads as a rendering fault, not as "there is
+   * more this way".
+   */
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.choice__strip::-webkit-scrollbar {
+  display: none;
 }
 
 .choice__strip-item {
