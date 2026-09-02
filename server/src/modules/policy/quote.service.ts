@@ -8,6 +8,15 @@ export interface QuoteLine {
   resolution: ResolutionType;
   /** Total price of the replacement chosen for this line, if it's an exchange. */
   exchangeValue?: Prisma.Decimal;
+  /**
+   * The replacement is another variant of the same product — a size swap.
+   *
+   * Only these are governed by the variant-difference setting. Swapping a
+   * 5,700 board for a 3,300 one is a real change of mind about what to own,
+   * and a merchant who offered to cover the odd rupee of exchange-rate drift
+   * did not offer to hand over 2,400.
+   */
+  sameProduct?: boolean;
 }
 
 /**
@@ -128,7 +137,9 @@ export const quoteReturn = ({
      * the real item at the real price — only who covers the gap changes.
      */
     const absorbed =
-      variantDifference === "ABSORB" && exchangeValue.greaterThan(0);
+      variantDifference === "ABSORB" &&
+      exchangeValue.greaterThan(0) &&
+      line.sameProduct === true;
 
     // An exchange consumes its own line's value. Anything left over is still
     // owed to the shopper; anything short is owed by them.

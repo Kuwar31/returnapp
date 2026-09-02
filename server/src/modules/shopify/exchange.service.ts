@@ -79,7 +79,8 @@ export const priceExchange = async (
   const request = await prisma.returnRequest.findFirstOrThrow({
     where: { id: returnRequestId, merchantId },
     include: {
-      lineItems: { include: { exchangeItems: true } },
+      // orderLineItem carries the product a swap has to match to count as one.
+      lineItems: { include: { exchangeItems: true, orderLineItem: true } },
       /**
        * Read off the request, not gathered from the lines.
        *
@@ -121,6 +122,13 @@ export const priceExchange = async (
             (sum, ex) => sum.add(toDecimal(ex.unitPrice).mul(ex.quantity)),
             ZERO,
           ),
+      sameProduct:
+        !request.shopNow &&
+        li.exchangeItems.length > 0 &&
+        Boolean(li.orderLineItem?.productId) &&
+        li.exchangeItems.every(
+          (ex) => ex.productId === li.orderLineItem?.productId,
+        ),
     })),
     ...(request.shopNow
       ? {

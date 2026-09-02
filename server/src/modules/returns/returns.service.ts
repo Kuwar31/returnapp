@@ -335,7 +335,8 @@ const recalculateTotals = async (merchantId: string, id: string) => {
   const request = await prisma.returnRequest.findFirstOrThrow({
     where: { id, merchantId },
     include: {
-      lineItems: { include: { exchangeItems: true } },
+      // orderLineItem carries the product a swap has to match; see priceExchange.
+      lineItems: { include: { exchangeItems: true, orderLineItem: true } },
       // Read off the request too: a "shop now" basket hangs from the return
       // rather than from a line, and quoting without it prices the goods at
       // nothing. See priceExchange for the same reasoning.
@@ -359,6 +360,13 @@ const recalculateTotals = async (merchantId: string, id: string) => {
             (sum, ex) => sum.add(toDecimal(ex.unitPrice).mul(ex.quantity)),
             toDecimal(0),
           ),
+      sameProduct:
+        !request.shopNow &&
+        li.exchangeItems.length > 0 &&
+        Boolean(li.orderLineItem?.productId) &&
+        li.exchangeItems.every(
+          (ex) => ex.productId === li.orderLineItem?.productId,
+        ),
     })),
     ...shopNowPool(request),
   });
@@ -431,7 +439,8 @@ const payoutSplit = async (merchantId: string, id: string) => {
   const request = await prisma.returnRequest.findFirstOrThrow({
     where: { id, merchantId },
     include: {
-      lineItems: { include: { exchangeItems: true } },
+      // orderLineItem carries the product a swap has to match; see priceExchange.
+      lineItems: { include: { exchangeItems: true, orderLineItem: true } },
       // Read off the request too: a "shop now" basket hangs from the return
       // rather than from a line, and quoting without it prices the goods at
       // nothing. See priceExchange for the same reasoning.
@@ -457,6 +466,13 @@ const payoutSplit = async (merchantId: string, id: string) => {
             (sum, ex) => sum.add(toDecimal(ex.unitPrice).mul(ex.quantity)),
             toDecimal(0),
           ),
+      sameProduct:
+        !request.shopNow &&
+        li.exchangeItems.length > 0 &&
+        Boolean(li.orderLineItem?.productId) &&
+        li.exchangeItems.every(
+          (ex) => ex.productId === li.orderLineItem?.productId,
+        ),
     })),
     ...shopNowPool(request),
   });

@@ -364,6 +364,9 @@ const resolveSelections = async (
       if (!selection.exchange) continue;
       const variant = variants.get(selection.exchange.variantId);
       if (!variant) continue;
+      // Governs size swaps only. Choosing a different product is a different
+      // decision, and its price gap is settled the ordinary way.
+      if (!line.productId || variant.productId !== line.productId) continue;
       const swapTotal = round2(
         toDecimal(variant.price).mul(selection.exchange.quantity),
       );
@@ -633,8 +636,11 @@ export const browseExchangeProducts = async (
  * are computed by exactly the same code that persists them.
  */
 const toQuoteLines = (
-  resolved: Array<{ line: { unitPrice: Prisma.Decimal }; selection: QuoteInput["items"][number] }>,
-  variants: Map<string, { price: number }>,
+  resolved: Array<{
+    line: { unitPrice: Prisma.Decimal; productId: string | null };
+    selection: QuoteInput["items"][number];
+  }>,
+  variants: Map<string, { price: number; productId?: string | null }>,
   /**
    * A basket is priced as a pool against every line at once, so the per-line
    * replacement value has to stay zero here — leaving it in would charge the
@@ -654,6 +660,10 @@ const toQuoteLines = (
       exchangeValue: chosen
         ? round2(toDecimal(chosen.price).mul(selection.exchange!.quantity))
         : ZERO,
+      // A size swap, as opposed to picking something else entirely.
+      sameProduct: Boolean(
+        chosen && line.productId && chosen.productId === line.productId,
+      ),
     };
   });
 
