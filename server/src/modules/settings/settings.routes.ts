@@ -393,6 +393,9 @@ const ruleSchema = z.object({
   matchBy: z.enum(["PRODUCT_TAG", "PRODUCT_NAME"]).optional(),
   matchValues: z.array(z.string().trim().min(1).max(120)).max(50).optional(),
   showProductTitles: z.boolean().optional(),
+  bonusType: z.enum(["PERCENT", "FIXED"]).optional(),
+  /** Null clears the override, falling back to the store-wide bonus. */
+  bonusValue: z.number().min(0).max(100000).nullable().optional(),
   options: z
     .array(
       z.object({

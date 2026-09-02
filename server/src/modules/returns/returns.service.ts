@@ -1,6 +1,7 @@
 import type { Prisma, ResolutionType, ReturnStatus } from "@prisma/client";
 import { conflict, notFound, unprocessable } from "../../lib/errors.js";
 import { prisma } from "../../lib/prisma.js";
+import { exchangeBonusFor } from "../settings/exchange-rules.service.js";
 import { displayConverter, forDisplay, toDecimal } from "../../lib/money.js";
 import { logger } from "../../lib/logger.js";
 import { notifyInBackground } from "../email/notifications.js";
@@ -25,7 +26,6 @@ import {
 import { releaseExchangeFulfillment } from "../shopify/fulfillment-hold.js";
 import {
   resolveDisplayMode,
-  resolveExchangeBonus,
   resolveExchangeMethod,
   resolveVariantDifference,
 } from "../settings/merchant-settings.js";
@@ -353,7 +353,15 @@ const recalculateTotals = async (merchantId: string, id: string) => {
     policy: request.policy,
     // Same rule the shopper was quoted under; see priceExchange.
     variantDifference: await resolveVariantDifference(merchantId),
-    exchangeBonus: await resolveExchangeBonus(merchantId),
+    // A rule that matched the returned items overrides the store setting; see
+    // exchangeBonusFor. The shopper was quoted under it, so the draft and the
+    // admin's recomputations have to price it the same way.
+    exchangeBonus: await exchangeBonusFor(
+      merchantId,
+      request.lineItems.flatMap((li) =>
+        li.orderLineItem ? [li.orderLineItem] : [],
+      ),
+    ),
     lines: request.lineItems.map((li) => ({
       unitPrice: toDecimal(li.unitPrice),
       quantity: li.acceptedQuantity ?? li.quantity,
@@ -458,7 +466,15 @@ const payoutSplit = async (merchantId: string, id: string) => {
     policy: request.policy,
     // Same rule the shopper was quoted under; see priceExchange.
     variantDifference: await resolveVariantDifference(merchantId),
-    exchangeBonus: await resolveExchangeBonus(merchantId),
+    // A rule that matched the returned items overrides the store setting; see
+    // exchangeBonusFor. The shopper was quoted under it, so the draft and the
+    // admin's recomputations have to price it the same way.
+    exchangeBonus: await exchangeBonusFor(
+      merchantId,
+      request.lineItems.flatMap((li) =>
+        li.orderLineItem ? [li.orderLineItem] : [],
+      ),
+    ),
     lines: request.lineItems.map((li) => ({
       unitPrice: toDecimal(li.unitPrice),
       // Pay for what was accepted. An uninspected line falls back to what the

@@ -144,6 +144,17 @@ model ExchangeRule {
   matchValues String[]
   /// Whether the shopper sees names under the pictures, or just the pictures.
   showProductTitles Boolean @default(false)
+  /**
+   * A sweetener specific to this rule, overriding the store-wide exchange
+   * bonus for the items it matches — "10% extra for swapping footwear".
+   *
+   * Null value means no override. Where several rules match one item, the
+   * first that sets a bonus wins, by the merchant's own ordering: the
+   * alternative of summing them would hand a shopper more credit the more
+   * rules happened to overlap, which nobody intends.
+   */
+  bonusType  BonusType?
+  bonusValue Decimal?  @db.Decimal(12, 2)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

@@ -1,6 +1,8 @@
-import type { ExchangeRuleMatch } from "@prisma/client";
+import type { BonusType, ExchangeRuleMatch } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { notFound } from "../../lib/errors.js";
 import { prisma } from "../../lib/prisma.js";
+import { resolveExchangeBonus } from "./merchant-settings.js";
 
 /**
  * "Advanced exchanges": which lists a returned item may be swapped into.
@@ -37,6 +39,9 @@ export interface RuleInput {
   matchBy?: ExchangeRuleMatch;
   matchValues?: string[];
   showProductTitles?: boolean;
+  bonusType?: BonusType;
+  /** Null clears the override, falling back to the store-wide bonus. */
+  bonusValue?: number | null;
   options?: Array<{ label: string; collectionId: string; collectionTitle: string }>;
 }
 
@@ -53,6 +58,8 @@ export const createRule = async (merchantId: string, input: RuleInput) => {
       matchBy: input.matchBy ?? "PRODUCT_TAG",
       matchValues: input.matchValues ?? [],
       showProductTitles: input.showProductTitles ?? false,
+      bonusType: input.bonusType ?? null,
+      bonusValue: input.bonusValue ?? null,
       options: {
         create: (input.options ?? []).map((o, i) => ({ ...o, sortOrder: i })),
       },
@@ -90,6 +97,10 @@ export const updateRule = async (
         ...(input.showProductTitles === undefined
           ? {}
           : { showProductTitles: input.showProductTitles }),
+        ...(input.bonusType === undefined ? {} : { bonusType: input.bonusType }),
+        ...(input.bonusValue === undefined
+          ? {}
+          : { bonusValue: input.bonusValue }),
         ...(input.options
           ? {
               options: {
@@ -166,3 +177,49 @@ export const rulesForLine = async (
       : values.some((v) => title.includes(v));
   });
 };
+
+/**
+ * The bonus that governs an exchange, when a rule sets one.
+ *
+ * The rule that matched the *returned* item decides, not the collection the
+ * shopper picked from — a merchant offering "10% extra on footwear swaps" is
+ * describing what came back, and resolving it the other way would need the
+ * server to work out which collection every chosen product belongs to on every
+ * quote.
+ *
+ * Where several rules match, the first that sets one wins by the merchant's
+ * own ordering. Returns undefined when no matching rule overrides, which is
+ * the signal to fall back to the store-wide setting.
+ */
+export const ruleBonusForLines = async (
+  merchantId: string,
+  lines: Array<{ productTags: string[]; title: string }>,
+): Promise<{ type: BonusType; value: Prisma.Decimal } | undefined> => {
+  for (const line of lines) {
+    const matches = await rulesForLine(merchantId, line);
+    const withBonus = matches.find(
+      (r) => r.bonusValue !== null && r.bonusType !== null,
+    );
+    if (withBonus) {
+      return { type: withBonus.bonusType!, value: withBonus.bonusValue! };
+    }
+  }
+  return undefined;
+};
+
+/**
+ * Which exchange sweetener applies to a return.
+ *
+ * A rule that matched one of the returned items overrides the store-wide
+ * setting; that in turn falls back to the policy's percentage. Resolved in one
+ * place because the portal's quote, the draft order's price and the admin's
+ * recomputations all have to reach the same answer — and it lives here rather
+ * than in the portal so the two callers above it don't have to import
+ * downwards through it.
+ */
+export const exchangeBonusFor = async (
+  merchantId: string,
+  lines: Array<{ productTags: string[]; title: string }>,
+) =>
+  (await ruleBonusForLines(merchantId, lines)) ??
+  (await resolveExchangeBonus(merchantId));

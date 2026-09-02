@@ -10,11 +10,13 @@ import {
 } from "../settings/reasons.service.js";
 import {
   resolveDisplayMode,
-  resolveExchangeBonus,
   resolveShopNowBonus,
   resolveVariantDifference,
 } from "../settings/merchant-settings.js";
-import { rulesForLine } from "../settings/exchange-rules.service.js";
+import {
+  exchangeBonusFor,
+  rulesForLine,
+} from "../settings/exchange-rules.service.js";
 import { signShopToken } from "../../lib/tokens.js";
 import {
   qualifiesForAutoApproval,
@@ -763,7 +765,10 @@ export const quoteSelection = async (
     lines: toQuoteLines(resolved, variants, Boolean(shopNow)),
     policy,
     variantDifference,
-    exchangeBonus: await resolveExchangeBonus(merchantId),
+    exchangeBonus: await exchangeBonusFor(
+      merchantId,
+      resolved.map(({ line }) => line),
+    ),
     ...(shopNow ? { shopNow } : {}),
   });
 
@@ -818,7 +823,10 @@ export const submitReturn = async (
   const quote = quoteReturn({
     lines: toQuoteLines(resolved, variants, Boolean(shopNow)),
     variantDifference,
-    exchangeBonus: await resolveExchangeBonus(merchantId),
+    exchangeBonus: await exchangeBonusFor(
+      merchantId,
+      resolved.map(({ line }) => line),
+    ),
     ...(shopNow ? { shopNow } : {}),
     policy,
   });

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
-import type { ExchangeCollection } from "../lib/types";
+import type { BonusType, ExchangeCollection } from "../lib/types";
 import { ErrorAlert, Loading } from "../components/Feedback";
 
 /**
@@ -29,6 +29,9 @@ interface Rule {
   matchBy: MatchBy;
   matchValues: string[];
   showProductTitles: boolean;
+  /** Null means this rule doesn't override the store-wide exchange bonus. */
+  bonusType: BonusType | null;
+  bonusValue: number | null;
   options: RuleOption[];
 }
 
@@ -40,6 +43,8 @@ const blankRule = (): Rule => ({
   matchBy: "PRODUCT_TAG",
   matchValues: [],
   showProductTitles: false,
+  bonusType: "PERCENT",
+  bonusValue: null,
   options: [],
 });
 
@@ -53,6 +58,8 @@ export default function ExchangeRulesPage() {
   const [status, setStatus] = useState<string | null>(null);
   /** Tags are typed as text and split on save; see the hint under the field. */
   const [valuesText, setValuesText] = useState("");
+  /** Text while it's being typed; "1." on the way to "1.5" must survive. */
+  const [bonusText, setBonusText] = useState("");
 
   const load = () =>
     api
@@ -74,6 +81,7 @@ export default function ExchangeRulesPage() {
   const open = (rule: Rule) => {
     setEditing(rule);
     setValuesText(rule.matchValues.join(", "));
+    setBonusText(rule.bonusValue === null ? "" : String(rule.bonusValue));
     setStatus(null);
     setError(null);
   };
@@ -92,6 +100,8 @@ export default function ExchangeRulesPage() {
           .map((v) => v.trim())
           .filter(Boolean),
         showProductTitles: editing.showProductTitles,
+        bonusType: editing.bonusType ?? "PERCENT",
+        bonusValue: bonusText.trim() === "" ? null : Number(bonusText),
         options: editing.options.map((o) => ({
           label: o.label.trim(),
           collectionId: o.collectionId,
@@ -209,6 +219,8 @@ export default function ExchangeRulesPage() {
                     {rule.matchValues.join(", ") || "—"} ·{" "}
                     {rule.options.length} option
                     {rule.options.length === 1 ? "" : "s"}
+                    {rule.bonusValue !== null &&
+                      ` · ${rule.bonusValue}${rule.bonusType === "PERCENT" ? "%" : ""} bonus`}
                   </div>
                 </div>
                 <div className="rule-row__actions">
@@ -304,6 +316,40 @@ export default function ExchangeRulesPage() {
                 placeholder="department:footwear, brand:alohas"
                 onChange={(e) => setValuesText(e.target.value)}
               />
+            </div>
+
+            <div className="settings-row">
+              <div>
+                <div className="settings-row__label">Credit bonus</div>
+                <div className="settings-row__hint">
+                  Extra credit for exchanging an item this rule matches,
+                  overriding the store-wide exchange bonus. Leave empty to use
+                  that instead. Where several rules match, the first one with a
+                  bonus applies.
+                </div>
+              </div>
+              <div className="bonus-field">
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={bonusText}
+                  placeholder="Store default"
+                  onChange={(e) => setBonusText(e.target.value)}
+                />
+                <select
+                  value={editing.bonusType ?? "PERCENT"}
+                  onChange={(e) =>
+                    setEditing({
+                      ...editing,
+                      bonusType: e.target.value as BonusType,
+                    })
+                  }
+                >
+                  <option value="PERCENT">%</option>
+                  <option value="FIXED">flat</option>
+                </select>
+              </div>
             </div>
 
             <div className="settings-row">

@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { AppError } from "../../lib/errors.js";
 import { logger } from "../../lib/logger.js";
 import { prisma } from "../../lib/prisma.js";
+import { exchangeBonusFor } from "../settings/exchange-rules.service.js";
 import {
   forDisplay,
   round2,
@@ -11,7 +12,6 @@ import {
 } from "../../lib/money.js";
 import { quoteReturn } from "../policy/quote.service.js";
 import {
-  resolveExchangeBonus,
   resolveExchangeMethod,
   resolveVariantDifference,
 } from "../settings/merchant-settings.js";
@@ -111,7 +111,15 @@ export const priceExchange = async (
      * would show as free on the portal and still arrive as an invoice.
      */
     variantDifference: await resolveVariantDifference(merchantId),
-    exchangeBonus: await resolveExchangeBonus(merchantId),
+    // A rule that matched the returned items overrides the store setting; see
+    // exchangeBonusFor. The shopper was quoted under it, so the draft and the
+    // admin's recomputations have to price it the same way.
+    exchangeBonus: await exchangeBonusFor(
+      merchantId,
+      request.lineItems.flatMap((li) =>
+        li.orderLineItem ? [li.orderLineItem] : [],
+      ),
+    ),
     lines: request.lineItems.map((li) => ({
       unitPrice: toDecimal(li.unitPrice),
       quantity: li.quantity,
