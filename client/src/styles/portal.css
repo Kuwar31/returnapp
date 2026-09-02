@@ -2424,3 +2424,12 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* A decision, not a detail: the page behind this one is a list the shopper has
+   already finished with, and leaving it legible invited them to keep reading
+   it instead of answering. Blur is progressive — browsers without it still get
+   the darker wash. */
+.drawer__backdrop--strong {
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(4px);
+}

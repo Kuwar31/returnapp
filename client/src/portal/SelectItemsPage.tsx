@@ -61,7 +61,7 @@ const RESOLUTION_LABEL: Record<string, string> = {
 };
 
 export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
-  const { order, reasonGroups, eligibility, shopNow } = loaderData;
+  const { order, policy, reasonGroups, eligibility, shopNow } = loaderData;
   const { merchant } = usePortal();
   const { slug } = useParams();
   const navigate = useNavigate();
@@ -151,6 +151,14 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
     (d) => EXCHANGE_RESOLUTIONS.includes(d.resolution) || d.exchangeVariantId,
   );
   const canOfferShopping = Boolean(shopNow?.enabled) && !anyExchange;
+  /** The flat sweetener, already converted for this order. */
+  const flatBonus = shopNow?.enabled ? shopNow.bonus : 0;
+  /**
+   * What shopping is worth over taking the money, from the server's own two
+   * quotes rather than by re-deriving the bonus rules in the browser.
+   */
+  const offerUplift =
+    shopCredit !== null && quote ? shopCredit - quote.estimatedTotal : 0;
 
   /**
    * What these items are worth two ways.
@@ -502,14 +510,34 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
       {offerOpen && (
         <div className="drawer" role="dialog" aria-modal="true">
           <div
-            className="drawer__backdrop"
+            className="drawer__backdrop drawer__backdrop--strong"
             onClick={() => setOfferOpen(false)}
           />
           <div className="card offer">
             <h2 className="offer__title">
-              {shopCredit !== null && quote && shopCredit - quote.estimatedTotal > 0.005
-                ? `Shop now and get ${money(shopCredit - quote.estimatedTotal, currency)} added to your return credit.`
-                : "Spend your return with us instead?"}
+              {/*
+                Named for what it is, not just totalled.
+                "get ₹1,105.49" tells the shopper a number; "get 10% extra"
+                tells them the deal, which is the thing they can weigh against
+                taking the cash. Both bonuses can be running at once, so the
+                sentence is built from whichever are actually set.
+              */}
+              {offerUplift > 0.005 ? (
+                <>
+                  Shop now and get{" "}
+                  <strong>
+                    {policy.bonusCreditPercent > 0
+                      ? `${policy.bonusCreditPercent}% extra`
+                      : money(offerUplift, currency)}
+                    {policy.bonusCreditPercent > 0 && flatBonus > 0.005
+                      ? ` plus ${money(flatBonus, currency)}`
+                      : ""}
+                  </strong>{" "}
+                  — {money(offerUplift, currency)} more to spend.
+                </>
+              ) : (
+                "Spend your return with us instead?"
+              )}
             </h2>
 
             {offerProducts.length > 0 && (
