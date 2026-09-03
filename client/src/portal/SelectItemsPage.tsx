@@ -469,7 +469,19 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
                     {item.variantTitle && <>{item.variantTitle} · </>}
                     {money(item.unitPrice, currency)}
                   </div>
-                  <div className="line-item__meta">{item.ineligibleReason}</div>
+                  {/*
+                    The translated reason where the server gave a code, and its
+                    own English otherwise — an order synced before the codes
+                    existed still has to say something.
+                  */}
+                  <div className="line-item__meta">
+                    {item.ineligibleCode
+                      ? t(
+                          item.ineligibleCode as Parameters<typeof t>[0],
+                          item.ineligibleVars ?? undefined,
+                        )
+                      : item.ineligibleReason}
+                  </div>
                 </div>
               </div>
             ))}
@@ -633,7 +645,12 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
             reasonGroups[0]?.reasons ??
             []
           }
-          allowedResolutions={eligibility.allowedResolutions as ResolutionType[]}
+          /*
+            The item's own set, not the order's. A tagged item is narrower than
+            the parcel around it, and handing the drawer the union would offer
+            a refund the server is about to refuse.
+          */
+          allowedResolutions={openItem.allowedResolutions as ResolutionType[]}
           currency={currency}
           absorbing={loaderData.variantExchangeDifference === "ABSORB"}
           merchantName={merchant.name}

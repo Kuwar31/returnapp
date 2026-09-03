@@ -21,8 +21,26 @@ export interface EligibleLineItem {
   /** Units the shopper may still send back on this line. */
   returnableQuantity: number;
   eligible: boolean;
-  /** Why it can't be returned, for display next to the item. */
+  /** Why it can't be returned, in English, for the admin and the logs. */
   ineligibleReason: string | null;
+  /**
+   * The same answer as a translation key, for the portal.
+   *
+   * The portal speaks thirteen languages and this sentence is generated on the
+   * server, which knows none of them. Sending the key and its values lets the
+   * browser render it in the shopper's language; the English above stays for
+   * the admin, which is English-only, and for anything logged.
+   */
+  ineligibleCode: string | null;
+  ineligibleVars: Record<string, string | number> | null;
+  /**
+   * What this particular item may become.
+   *
+   * Per line rather than per order, because a product tag can narrow one item
+   * without touching the rest of the parcel — an exchange-only jacket beside a
+   * freely refundable shirt is the whole point of the feature.
+   */
+  allowedResolutions: ResolutionType[];
 }
 
 export interface OrderEligibility {
@@ -90,6 +108,37 @@ const windowAnchor = (order: Order, policy: ReturnPolicy): Date | null => {
   }
 };
 
+/**
+ * Whether a line carries any of the named tags.
+ *
+ * Both sides are lowercased and trimmed: a merchant types "Final Sale" into
+ * Shopify and "final-sale" into this app, and refusing to match those would
+ * make the feature look broken rather than strict.
+ */
+const hasAnyTag = (line: OrderLineItem, tags: string[]): boolean => {
+  if (tags.length === 0) return false;
+  const wanted = new Set(
+    tags.map((t) => t.trim().toLowerCase()).filter(Boolean),
+  );
+  if (wanted.size === 0) return false;
+  return line.productTags.some((t) => wanted.has(t.trim().toLowerCase()));
+};
+
+/**
+ * Money that stays with the store, as opposed to a refund to the card.
+ *
+ * What "exchange only" permits, following Loop: a swap, one of the merchant's
+ * advanced-exchange lists, store credit or a gift card. The one thing it
+ * excludes is cash leaving the business, which is the reason a merchant tags an
+ * item this way in the first place.
+ */
+const KEEPS_MONEY_IN_STORE: ResolutionType[] = [
+  "EXCHANGE",
+  "INSTANT_EXCHANGE",
+  "STORE_CREDIT",
+  "GIFT_CARD",
+];
+
 export const allowedResolutions = (
   policy: ReturnPolicy,
 ): ResolutionType[] => {
@@ -151,6 +200,8 @@ export const evaluateOrder = (
     ? Math.max(0, Math.ceil((windowClosesAt.getTime() - now.getTime()) / DAY_MS))
     : null;
 
+  const policyResolutions = allowedResolutions(policy);
+
   const items: EligibleLineItem[] = order.lineItems.map((line) => {
     const ours = Math.max(0, line.quantity - line.returnedQuantity);
 
@@ -173,16 +224,37 @@ export const evaluateOrder = (
         ? ours
         : Math.min(ours, fromShopify);
 
+    /**
+     * The merchant's tag rules, read from the snapshot the order synced with.
+     *
+     * Checked after the window rather than before it: an item outside the
+     * window is closed for a reason the shopper can act on next time, and
+     * leading with "final sale" would bury the deadline.
+     */
+    const tagRules = policy.tagRulesEnabled;
+    const finalSaleByTag = tagRules && hasAnyTag(line, policy.finalSaleTags);
+    const exchangeOnly = tagRules && hasAnyTag(line, policy.exchangeOnlyTags);
+
     let ineligibleReason: string | null = null;
+    let ineligibleCode: string | null = null;
+    let ineligibleVars: Record<string, string | number> | null = null;
     if (isExchangeReplacement) {
       ineligibleReason =
         "This item is a replacement from an earlier exchange, so it can't be returned again.";
+      ineligibleCode = "ineligible.replacement";
     } else if (!anchor) {
       ineligibleReason = "This item hasn't shipped yet.";
+      ineligibleCode = "ineligible.unshipped";
     } else if (!withinWindow) {
       ineligibleReason = `The ${policy.returnWindowDays}-day return window has closed.`;
+      ineligibleCode = "ineligible.windowClosed";
+      ineligibleVars = { days: policy.returnWindowDays };
     } else if (line.finalSale && !policy.allowFinalSale) {
       ineligibleReason = "Final sale items can't be returned.";
+      ineligibleCode = "ineligible.finalSale";
+    } else if (finalSaleByTag) {
+      ineligibleReason = "This item is final sale and can't be returned.";
+      ineligibleCode = "ineligible.finalSale";
     } else if (returnable <= 0) {
       /**
        * Three different reasons look identical from Shopify's side — the line
@@ -199,12 +271,40 @@ export const evaluateOrder = (
         unfulfilledQuantities && line.externalId
           ? (unfulfilledQuantities.get(line.externalId) ?? 0)
           : 0;
+      if (unshipped > 0) {
+        ineligibleReason = "This item hasn't shipped yet.";
+        ineligibleCode = "ineligible.unshipped";
+      } else if (fromShopify === 0 && ours > 0) {
+        ineligibleReason = "This item already has a return open in Shopify.";
+        ineligibleCode = "ineligible.returnOpen";
+      } else {
+        ineligibleReason = "This item has already been returned.";
+        ineligibleCode = "ineligible.alreadyReturned";
+      }
+    }
+
+    /**
+     * An exchange-only item keeps whatever the policy already allows, minus a
+     * refund. Intersected rather than replaced: a store that doesn't offer gift
+     * cards shouldn't start offering them because a product was tagged.
+     */
+    const lineResolutions = exchangeOnly
+      ? policyResolutions.filter((r) => KEEPS_MONEY_IN_STORE.includes(r))
+      : policyResolutions;
+
+    /**
+     * Tagged exchange-only, but the store offers nothing that qualifies — no
+     * exchanges, no credit, no gift cards. Saying the item can't be returned is
+     * more honest than offering a choice of nothing.
+     */
+    if (
+      ineligibleReason === null &&
+      exchangeOnly &&
+      lineResolutions.length === 0
+    ) {
       ineligibleReason =
-        unshipped > 0
-          ? "This item hasn't shipped yet."
-          : fromShopify === 0 && ours > 0
-            ? "This item already has a return open in Shopify."
-            : "This item has already been returned.";
+        "This item can only be exchanged, and no exchange options are available.";
+      ineligibleCode = "ineligible.exchangeOnlyUnavailable";
     }
 
     return {
@@ -226,6 +326,9 @@ export const evaluateOrder = (
       returnableQuantity: returnable,
       eligible: ineligibleReason === null,
       ineligibleReason,
+      ineligibleCode,
+      ineligibleVars,
+      allowedResolutions: lineResolutions,
     };
   });
 

@@ -197,4 +197,13 @@ export const da: Dict = {
   "shop.oneFewer": "Én færre",
   "shop.oneMore": "Én mere",
   "shop.alreadyInCart": "{count} allerede i din kurv",
+
+  // --- why an item can't come back ---------------------------------------
+  "ineligible.replacement": "Denne vare er en erstatning fra et tidligere bytte og kan ikke returneres igen.",
+  "ineligible.unshipped": "Denne vare er ikke sendt endnu.",
+  "ineligible.windowClosed": "Returfristen på {days} dage er udløbet.",
+  "ineligible.finalSale": "Denne vare er slutsalg og kan ikke returneres.",
+  "ineligible.returnOpen": "Der er allerede en igangværende returnering for denne vare.",
+  "ineligible.alreadyReturned": "Denne vare er allerede returneret.",
+  "ineligible.exchangeOnlyUnavailable": "Denne vare kan kun byttes, og der er ingen byttemuligheder tilgængelige.",
 };

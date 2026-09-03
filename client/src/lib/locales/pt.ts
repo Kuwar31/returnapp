@@ -197,4 +197,13 @@ export const pt: Dict = {
   "shop.oneFewer": "Menos um",
   "shop.oneMore": "Mais um",
   "shop.alreadyInCart": "{count} já no seu cesto",
+
+  // --- why an item can't come back ---------------------------------------
+  "ineligible.replacement": "Este artigo substitui uma troca anterior, por isso não pode ser devolvido novamente.",
+  "ineligible.unshipped": "Este artigo ainda não foi enviado.",
+  "ineligible.windowClosed": "O prazo de devolução de {days} dias terminou.",
+  "ineligible.finalSale": "Este artigo é de venda final e não pode ser devolvido.",
+  "ineligible.returnOpen": "Já existe uma devolução em curso para este artigo.",
+  "ineligible.alreadyReturned": "Este artigo já foi devolvido.",
+  "ineligible.exchangeOnlyUnavailable": "Este artigo só pode ser trocado e não há opções de troca disponíveis.",
 };

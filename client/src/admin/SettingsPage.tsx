@@ -18,6 +18,9 @@ interface Policy {
   returnWindowDays: number;
   windowStartsFrom: "ORDER_DATE" | "FULFILLMENT" | "DELIVERY";
   allowFinalSale: boolean;
+  tagRulesEnabled: boolean;
+  finalSaleTags: string[];
+  exchangeOnlyTags: string[];
   allowRefund: boolean;
   allowStoreCredit: boolean;
   allowGiftCard: boolean;
@@ -58,6 +61,27 @@ const SECTIONS = {
 
 type Section = keyof typeof SECTIONS;
 
+/**
+ * A comma-separated tag list, as typed.
+ *
+ * Kept as text while the merchant is typing for the same reason the bonus is:
+ * bound to an array, a trailing comma on the way to a second tag would vanish
+ * under them mid-keystroke. Blanks are dropped and duplicates collapse, and
+ * case is preserved — the merchant sees back exactly what they wrote, and the
+ * matching lowercases both sides when it compares.
+ */
+const parseTags = (raw: string): string[] => [
+  ...new Set(
+    raw
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean),
+  ),
+];
+
+const sameTags = (a: string[], b: string[]): boolean =>
+  a.length === b.length && a.every((t, i) => t === b[i]);
+
 /** Blank clears the flat bonus; anything unparseable is left as-is. */
 const parseBonus = (raw: string): number | null => {
   const trimmed = raw.trim();
@@ -96,6 +120,9 @@ export default function SettingsPage() {
   const [bonusText, setBonusText] = useState("");
   /** The exchange sweetener, likewise text while it's being typed. */
   const [exchangeBonusText, setExchangeBonusText] = useState("");
+  /** The two tag lists, likewise. */
+  const [finalSaleText, setFinalSaleText] = useState("");
+  const [exchangeOnlyText, setExchangeOnlyText] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -103,7 +130,10 @@ export default function SettingsPage() {
       .get<Policy[]>("/admin/settings/policies", { auth: "admin" })
       .then((policies) => {
         if (!active) return;
-        setSavedPolicy(policies.find((p) => p.isDefault) ?? policies[0] ?? null);
+        const chosen = policies.find((p) => p.isDefault) ?? policies[0] ?? null;
+        setSavedPolicy(chosen);
+        setFinalSaleText((chosen?.finalSaleTags ?? []).join(", "));
+        setExchangeOnlyText((chosen?.exchangeOnlyTags ?? []).join(", "));
       })
       .catch((e) => active && setError(e.message))
       .finally(() => active && setLoading(false));
@@ -144,11 +174,17 @@ export default function SettingsPage() {
     savedStore !== null &&
     parseBonus(exchangeBonusText) !== (savedStore.exchangeBonusValue ?? null);
 
+  const tagsEdited =
+    savedPolicy !== null &&
+    (!sameTags(parseTags(finalSaleText), savedPolicy.finalSaleTags) ||
+      !sameTags(parseTags(exchangeOnlyText), savedPolicy.exchangeOnlyTags));
+
   const dirty =
     Object.keys(policyEdits).length > 0 ||
     Object.keys(storeEdits).length > 0 ||
     bonusEdited ||
-    exchangeBonusEdited;
+    exchangeBonusEdited ||
+    tagsEdited;
 
   const discard = () => {
     setPolicyEdits({});
@@ -163,6 +199,8 @@ export default function SettingsPage() {
         ? ""
         : String(savedStore.exchangeBonusValue),
     );
+    setFinalSaleText((savedPolicy?.finalSaleTags ?? []).join(", "));
+    setExchangeOnlyText((savedPolicy?.exchangeOnlyTags ?? []).join(", "));
     setError(null);
     setStatus(null);
   };
@@ -200,8 +238,15 @@ export default function SettingsPage() {
         setStoreEdits({});
       }
 
-      if (Object.keys(policyEdits).length > 0) {
-        const { id, isDefault, ...body } = { ...savedPolicy, ...policyEdits };
+      if (Object.keys(policyEdits).length > 0 || tagsEdited) {
+        const { id, isDefault, ...body } = {
+          ...savedPolicy,
+          ...policyEdits,
+          // Parsed here rather than on every keystroke, so the text the
+          // merchant is mid-way through typing is never what gets stored.
+          finalSaleTags: parseTags(finalSaleText),
+          exchangeOnlyTags: parseTags(exchangeOnlyText),
+        };
         void isDefault;
         const updated = await api.patch<Policy>(
           `/admin/settings/policies/${id}`,
@@ -210,6 +255,8 @@ export default function SettingsPage() {
         );
         setSavedPolicy(updated);
         setPolicyEdits({});
+        setFinalSaleText(updated.finalSaleTags.join(", "));
+        setExchangeOnlyText(updated.exchangeOnlyTags.join(", "));
       }
 
       setStatus("Saved.");
@@ -643,6 +690,83 @@ export default function SettingsPage() {
               }
             />
           </div>
+        </div>
+
+        <div className="panel">
+          <h2>Product tag rules</h2>
+          <p className="settings-row__hint" style={{ marginBottom: 14 }}>
+            Narrow what a specific product can become, using the tags you
+            already keep in Shopify. Matched against the tags a product carried
+            when the order was placed, so retagging something later can't close
+            a return a customer has already started. Tag names aren't
+            case-sensitive.
+          </p>
+
+          <div className="settings-row">
+            <div>
+              <div className="settings-row__label">Use product tags</div>
+              <div className="settings-row__hint">
+                Off means every item follows the resolutions above, whatever
+                tags it carries.
+              </div>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={policy.tagRulesEnabled}
+              aria-label="Use product tags"
+              className={`switch${policy.tagRulesEnabled ? " is-on" : ""}`}
+              onClick={() => update("tagRulesEnabled", !policy.tagRulesEnabled)}
+            >
+              <span className="switch__knob" />
+            </button>
+          </div>
+
+          {policy.tagRulesEnabled && (
+            <>
+              <div className="settings-row">
+                <div>
+                  <div className="settings-row__label">Final sale tags</div>
+                  <div className="settings-row__hint">
+                    An item with any of these can't be returned or exchanged at
+                    all. Separate several with commas.
+                  </div>
+                </div>
+                <input
+                  type="text"
+                  className="settings-input"
+                  value={finalSaleText}
+                  placeholder="final-sale"
+                  onChange={(e) => {
+                    setStatus(null);
+                    setFinalSaleText(e.target.value);
+                  }}
+                />
+              </div>
+
+              <div className="settings-row">
+                <div>
+                  <div className="settings-row__label">Exchange only tags</div>
+                  <div className="settings-row__hint">
+                    An item with any of these can be exchanged, or taken as
+                    store credit or a gift card — but not refunded to the
+                    original payment method. Whichever of those you offer above
+                    still applies; this only removes the cash refund.
+                  </div>
+                </div>
+                <input
+                  type="text"
+                  className="settings-input"
+                  value={exchangeOnlyText}
+                  placeholder="exchange-only"
+                  onChange={(e) => {
+                    setStatus(null);
+                    setExchangeOnlyText(e.target.value);
+                  }}
+                />
+              </div>
+            </>
+          )}
         </div>
 
         <div className="panel">

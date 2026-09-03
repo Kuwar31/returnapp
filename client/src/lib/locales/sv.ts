@@ -197,4 +197,13 @@ export const sv: Dict = {
   "shop.oneFewer": "En färre",
   "shop.oneMore": "En till",
   "shop.alreadyInCart": "{count} redan i din varukorg",
+
+  // --- why an item can't come back ---------------------------------------
+  "ineligible.replacement": "Den här varan är en ersättning från ett tidigare byte och kan inte returneras igen.",
+  "ineligible.unshipped": "Den här varan har inte skickats än.",
+  "ineligible.windowClosed": "Returfristen på {days} dagar har gått ut.",
+  "ineligible.finalSale": "Den här varan är slutförsäljning och kan inte returneras.",
+  "ineligible.returnOpen": "Det finns redan en pågående retur för den här varan.",
+  "ineligible.alreadyReturned": "Den här varan har redan returnerats.",
+  "ineligible.exchangeOnlyUnavailable": "Den här varan kan bara bytas, och inga bytesalternativ är tillgängliga.",
 };

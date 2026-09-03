@@ -204,4 +204,13 @@ export const ar: Dict = {
   "shop.oneFewer": "واحد أقل",
   "shop.oneMore": "واحد أكثر",
   "shop.alreadyInCart": "{count} في سلتك بالفعل",
+
+  // --- why an item can't come back ---------------------------------------
+  "ineligible.replacement": "هذا المنتج بديل عن استبدال سابق، لذا لا يمكن إرجاعه مرة أخرى.",
+  "ineligible.unshipped": "لم يتم شحن هذا المنتج بعد.",
+  "ineligible.windowClosed": "انتهت مهلة الإرجاع البالغة {days} يومًا.",
+  "ineligible.finalSale": "هذا المنتج بيع نهائي ولا يمكن إرجاعه.",
+  "ineligible.returnOpen": "يوجد بالفعل طلب إرجاع قيد التنفيذ لهذا المنتج.",
+  "ineligible.alreadyReturned": "تم إرجاع هذا المنتج بالفعل.",
+  "ineligible.exchangeOnlyUnavailable": "هذا المنتج قابل للاستبدال فقط، ولا تتوفر أي خيارات استبدال.",
 };

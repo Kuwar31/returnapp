@@ -197,4 +197,13 @@ export const it: Dict = {
   "shop.oneFewer": "Uno in meno",
   "shop.oneMore": "Uno in più",
   "shop.alreadyInCart": "{count} già nel carrello",
+
+  // --- why an item can't come back ---------------------------------------
+  "ineligible.replacement": "Questo articolo sostituisce un cambio precedente, quindi non può essere restituito di nuovo.",
+  "ineligible.unshipped": "Questo articolo non è ancora stato spedito.",
+  "ineligible.windowClosed": "Il termine di {days} giorni per il reso è scaduto.",
+  "ineligible.finalSale": "Questo articolo è in vendita finale e non è restituibile.",
+  "ineligible.returnOpen": "Per questo articolo è già aperto un reso.",
+  "ineligible.alreadyReturned": "Questo articolo è già stato restituito.",
+  "ineligible.exchangeOnlyUnavailable": "Questo articolo può solo essere cambiato e non ci sono opzioni di cambio disponibili.",
 };

@@ -382,12 +382,18 @@ const resolveSelections = async (
         `You can only return ${evaluated.returnableQuantity} of ${line.title}.`,
       );
     }
-    // Each line carries its own resolution now, so each is checked against the
-    // policy separately — a shopper can't smuggle in an option this store
-    // doesn't offer by attaching it to one item out of several.
-    if (!eligibility.allowedResolutions.includes(selection.resolution)) {
-      throw badRequest(
-        `"${line.title}" can't be resolved that way for this order.`,
+    /**
+     * Against the *line's* own allowed set, not the order's.
+     *
+     * A product tag can narrow one item without touching the rest of the
+     * parcel, so an exchange-only jacket has a smaller set than the shirt
+     * beside it. Checking the order-level union would have let a refund
+     * through on the jacket — and the portal hiding the option is a courtesy,
+     * not a rule: this is where the rule lives.
+     */
+    if (!evaluated.allowedResolutions.includes(selection.resolution)) {
+      throw unprocessable(
+        `"${line.title}" can't be resolved that way — it can only be exchanged or credited.`,
       );
     }
     return { line, selection };

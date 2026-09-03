@@ -435,6 +435,24 @@ model ReturnPolicy {
   waiveShippingOnCredit Boolean @default(true)
 
   // Requests under this value skip manual review
+  /**
+   * Product tags that narrow what a returned item may become.
+   *
+   * Two rules, both named by the merchant because a store's tags are its own:
+   * one closes an item to returns outright, the other allows it to be swapped
+   * or credited but not refunded in cash. Off by default — turning them on
+   * changes what every shopper is offered, so it is a decision to make rather
+   * than one to inherit.
+   *
+   * Matched against the tag snapshot taken when the order synced, so a product
+   * retagged after someone bought it doesn't retroactively close their return.
+   * Comparison is case-insensitive: merchants type "Final Sale" in Shopify and
+   * "final-sale" here, and neither spelling is wrong.
+   */
+  tagRulesEnabled  Boolean  @default(false)
+  finalSaleTags    String[] @default(["final-sale"])
+  exchangeOnlyTags String[] @default(["exchange-only"])
+
   autoApprove      Boolean  @default(false)
   autoApproveUnder Decimal? @db.Decimal(12, 2)
 

@@ -195,4 +195,13 @@ export const zh: Dict = {
   "shop.oneFewer": "减少一件",
   "shop.oneMore": "增加一件",
   "shop.alreadyInCart": "购物车中已有 {count} 件",
+
+  // --- why an item can't come back ---------------------------------------
+  "ineligible.replacement": "该商品是此前换货的替换品，无法再次退货。",
+  "ineligible.unshipped": "该商品尚未发货。",
+  "ineligible.windowClosed": "{days} 天的退货期限已结束。",
+  "ineligible.finalSale": "该商品为最终特卖商品，不支持退货。",
+  "ineligible.returnOpen": "该商品已有一笔正在处理的退货。",
+  "ineligible.alreadyReturned": "该商品已退货。",
+  "ineligible.exchangeOnlyUnavailable": "该商品仅支持换货，但目前没有可用的换货方式。",
 };

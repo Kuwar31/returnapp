@@ -250,5 +250,16 @@ export const en = {
   "shop.closeCart": "Close cart",
   "shop.oneFewer": "One fewer",
   "shop.oneMore": "One more",
+
+  // --- why an item can't come back ---------------------------------------
+  "ineligible.replacement":
+    "This item is a replacement from an earlier exchange, so it can't be returned again.",
+  "ineligible.unshipped": "This item hasn't shipped yet.",
+  "ineligible.windowClosed": "The {days}-day return window has closed.",
+  "ineligible.finalSale": "This item is final sale and can't be returned.",
+  "ineligible.returnOpen": "This item already has a return open.",
+  "ineligible.alreadyReturned": "This item has already been returned.",
+  "ineligible.exchangeOnlyUnavailable":
+    "This item can only be exchanged, and no exchange options are available.",
   "shop.alreadyInCart": "{count} already in your cart",
 } as const;

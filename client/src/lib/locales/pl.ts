@@ -201,4 +201,13 @@ export const pl: Dict = {
   "shop.oneFewer": "O jeden mniej",
   "shop.oneMore": "O jeden więcej",
   "shop.alreadyInCart": "{count} już w koszyku",
+
+  // --- why an item can't come back ---------------------------------------
+  "ineligible.replacement": "Ten produkt jest wymianą z wcześniejszego zgłoszenia, więc nie można go zwrócić ponownie.",
+  "ineligible.unshipped": "Ten produkt nie został jeszcze wysłany.",
+  "ineligible.windowClosed": "{days}-dniowy termin zwrotu minął.",
+  "ineligible.finalSale": "Ten produkt jest objęty wyprzedażą ostateczną i nie podlega zwrotowi.",
+  "ineligible.returnOpen": "Dla tego produktu trwa już zwrot.",
+  "ineligible.alreadyReturned": "Ten produkt został już zwrócony.",
+  "ineligible.exchangeOnlyUnavailable": "Ten produkt można tylko wymienić, a żadne opcje wymiany nie są dostępne.",
 };

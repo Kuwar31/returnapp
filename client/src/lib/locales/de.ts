@@ -197,4 +197,13 @@ export const de: Dict = {
   "shop.oneFewer": "Eins weniger",
   "shop.oneMore": "Eins mehr",
   "shop.alreadyInCart": "{count} bereits in Ihrem Warenkorb",
+
+  // --- why an item can't come back ---------------------------------------
+  "ineligible.replacement": "Dieser Artikel ist ein Ersatz aus einem früheren Umtausch und kann nicht erneut zurückgegeben werden.",
+  "ineligible.unshipped": "Dieser Artikel wurde noch nicht versandt.",
+  "ineligible.windowClosed": "Die Rückgabefrist von {days} Tagen ist abgelaufen.",
+  "ineligible.finalSale": "Dieser Artikel ist vom Umtausch ausgeschlossen und kann nicht zurückgegeben werden.",
+  "ineligible.returnOpen": "Für diesen Artikel läuft bereits eine Rückgabe.",
+  "ineligible.alreadyReturned": "Dieser Artikel wurde bereits zurückgegeben.",
+  "ineligible.exchangeOnlyUnavailable": "Dieser Artikel kann nur umgetauscht werden, und es sind keine Umtauschoptionen verfügbar.",
 };

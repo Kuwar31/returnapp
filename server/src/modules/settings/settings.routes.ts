@@ -42,6 +42,9 @@ const serializePolicy = (policy: {
   restockingFeePercent: unknown;
   autoApprove: boolean;
   autoApproveUnder: unknown;
+  tagRulesEnabled: boolean;
+  finalSaleTags: string[];
+  exchangeOnlyTags: string[];
 }) => ({
   ...policy,
   bonusCreditPercent: Number(policy.bonusCreditPercent),
@@ -76,6 +79,20 @@ const policySchema = z.object({
   restockingFeePercent: z.number().min(0).max(100),
   autoApprove: z.boolean(),
   autoApproveUnder: z.number().min(0).nullable(),
+  tagRulesEnabled: z.boolean(),
+  /**
+   * Tags are trimmed and de-duplicated but not lowercased on the way in: the
+   * merchant sees back exactly what they typed, and matching lowercases both
+   * sides at comparison time instead.
+   */
+  finalSaleTags: z
+    .array(z.string().trim().min(1).max(80))
+    .max(25)
+    .transform((tags) => [...new Set(tags)]),
+  exchangeOnlyTags: z
+    .array(z.string().trim().min(1).max(80))
+    .max(25)
+    .transform((tags) => [...new Set(tags)]),
 });
 
 settingsRouter.patch(

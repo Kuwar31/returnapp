@@ -74,6 +74,14 @@ export interface EligibleLineItem {
   returnableQuantity: number;
   eligible: boolean;
   ineligibleReason: string | null;
+  /**
+   * The same reason as a translation key, so the portal can say it in the
+   * shopper's language. The English above is what the admin shows.
+   */
+  ineligibleCode: string | null;
+  ineligibleVars: Record<string, string | number> | null;
+  /** What this item may become — narrower than the order's when tagged. */
+  allowedResolutions: ResolutionType[];
   /** Which reason group applies to this item, by its product type. */
   reasonGroupId?: string | null;
 }

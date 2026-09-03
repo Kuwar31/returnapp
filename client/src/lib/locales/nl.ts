@@ -197,4 +197,13 @@ export const nl: Dict = {
   "shop.oneFewer": "Eén minder",
   "shop.oneMore": "Eén meer",
   "shop.alreadyInCart": "{count} al in je winkelmandje",
+
+  // --- why an item can't come back ---------------------------------------
+  "ineligible.replacement": "Dit artikel is een vervanging uit een eerdere ruil en kan niet opnieuw worden geretourneerd.",
+  "ineligible.unshipped": "Dit artikel is nog niet verzonden.",
+  "ineligible.windowClosed": "De retourtermijn van {days} dagen is verstreken.",
+  "ineligible.finalSale": "Dit artikel is final sale en kan niet worden geretourneerd.",
+  "ineligible.returnOpen": "Er loopt al een retour voor dit artikel.",
+  "ineligible.alreadyReturned": "Dit artikel is al geretourneerd.",
+  "ineligible.exchangeOnlyUnavailable": "Dit artikel kan alleen worden geruild, en er zijn geen ruilopties beschikbaar.",
 };

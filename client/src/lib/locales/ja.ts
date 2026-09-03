@@ -195,4 +195,13 @@ export const ja: Dict = {
   "shop.oneFewer": "1つ減らす",
   "shop.oneMore": "1つ増やす",
   "shop.alreadyInCart": "すでにカートに{count}点",
+
+  // --- why an item can't come back ---------------------------------------
+  "ineligible.replacement": "この商品は以前の交換によるお届け品のため、再度の返品はできません。",
+  "ineligible.unshipped": "この商品はまだ発送されていません。",
+  "ineligible.windowClosed": "{days}日間の返品期間が終了しました。",
+  "ineligible.finalSale": "この商品は返品不可のため、ご返品いただけません。",
+  "ineligible.returnOpen": "この商品にはすでに返品手続きがあります。",
+  "ineligible.alreadyReturned": "この商品はすでに返品済みです。",
+  "ineligible.exchangeOnlyUnavailable": "この商品は交換のみ対応ですが、現在ご利用いただける交換方法がありません。",
 };
