@@ -9,6 +9,7 @@ import type {
   OrderSession,
 } from "../lib/types";
 import { ErrorAlert } from "../components/Feedback";
+import { useT } from "./PortalLayout";
 import {
   cartTotal,
   describeVariant,
@@ -47,6 +48,7 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
 export default function ShopPage({ loaderData }: Route.ComponentProps) {
   const { order, shopNow } = loaderData;
   const { slug } = useParams();
+  const t = useT();
   const navigate = useNavigate();
 
   const [products, setProducts] = useState<ExchangeProduct[]>([]);
@@ -99,7 +101,7 @@ export default function ShopPage({ loaderData }: Route.ComponentProps) {
       .catch(
         (e) =>
           active &&
-          setError(e instanceof Error ? e.message : "Couldn't load your credit."),
+          setError(e instanceof Error ? e.message : t("shop.creditFailed")),
       );
     return () => {
       active = false;
@@ -194,7 +196,7 @@ export default function ShopPage({ loaderData }: Route.ComponentProps) {
         <input
           className="shop__search"
           value={search}
-          placeholder="Search for product…"
+          placeholder={t("shop.searchPlaceholder")}
           onChange={(e) => setSearch(e.target.value)}
         />
         <div className="shop__bar-actions">
@@ -211,7 +213,7 @@ export default function ShopPage({ loaderData }: Route.ComponentProps) {
             type="button"
             className="shop__icon"
             onClick={() => navigate(`/r/${slug}/review`)}
-            aria-label="Close and go back to your return"
+            aria-label={t("shop.closeAndBack")}
           >
             <span aria-hidden="true">✕</span>
           </button>
@@ -220,13 +222,13 @@ export default function ShopPage({ loaderData }: Route.ComponentProps) {
 
       <div className="shop__layout">
         {/* Collections, so a big catalogue is navigable without searching. */}
-        <nav className="shop__rail" aria-label="Collections">
+        <nav className="shop__rail" aria-label={t("shop.collections")}>
           <button
             type="button"
             className={`shop__rail-item${collectionId === null ? " is-active" : ""}`}
             onClick={() => setCollectionId(null)}
           >
-            All products
+            {t("shop.allProducts")}
           </button>
           {collections.map((c) => (
             <button
@@ -244,14 +246,14 @@ export default function ShopPage({ loaderData }: Route.ComponentProps) {
           <ErrorAlert message={error} />
           <h2 className="shop__heading">
             {collections.find((c) => c.id === collectionId)?.title ??
-              "All products"}
+              t("shop.allProducts")}
           </h2>
 
           {loading ? (
-            <p className="muted">Loading products…</p>
+            <p className="muted">{t("shop.loadingProducts")}</p>
           ) : products.length === 0 ? (
             <p className="muted">
-              {search ? `Nothing matched "${search}".` : "Nothing here yet."}
+              {search ? `Nothing matched "${search}".` : t("shop.nothingHere")}
             </p>
           ) : (
             <div className="shop__grid">
@@ -310,14 +312,14 @@ export default function ShopPage({ loaderData }: Route.ComponentProps) {
                 type="button"
                 className="shop__icon"
                 onClick={() => setCartOpen(false)}
-                aria-label="Close cart"
+                aria-label={t("shop.closeCart")}
               >
                 <span aria-hidden="true">✕</span>
               </button>
             </div>
 
             {cart.length === 0 ? (
-              <p className="muted">Nothing added yet.</p>
+              <p className="muted">{t("shop.emptyCart")}</p>
             ) : (
               <ul className="shop-cart__lines">
                 {cart.map((line) => (
@@ -336,7 +338,7 @@ export default function ShopPage({ loaderData }: Route.ComponentProps) {
                         className="linkish"
                         onClick={() => setQuantity(line.variantId, 0)}
                       >
-                        Remove
+                        {t("common.remove")}
                       </button>
                     </div>
                     <Stepper
@@ -350,11 +352,11 @@ export default function ShopPage({ loaderData }: Route.ComponentProps) {
 
             <div className="shop-cart__summary">
               <div className="summary__line">
-                <span>New items</span>
+                <span>{t("shop.newItems")}</span>
                 <span>{money(basket, currency)}</span>
               </div>
               <div className="summary__line">
-                <span>Your return credit</span>
+                <span>{t("shop.yourCredit")}</span>
                 <span>−{money(credit ?? 0, currency)}</span>
               </div>
               <div
@@ -362,7 +364,7 @@ export default function ShopPage({ loaderData }: Route.ComponentProps) {
                   owed > 0 ? "summary__total--due" : "summary__total--paid"
                 }`}
               >
-                <span>{owed > 0 ? "Left to pay" : "Credit remaining"}</span>
+                <span>{owed > 0 ? t("shop.leftToPay") : t("shop.creditRemaining")}</span>
                 <strong>
                   {money(owed > 0 ? owed : (remaining ?? 0), currency)}
                 </strong>
@@ -380,14 +382,14 @@ export default function ShopPage({ loaderData }: Route.ComponentProps) {
                 disabled={cart.length === 0}
                 onClick={() => navigate(`/r/${slug}/review`)}
               >
-                Continue ({count})
+                {t("shop.continueCount", { count })}
               </button>
               <button
                 type="button"
                 className="btn btn--secondary btn--block"
                 onClick={() => setCartOpen(false)}
               >
-                Keep shopping
+                {t("shop.keepShopping")}
               </button>
             </div>
           </aside>
@@ -406,14 +408,14 @@ export default function ShopPage({ loaderData }: Route.ComponentProps) {
             : money(owed > 0 ? owed : (remaining ?? 0), currency)}
         </span>
         <span className="shop__pill-label">
-          {owed > 0 ? "more to pay" : "to spend from your return"}
+          {owed > 0 ? t("shop.morePay") : t("shop.toSpend")}
         </span>
         <button
           className="btn shop__pill-btn"
           disabled={cart.length === 0}
           onClick={() => navigate(`/r/${slug}/review`)}
         >
-          Continue ({count})
+          {t("shop.continueCount", { count })}
         </button>
       </div>
     </div>
@@ -428,12 +430,13 @@ function Stepper({
   value: number;
   onChange: (next: number) => void;
 }) {
+  const t = useT();
   return (
     <div className="stepper">
       <button
         type="button"
         onClick={() => onChange(value - 1)}
-        aria-label="One fewer"
+        aria-label={t("shop.oneFewer")}
       >
         −
       </button>
@@ -441,7 +444,7 @@ function Stepper({
       <button
         type="button"
         onClick={() => onChange(value + 1)}
-        aria-label="One more"
+        aria-label={t("shop.oneMore")}
       >
         +
       </button>
@@ -471,6 +474,7 @@ function ProductDialog({
   ) => void;
   onClose: () => void;
 }) {
+  const t = useT();
   const [variantId, setVariantId] = useState(
     () => product.variants.find((v) => v.available)?.id ?? product.variants[0]?.id,
   );
@@ -488,7 +492,7 @@ function ProductDialog({
           type="button"
           className="shop-pdp__close shop__icon"
           onClick={onClose}
-          aria-label="Close"
+          aria-label={t("common.close")}
         >
           <span aria-hidden="true">✕</span>
         </button>
@@ -509,13 +513,13 @@ function ProductDialog({
               : money(product.minPrice, product.currency)}
           </div>
           <p className="muted shop-pdp__stock">
-            {variant?.available ? "In stock" : "Sold out"}
-            {inCart > 0 && ` · ${inCart} already in your cart`}
+            {variant?.available ? t("shop.inStock") : t("shop.soldOut")}
+            {inCart > 0 && ` · ${t("shop.alreadyInCart", { count: inCart })}`}
           </p>
 
           {product.variants.length > 1 && (
             <>
-              <h3 className="shop-pdp__label">Options</h3>
+              <h3 className="shop-pdp__label">{t("drawer.options")}</h3>
               <div className="shop-pdp__options">
                 {product.variants.map((v) => (
                   <button
@@ -534,7 +538,7 @@ function ProductDialog({
             </>
           )}
 
-          <h3 className="shop-pdp__label">Quantity</h3>
+          <h3 className="shop-pdp__label">{t("shop.quantity")}</h3>
           <Stepper
             value={quantity}
             onChange={(q) => setQuantity(Math.max(1, q))}
@@ -545,7 +549,7 @@ function ProductDialog({
             disabled={!variant?.available}
             onClick={() => variant && onAdd(product, variant, quantity)}
           >
-            {variant?.available ? "Add to cart" : "Sold out"}
+            {variant?.available ? t("shop.addToCart") : t("shop.soldOut")}
           </button>
         </div>
       </div>

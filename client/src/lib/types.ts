@@ -54,6 +54,8 @@ export interface PortalBranding {
   supportEmail: string | null;
   policyUrl: string | null;
   searchEngineVisible: boolean;
+  /** BCP-47 code for the language the app's own strings render in. */
+  locale: string;
 }
 
 export interface EligibleLineItem {

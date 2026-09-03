@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { FONT_KEYS } from "./portal-fonts.js";
+import { LOCALE_CODES } from "./portal-locales.js";
 import { notFound } from "../../lib/errors.js";
 import { portalUrl } from "../../lib/portal-links.js";
 import { prisma } from "../../lib/prisma.js";
@@ -410,6 +411,7 @@ const brandingSchema = z.object({
   footerText: optionalText(300),
 
   searchEngineVisible: z.boolean(),
+  locale: z.enum(LOCALE_CODES),
 });
 
 settingsRouter.get(

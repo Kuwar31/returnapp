@@ -184,6 +184,7 @@ const BRANDING_DEFAULTS = {
   supportEmail: null as string | null,
   policyUrl: null as string | null,
   searchEngineVisible: true,
+  locale: "en",
 };
 
 export type PortalBrandingPayload = typeof BRANDING_DEFAULTS & {

@@ -10,7 +10,8 @@ import type {
 } from "../lib/types";
 import { ErrorAlert } from "../components/Feedback";
 import { ItemDrawer, type ItemDecision } from "./ItemDrawer";
-import { usePortal } from "./PortalLayout";
+import type { TranslateFn } from "../lib/i18n";
+import { usePortal, useT } from "./PortalLayout";
 import {
   articleKey,
   exchangePriceIn,
@@ -52,17 +53,28 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
  */
 const EXCHANGE_RESOLUTIONS = ["EXCHANGE", "INSTANT_EXCHANGE"];
 
-const RESOLUTION_LABEL: Record<string, string> = {
-  REFUND: "Return",
-  STORE_CREDIT: "Store credit",
-  GIFT_CARD: "Gift card",
-  EXCHANGE: "Exchange",
-  INSTANT_EXCHANGE: "Instant exchange",
-};
+/**
+ * How a chosen outcome reads back on the picker, in the shopper's language.
+ *
+ * "Return" rather than "Refund" for the plain case: at this point the shopper
+ * has said what they're sending back, not how they want paying — that choice
+ * comes on the review step. A function rather than a constant for the same
+ * reason as elsewhere: a constant is built before any store's language is
+ * known.
+ */
+const resolutionWord = (t: TranslateFn, r: string): string =>
+  ({
+    REFUND: t("picker.returnWord"),
+    STORE_CREDIT: t("resolution.storeCredit"),
+    GIFT_CARD: t("resolution.giftCard"),
+    EXCHANGE: t("resolution.exchange"),
+    INSTANT_EXCHANGE: t("resolution.instantExchange"),
+  })[r] ?? r;
 
 export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
   const { order, policy, reasonGroups, eligibility, shopNow } = loaderData;
   const { merchant } = usePortal();
+  const t = useT();
   const { slug } = useParams();
   const navigate = useNavigate();
 
@@ -242,7 +254,7 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
     } catch (e) {
       setLeaving(false);
       setError(
-        e instanceof Error ? e.message : "Couldn't open the store just now.",
+        e instanceof Error ? e.message : t("picker.shopFailed"),
       );
     }
   };
@@ -259,17 +271,15 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
   return (
     <>
       <div className="card portal__card portal__card--wide">
-        <h2 className="picker__heading">Select an item to return</h2>
-        <p className="picker__sub">
-          You'll have the opportunity to add more later.
-        </p>
+        <h2 className="picker__heading">{t("picker.title")}</h2>
+        <p className="picker__sub">{t("picker.intro")}</p>
         {eligibility.withinWindow && eligibility.windowClosesAt && (
           <p className="picker__until">
-            Returnable until{" "}
-            {new Date(eligibility.windowClosesAt).toLocaleDateString("en-US", {
-              month: "long",
-              day: "numeric",
-              year: "numeric",
+            {t("picker.returnableUntil", {
+              date: new Date(eligibility.windowClosesAt).toLocaleDateString(
+                t.locale,
+                { month: "long", day: "numeric", year: "numeric" },
+              ),
             })}
           </p>
         )}
@@ -285,10 +295,11 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
         {submitted && (
           <div className="picker__submitted">
             <div>
-              <strong>You already have a return for this order</strong>
+              <strong>{t("picker.existing")}</strong>
               <div className="muted">
                 {submitted.reference}
-                {submitted.at && ` · started ${shortDate(submitted.at)}`}
+                {submitted.at &&
+                  ` · ${t("picker.started", { date: shortDate(submitted.at) })}`}
               </div>
             </div>
             <Link
@@ -297,7 +308,7 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
                 submitted.email,
               )}`}
             >
-              View it
+              {t("shell.resumeAction")}
             </Link>
           </div>
         )}
@@ -312,7 +323,7 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
         */}
         {!eligibility.withinWindow && eligibility.windowClosesAt && (
           <div className="alert alert--warn">
-            This order is outside the {eligibility.windowDays}-day return window.
+            {t("picker.windowClosed", { days: eligibility.windowDays })}
           </div>
         )}
 
@@ -365,7 +376,7 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
 
                   {decision ? (
                     <div className="line-item__decision">
-                      <strong>{RESOLUTION_LABEL[decision.resolution]}</strong>
+                      <strong>{resolutionWord(t, decision.resolution)}</strong>
                       {decision.reasonLabel && (
                         <div className="muted">{decision.reasonLabel}</div>
                       )}
@@ -377,7 +388,9 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
                       */}
                       {decision.exchangeLabel && (
                         <div className="swap">
-                          <div className="swap__caption">Exchanging for</div>
+                          <div className="swap__caption">
+                            {t("picker.exchangingFor")}
+                          </div>
                           <div className="swap__item">
                             {decision.exchangeImageUrl ? (
                               <img
@@ -431,7 +444,7 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
                         });
                       }}
                     >
-                      Remove
+                      {t("picker.remove")}
                     </button>
                   )}
                 </div>
@@ -442,7 +455,7 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
 
         {ineligible.length > 0 && (
           <>
-            <p className="section-label">Unavailable for return</p>
+            <p className="section-label">{t("picker.unavailable")}</p>
             {ineligible.map((item) => (
               <div key={item.id} className="line-item is-disabled">
                 {item.imageUrl ? (
@@ -466,18 +479,18 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
         {quote && (
           <div className="totals">
             <div className="totals__row">
-              <span>Item total</span>
+              <span>{t("totals.items")}</span>
               <span>{money(quote.itemsSubtotal, currency)}</span>
             </div>
             {quote.bonusCredit > 0 && (
               <div className="totals__row totals__row--credit">
-                <span>Bonus credit</span>
+                <span>{t("totals.bonus")}</span>
                 <span>+{money(quote.bonusCredit, currency)}</span>
               </div>
             )}
             {quote.restockingFee > 0 && (
               <div className="totals__row">
-                <span>Restocking fee</span>
+                <span>{t("totals.restocking")}</span>
                 <span>−{money(quote.restockingFee, currency)}</span>
               </div>
             )}
@@ -499,10 +512,10 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
       {count > 0 && (
         <div className="portal__bar">
           <span className="portal__bar-label">
-            {count} item{count === 1 ? "" : "s"} selected
+            {t.plural("picker.selected", count)}
           </span>
           <button className="btn" onClick={goToReview}>
-            Continue with return
+            {t("picker.continue")}
           </button>
         </div>
       )}
@@ -530,19 +543,25 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
               */}
               {offerUplift > 0.005 ? (
                 <>
-                  Shop now and get{" "}
+                  {t("offer.leadIn")}{" "}
                   <strong>
                     {policy.bonusCreditPercent > 0
-                      ? `${policy.bonusCreditPercent}% extra`
+                      ? t("offer.percentExtra", {
+                          percent: policy.bonusCreditPercent,
+                        })
                       : money(offerUplift, currency)}
                     {policy.bonusCreditPercent > 0 && flatBonus > 0.005
-                      ? ` plus ${money(flatBonus, currency)}`
+                      ? ` ${t("offer.plus", {
+                          amount: money(flatBonus, currency),
+                        })}`
                       : ""}
                   </strong>{" "}
-                  — {money(offerUplift, currency)} more to spend.
+                  {t("offer.moreToSpend", {
+                    amount: money(offerUplift, currency),
+                  })}
                 </>
               ) : (
-                "Spend your return with us instead?"
+                t("offer.fallback")
               )}
             </h2>
 
@@ -570,7 +589,11 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
                   navigate(`/r/${slug}/review`);
                 }}
               >
-                {quote ? `Get ${money(quote.estimatedTotal, currency)}` : "Continue"}
+                {quote
+                  ? t("offer.takeMoney", {
+                      amount: money(quote.estimatedTotal, currency),
+                    })
+                  : t("common.continue")}
               </button>
               <button
                 type="button"
@@ -582,10 +605,12 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
                 }}
               >
                 {shopCredit === null
-                  ? "Loading…"
+                  ? t("common.loading")
                   : leaving
-                    ? "Opening the store…"
-                    : `Shop now with ${money(shopCredit, currency)}`}
+                    ? t("offer.opening")
+                    : t("offer.shopWith", {
+                        amount: money(shopCredit, currency),
+                      })}
               </button>
             </div>
 
@@ -594,7 +619,7 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
               className="linkish offer__back"
               onClick={() => setOfferOpen(false)}
             >
-              Go back
+              {t("common.goBack")}
             </button>
           </div>
         </div>

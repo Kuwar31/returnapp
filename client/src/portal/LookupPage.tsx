@@ -1,7 +1,8 @@
 import { Form, redirect, useNavigation, useParams } from "react-router";
 import { api, ApiError, setToken } from "../lib/api";
 import { ErrorAlert } from "../components/Feedback";
-import { usePortal } from "./PortalLayout";
+import { at } from "../lib/i18n";
+import { usePortal, useT } from "./PortalLayout";
 import type { Route } from "./+types/LookupPage";
 
 /**
@@ -15,7 +16,7 @@ export async function clientAction({ request, params }: Route.ClientActionArgs) 
   const email = String(formData.get("email") ?? "").trim();
 
   if (!orderNumber || !email) {
-    return { error: "Enter both your order number and email address." };
+    return { error: at("lookup.error.missing") };
   }
 
   try {
@@ -30,7 +31,7 @@ export async function clientAction({ request, params }: Route.ClientActionArgs) 
       error:
         e instanceof ApiError
           ? e.message
-          : "We couldn't look up your order. Please try again.",
+          : at("lookup.error.failed"),
     };
   }
 }
@@ -38,6 +39,7 @@ export async function clientAction({ request, params }: Route.ClientActionArgs) 
 export default function LookupPage({ actionData }: Route.ComponentProps) {
   const { slug } = useParams();
   const { branding, merchant } = usePortal();
+  const t = useT();
   const navigation = useNavigation();
   const busy = navigation.state !== "idle";
 
@@ -55,9 +57,9 @@ export default function LookupPage({ actionData }: Route.ComponentProps) {
             alt={merchant.name}
           />
         )}
-        <h2>Find your order</h2>
+        <h2>{t("lookup.title")}</h2>
         <p className="muted" style={{ margin: "6px 0 20px" }}>
-          Enter your order number and the email you used at checkout.
+          {t("lookup.intro")}
         </p>
 
         <ErrorAlert message={actionData?.error ?? null} />
@@ -68,7 +70,7 @@ export default function LookupPage({ actionData }: Route.ComponentProps) {
             <input
               id="orderNumber"
               name="orderNumber"
-              placeholder="e.g. 1001"
+              placeholder={t("lookup.orderPlaceholder")}
               autoComplete="off"
               required
             />
@@ -79,7 +81,7 @@ export default function LookupPage({ actionData }: Route.ComponentProps) {
               id="email"
               name="email"
               type="email"
-              placeholder="you@example.com"
+              placeholder={t("lookup.emailPlaceholder")}
               required
             />
           </div>
@@ -91,7 +93,7 @@ export default function LookupPage({ actionData }: Route.ComponentProps) {
             <p className="portal__help">{branding.lookupHelpText}</p>
           )}
           <button className="btn btn--block" type="submit" disabled={busy}>
-            {busy ? "Finding your order…" : branding.startButtonLabel}
+            {busy ? t("lookup.busy") : branding.startButtonLabel}
           </button>
         </Form>
       </div>

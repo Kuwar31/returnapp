@@ -9,7 +9,8 @@ import type {
   ReturnDetail,
 } from "../lib/types";
 import { ErrorAlert } from "../components/Feedback";
-import { usePortal } from "./PortalLayout";
+import type { TranslateFn } from "../lib/i18n";
+import { usePortal, useT } from "./PortalLayout";
 import {
   clearDraft,
   exchangePriceIn,
@@ -43,22 +44,28 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   }
 }
 
-const RESOLUTION_LABEL: Record<string, string> = {
-  REFUND: "Refund to original payment method",
-  STORE_CREDIT: "Store credit",
-  GIFT_CARD: "Gift card",
-  EXCHANGE: "Exchange",
-  INSTANT_EXCHANGE: "Instant exchange",
-};
+/**
+ * Resolution names and their explanations, in the shopper's language.
+ *
+ * Functions of the translator rather than module constants: a constant is
+ * evaluated once at import, before any store's language is known, so it would
+ * pin every portal to English however the merchant had set it.
+ */
+const resolutionLabel = (t: TranslateFn, r: string): string =>
+  ({
+    REFUND: t("resolution.refund"),
+    STORE_CREDIT: t("resolution.storeCredit"),
+    GIFT_CARD: t("resolution.giftCard"),
+    EXCHANGE: t("resolution.exchange"),
+    INSTANT_EXCHANGE: t("resolution.instantExchange"),
+  })[r] ?? r;
 
-const RESOLUTION_BLURB: Record<string, string> = {
-  REFUND:
-    "Receive a refund (minus applicable fees) to your original payment method once your return is approved",
-  STORE_CREDIT:
-    "Added to your account balance to spend whenever you like, once your return is approved",
-  GIFT_CARD:
-    "Receive a gift card code via email once your return has been approved",
-};
+const resolutionBlurb = (t: TranslateFn, r: string): string | undefined =>
+  ({
+    REFUND: t("resolution.refund.blurb"),
+    STORE_CREDIT: t("resolution.storeCredit.blurb"),
+    GIFT_CARD: t("resolution.giftCard.blurb"),
+  })[r];
 
 const RESOLUTION_ICON: Record<string, string> = {
   REFUND: "▭",
@@ -74,6 +81,7 @@ type SurplusMethod = "REFUND" | "STORE_CREDIT" | "GIFT_CARD";
 export default function ReviewPage({ loaderData }: Route.ComponentProps) {
   const { order, policy, eligibility } = loaderData;
   const { merchant } = usePortal();
+  const t = useT();
   const { slug } = useParams();
   const navigate = useNavigate();
 
@@ -237,7 +245,7 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
       );
     } catch (e) {
       checkoutTab?.close();
-      setError(e instanceof Error ? e.message : "Something went wrong.");
+      setError(e instanceof Error ? e.message : t("common.error"));
     } finally {
       setSubmitting(false);
     }
@@ -290,19 +298,19 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
     <>
       <div className="review">
         <div className="review__main">
-          <h1>Review your return</h1>
+          <h1>{t("review.title")}</h1>
 
           <ErrorAlert message={error} />
 
           <div className="card review__card">
-            <h2>Send back your return</h2>
-            <p className="muted">Handling fees may apply.</p>
+            <h2>{t("review.sendBack")}</h2>
+            <p className="muted">{t("review.handlingFees")}</p>
             <div className="review__ship">
               <span className="review__ship-icon" aria-hidden="true">
                 🚚
               </span>
               <div>
-                <div className="review__ship-title">Box and ship it</div>
+                <div className="review__ship-title">{t("review.boxAndShip")}</div>
                 <p className="muted">
                   We'll email instructions once your return is approved. Pack the
                   items securely and send them back to us.
@@ -312,7 +320,7 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
           </div>
 
           <div className="card review__card">
-            <h2>What you're sending back</h2>
+            <h2>{t("review.sendingBack")}</h2>
             <div className="review__grid">
               {entries.map(([id]) => {
                 const item = itemFor(id);
@@ -331,7 +339,7 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
                       </div>
                     )}
                     <button className="linkish" onClick={() => remove(id)}>
-                      Remove
+                      {t("common.remove")}
                     </button>
                   </div>
                 );
@@ -346,7 +354,7 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
             */}
             {shopping && (
               <>
-                <h2 style={{ marginTop: 28 }}>What you're getting</h2>
+                <h2 style={{ marginTop: 28 }}>{t("review.getting")}</h2>
                 <div className="review__grid">
                   {cart.map((line) => (
                     <div key={line.variantId} className="review__tile">
@@ -382,7 +390,7 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
                     className="btn btn--secondary btn--sm"
                     onClick={() => navigate(`/r/${slug}/shop`)}
                   >
-                    Edit basket
+                    {t("review.editBasket")}
                   </button>
                 </div>
               </>
@@ -390,7 +398,7 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
 
             {!shopping && exchanges.length > 0 && (
               <>
-                <h2 style={{ marginTop: 28 }}>What you're getting</h2>
+                <h2 style={{ marginTop: 28 }}>{t("review.getting")}</h2>
                 <div className="review__grid">
                   {exchanges.map(([id, d]) => (
                     <div key={`x-${id}`} className="review__tile">
@@ -423,19 +431,19 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
           </div>
 
           <div className="card review__card">
-            <h2>Your details</h2>
+            <h2>{t("review.yourDetails")}</h2>
             <div className="review__kv">
-              <span className="muted">Email</span>
+              <span className="muted">{t("review.email")}</span>
               <span>{order.email}</span>
             </div>
             {order.customerName && (
               <div className="review__kv">
-                <span className="muted">Name</span>
+                <span className="muted">{t("review.name")}</span>
                 <span>{order.customerName}</span>
               </div>
             )}
             <div className="review__kv">
-              <span className="muted">Order</span>
+              <span className="muted">{t("review.order")}</span>
               <span>#{order.orderNumber}</span>
             </div>
             {/*
@@ -446,7 +454,7 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
             {order.shippingAddress && (
               <div className="review__kv review__kv--address">
                 <span className="muted">
-                  {owesMoney ? "Delivering to" : "Shipping address"}
+                  {owesMoney ? t("review.deliveringTo") : t("review.shippingAddress")}
                 </span>
                 <address>
                   {order.shippingAddress.name && (
@@ -463,11 +471,11 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
 
         <aside className="review__aside">
           <div className="card review__summary">
-            <h2>Return summary</h2>
+            <h2>{t("review.summary")}</h2>
 
             <div className="summary__section">
               <div className="summary__heading">
-                <span>Return credits ({entries.length})</span>
+                <span>{t("review.returnCredits", { count: entries.length })}</span>
                 <span>{quote ? money(quote.itemsSubtotal, currency) : "—"}</span>
               </div>
               {entries.map(([id, d]) => {
@@ -500,19 +508,19 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
                   rather than only against a total four rows further down. */}
               {quote && (
                 <div className="summary__line summary__line--subtotal">
-                  <span>Credit subtotal</span>
+                  <span>{t("review.creditSubtotal")}</span>
                   <span>{money(quote.itemsSubtotal, currency)}</span>
                 </div>
               )}
               {quote && quote.bonusCredit > 0 && (
                 <div className="summary__line summary__line--credit">
-                  <span>Bonus credit</span>
+                  <span>{t("totals.bonus")}</span>
                   <span>+{money(quote.bonusCredit, currency)}</span>
                 </div>
               )}
               {quote && quote.restockingFee > 0 && (
                 <div className="summary__line">
-                  <span>Restocking fee</span>
+                  <span>{t("totals.restocking")}</span>
                   <span>−{money(quote.restockingFee, currency)}</span>
                 </div>
               )}
@@ -530,7 +538,9 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
               <div className="summary__section">
                 <div className="summary__heading">
                   <span>
-                    Purchasing ({cart.length + exchanges.length})
+                    {t("review.purchasing", {
+                      count: cart.length + exchanges.length,
+                    })}
                   </span>
                   <span>
                     {quote ? money(quote.purchaseSubtotal, currency) : "—"}
@@ -593,7 +603,7 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
 
                 {quote && (
                   <div className="summary__line summary__line--subtotal">
-                    <span>Purchase subtotal</span>
+                    <span>{t("review.purchaseSubtotal")}</span>
                     <span>{money(quote.purchaseSubtotal, currency)}</span>
                   </div>
                 )}
@@ -609,7 +619,7 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
             */}
             {quote && quote.absorbedDifference > 0.005 && (
               <div className="summary__line summary__line--absorbed">
-                <span>Price difference · covered by {merchant.name}</span>
+                <span>{t("review.covered", { store: merchant.name })}</span>
                 <span>{money(quote.absorbedDifference, currency)}</span>
               </div>
             )}
@@ -632,8 +642,8 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
               <div className="summary__section">
                 <h3 className="summary__subheading">
                   {choosingForSurplus
-                    ? "How would you like the difference?"
-                    : "Credit options"}
+                    ? t("review.howDifference")
+                    : t("review.creditOptions")}
                 </h3>
                 {(eligibility.allowedResolutions as ResolutionType[])
                   .filter((r) => !EXCHANGE_RESOLUTIONS.includes(r))
@@ -660,7 +670,7 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
                         </span>
                         <span className="payout-card__body">
                           <span className="payout-card__title">
-                            {RESOLUTION_LABEL[r]}
+                            {resolutionLabel(t, r)}
                           </span>
                           {bonus && (
                             <span className="payout-card__bonus">
@@ -668,7 +678,7 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
                             </span>
                           )}
                           <span className="payout-card__blurb">
-                            {RESOLUTION_BLURB[r]}
+                            {resolutionBlurb(t, r)}
                           </span>
                         </span>
                       </button>
@@ -681,11 +691,11 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
             {quote && quote.amountDue > 0 && quote.estimatedTotal > 0 && (
               <>
                 <div className="summary__line">
-                  <span>Refund for your returns</span>
+                  <span>{t("review.refundForReturns")}</span>
                   <span>{money(quote.estimatedTotal, currency)}</span>
                 </div>
                 <div className="summary__line">
-                  <span>Cost of your exchange</span>
+                  <span>{t("review.costOfExchange")}</span>
                   <span>−{money(quote.amountDue, currency)}</span>
                 </div>
               </>
@@ -693,17 +703,17 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
 
             {!quote ? (
               <div className="summary__total">
-                <span>Total estimated refund</span>
+                <span>{t("review.totalRefund")}</span>
                 <strong>—</strong>
               </div>
             ) : net >= 0 ? (
               <div className="summary__total">
-                <span>Total estimated refund</span>
+                <span>{t("review.totalRefund")}</span>
                 <strong>{money(net, currency)}</strong>
               </div>
             ) : (
               <div className="summary__total summary__total--due">
-                <span>To pay for your exchange</span>
+                <span>{t("review.toPay")}</span>
                 <strong>{money(-net, currency)}</strong>
               </div>
             )}
@@ -714,17 +724,17 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
               disabled={submitting || !quote}
             >
               {submitting
-                ? "Submitting…"
+                ? t("review.submitting")
                 : owesMoney
-                  ? "Pay and submit"
-                  : "Submit return"}
+                  ? t("review.payAndSubmit")
+                  : t("review.submit")}
             </button>
             <button
               className="btn btn--secondary btn--block"
               style={{ marginTop: 10 }}
               onClick={() => navigate(`/r/${slug}/items`)}
             >
-              Go back
+              {t("common.goBack")}
             </button>
           </div>
         </aside>
@@ -744,14 +754,12 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
             onClick={() => setPayPrompt(false)}
           />
           <div className="paydialog__panel">
-            <h2>Pay and submit</h2>
+            <h2>{t("review.payAndSubmit")}</h2>
             <p>
-              Checkout will open on a new page. Your return is submitted either
-              way — if you'd rather pay later, the link is on your confirmation
-              page and in your email.
+              {t("review.payDialogBody")}
             </p>
             <p className="paydialog__amount">
-              <span>To pay</span>
+              <span>{t("review.toPayShort")}</span>
               <strong>{money(-net, currency)}</strong>
             </p>
             <div className="paydialog__actions">
@@ -759,10 +767,10 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
                 className="btn btn--secondary"
                 onClick={() => setPayPrompt(false)}
               >
-                Cancel
+                {t("review.cancel")}
               </button>
               <button className="btn" onClick={() => void submit(true)}>
-                Continue
+                {t("common.continue")}
               </button>
             </div>
           </div>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
+import { useT } from "./PortalLayout";
 import { money } from "../lib/format";
 import { describeVariant } from "./draft";
 import type {
@@ -87,6 +88,7 @@ export function ItemDrawer({
   onCancel: () => void;
   onConfirm: (decision: ItemDecision) => void;
 }) {
+  const t = useT();
   const [step, setStep] = useState<Step>(initial ? "resolution" : "reason");
   const [reasonId, setReasonId] = useState(initial?.reasonId ?? "");
   const [reasonLabel, setReasonLabel] = useState(initial?.reasonLabel ?? "");
@@ -206,12 +208,12 @@ export function ItemDrawer({
   const suggestion = (() => {
     const label = `${reasonLabel} ${reason?.label ?? ""}`.toLowerCase();
     if (/small|large|fit|size/.test(label)) {
-      return "You told us the fit was wrong, so we've kept the same item and opened its other sizes.";
+      return t("drawer.suggest.fit");
     }
     if (/wrong item|not as described|different/.test(label)) {
-      return "Same item, other options — swap to the one you meant to receive.";
+      return t("drawer.suggest.wrongItem");
     }
-    return "Swap this for another option of the same item.";
+    return t("drawer.suggest.generic");
   })();
   /**
    * Whatever the merchant actually calls this axis — "Size" for footwear,
@@ -225,7 +227,7 @@ export function ItemDrawer({
   const rawOptionName = swap?.variants[0]?.options?.[0]?.name ?? "";
   const optionName =
     !rawOptionName || rawOptionName.toLowerCase() === "title"
-      ? "Options"
+      ? t("drawer.options")
       : rawOptionName[0].toUpperCase() + rawOptionName.slice(1);
 
   const canExchange = allowedResolutions.some((r) =>
@@ -379,7 +381,7 @@ export function ItemDrawer({
                     <button
                       type="button"
                       className="swapper__arrow swapper__arrow--prev"
-                      aria-label="Previous image"
+                      aria-label={t("drawer.prevImage")}
                       onClick={() =>
                         setGalleryIndex(
                           (i) => (i - 1 + gallery.length) % gallery.length,
@@ -391,7 +393,7 @@ export function ItemDrawer({
                     <button
                       type="button"
                       className="swapper__arrow swapper__arrow--next"
-                      aria-label="Next image"
+                      aria-label={t("drawer.nextImage")}
                       onClick={() =>
                         setGalleryIndex((i) => (i + 1) % gallery.length)
                       }
@@ -442,7 +444,7 @@ export function ItemDrawer({
           <button
             className="drawer__close"
             onClick={onCancel}
-            aria-label="Close"
+            aria-label={t("common.close")}
           >
             ✕
           </button>
@@ -457,7 +459,7 @@ export function ItemDrawer({
                   ? (setPicked(null), setChosenId(null), setStep("browse"))
                   : setStep(step === "resolution" ? "reason" : "resolution")
               }
-              aria-label="Back"
+              aria-label={t("common.back")}
             >
               ←
             </button>
@@ -474,18 +476,18 @@ export function ItemDrawer({
                     style={{ marginBottom: 10 }}
                     onClick={() => setReasonParent(null)}
                   >
-                    ← All reasons
+                    ← {t("drawer.allReasons")}
                   </button>
                   <h2>{reasonParent.label}</h2>
                   <p className="muted" style={{ margin: "6px 0 20px" }}>
-                    Which of these is closest?
+                    {t("drawer.closest")}
                   </p>
                 </>
               ) : (
                 <>
-                  <h2>Why are you returning this item?</h2>
+                  <h2>{t("drawer.whyReturning")}</h2>
                   <p className="muted" style={{ margin: "6px 0 20px" }}>
-                    Specific details help us prevent similar issues in future.
+                    {t("drawer.detailsHelp")}
                   </p>
                 </>
               )}
@@ -521,13 +523,13 @@ export function ItemDrawer({
 
               {reason?.requiresNote && (
                 <div className="field" style={{ marginTop: 16 }}>
-                  <label htmlFor="note">Tell us what happened</label>
+                  <label htmlFor="note">{t("drawer.noteLabel")}</label>
                   <textarea
                     id="note"
                     rows={3}
                     value={reasonNote}
                     onChange={(e) => setReasonNote(e.target.value)}
-                    placeholder="A short description helps us put it right"
+                    placeholder={t("drawer.notePlaceholder")}
                   />
                   <button
                     className="btn btn--block"
@@ -538,7 +540,7 @@ export function ItemDrawer({
                       setStep("resolution");
                     }}
                   >
-                    Continue
+                    {t("common.continue")}
                   </button>
                 </div>
               )}
@@ -547,7 +549,7 @@ export function ItemDrawer({
 
           {step === "resolution" && (
             <>
-              <h2>How would you like to proceed?</h2>
+              <h2>{t("drawer.howProceed")}</h2>
 
               {canExchange && (swappableVariants.length > 0 || optionsFailed) && (
                 <button
@@ -555,8 +557,8 @@ export function ItemDrawer({
                   onClick={() => setStep("size")}
                 >
                   <span className="choice__main">
-                    <span className="choice__flag">✦ Best match for you</span>
-                    <span className="choice__label">Exchange for new size</span>
+                    <span className="choice__flag">✦ {t("drawer.bestMatch")}</span>
+                    <span className="choice__label">{t("drawer.exchangeSize")}</span>
                     <span className="choice__preview">
                       {item.imageUrl && (
                         <img src={item.imageUrl} alt="" className="choice__thumb" />
@@ -565,10 +567,11 @@ export function ItemDrawer({
                         {/* Never "0 size options": the count is unknown when
                             the preview didn't load, not zero. */}
                         {optionsFailed && swappableVariants.length === 0
-                          ? "See what's available"
-                          : swappableVariants.length === 1
-                            ? "1 other option available"
-                            : `${swappableVariants.length} size options available`}
+                          ? t("drawer.seeAvailable")
+                          : t.plural(
+                              "drawer.sizeOptions",
+                              swappableVariants.length,
+                            )}
                       </span>
                     </span>
                   </span>
@@ -633,7 +636,7 @@ export function ItemDrawer({
                 >
                   <span className="choice__main">
                     <span className="choice__label">
-                      Exchange for another product
+                      {t("drawer.exchangeProduct")}
                     </span>
                     {/* A strip of real products, so the option reads as a
                         catalogue rather than an empty promise. */}
@@ -658,9 +661,9 @@ export function ItemDrawer({
 
               <button className="choice" onClick={() => finish(defaultPayout)}>
                 <span className="choice__main">
-                  <span className="choice__label">Return item</span>
+                  <span className="choice__label">{t("drawer.returnItem")}</span>
                   <span className="choice__desc">
-                    Choose how you're paid on the next step
+                    {t("drawer.paidNextStep")}
                   </span>
                 </span>
                 <span className="choice__chevron">›</span>
@@ -671,7 +674,7 @@ export function ItemDrawer({
 
           {(step === "size" || step === "product") && (
             <>
-              {loading && <p className="muted">Loading options…</p>}
+              {loading && <p className="muted">{t("drawer.loadingOptions")}</p>}
               {!loading && swap && swap.variants.length === 0 && (
                 <div className="alert alert--info">
                   This item has no other options. Try exchanging for another
@@ -682,7 +685,9 @@ export function ItemDrawer({
               {swap && swap.variants.length > 0 && (
                 <div className="swapper__panel">
                   {/* What they're giving up, so the swap reads as a comparison. */}
-                  <div className="swapper__current-heading">Returning</div>
+                  <div className="swapper__current-heading">
+                    {t("drawer.returning")}
+                  </div>
                   <div className="swapper__current">
                     {item.imageUrl ? (
                       <img src={item.imageUrl} alt="" />
@@ -742,12 +747,16 @@ export function ItemDrawer({
                         simply false — the summary would then show zero.
                       */}
                       {absorbing && sameProduct && Math.abs(delta) > 0.005
-                        ? `No difference to pay — ${merchantName} covers it.`
+                        ? t("drawer.absorbed", { store: merchantName })
                         : delta > 0.005
-                          ? `You'll pay ${money(delta, swap.currency)} more.`
+                          ? t("drawer.youPay", {
+                              amount: money(delta, swap.currency),
+                            })
                           : delta < -0.005
-                            ? `You'll receive a credit of ${money(-delta, swap.currency)}.`
-                            : "An even swap — nothing more to pay."}
+                            ? t("drawer.youGetCredit", {
+                                amount: money(-delta, swap.currency),
+                              })
+                            : t("drawer.evenSwap")}
                     </p>
                   )}
 
@@ -768,10 +777,10 @@ export function ItemDrawer({
                           onClick={() => setChosenId(v.id)}
                           title={
                             isCurrent
-                              ? "This is the option you have"
+                              ? t("drawer.currentOption")
                               : v.available
                                 ? money(v.price, swap.currency)
-                                : "Out of stock"
+                                : t("drawer.outOfStock")
                           }
                         >
                           {v.title}
@@ -787,7 +796,11 @@ export function ItemDrawer({
                       chosen && finish("EXCHANGE", chosen, picked?.title)
                     }
                   >
-                    {chosen ? "Confirm item" : `Choose a ${optionName.toLowerCase()}`}
+                    {chosen
+                      ? t("drawer.confirmItem")
+                      : t("drawer.chooseOption", {
+                          option: optionName.toLowerCase(),
+                        })}
                   </button>
                 </div>
               )}
@@ -796,15 +809,15 @@ export function ItemDrawer({
 
           {step === "browse" && (
             <>
-              <h2>Exchange for another product</h2>
+              <h2>{t("drawer.exchangeProduct")}</h2>
               <div className="field">
                 <input
-                  placeholder="Search products"
+                  placeholder={t("drawer.searchProducts")}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
-              {loading && <p className="muted">Loading…</p>}
+              {loading && <p className="muted">{t("common.loading")}</p>}
               {/*
                 Pictures and prices only. Every variant used to be a chip under
                 its product, which turned a browse into a wall of buttons and
@@ -841,7 +854,7 @@ export function ItemDrawer({
                 ))}
               </div>
               {products?.length === 0 && !loading && (
-                <p className="muted">No products match that search.</p>
+                <p className="muted">{t("drawer.noProducts")}</p>
               )}
             </>
           )}

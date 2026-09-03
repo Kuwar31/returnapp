@@ -4,6 +4,7 @@ import { api, ApiError, getToken } from "../lib/api";
 import type { OrderSession } from "../lib/types";
 import { ErrorAlert } from "../components/Feedback";
 import { describeVariant, saveCart, type CartLine } from "./draft";
+import { useT } from "./PortalLayout";
 import type { Route } from "./+types/ShopReturnPage";
 
 export async function clientLoader({ params }: Route.ClientLoaderArgs) {
@@ -45,6 +46,7 @@ const parseCart = (raw: string | null) =>
  * persisted server-side to survive it.
  */
 export default function ShopReturnPage({ loaderData }: Route.ComponentProps) {
+  const t = useT();
   const { order } = loaderData;
   const { slug } = useParams();
   const [params] = useSearchParams();
@@ -106,7 +108,7 @@ export default function ShopReturnPage({ loaderData }: Route.ComponentProps) {
       })
       .catch((e) =>
         setError(
-          e instanceof Error ? e.message : "We couldn't read your basket.",
+          e instanceof Error ? e.message : t("shopReturn.failed"),
         ),
       );
   }, [order.id, params, slug, navigate]);
@@ -120,12 +122,12 @@ export default function ShopReturnPage({ loaderData }: Route.ComponentProps) {
             className="btn btn--block"
             onClick={() => navigate(`/r/${slug}/review`)}
           >
-            Back to your return
+            {t("shopReturn.back")}
           </button>
         </>
       ) : (
         <p className="muted" style={{ textAlign: "center" }}>
-          Bringing your basket back…
+          {t("shopReturn.restoring")}
         </p>
       )}
     </div>

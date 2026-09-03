@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import { CopyLink } from "../components/CopyLink";
 import { ErrorAlert, Loading } from "../components/Feedback";
 import { ensureFontsLoaded, FONTS, fontStack, RADIUS_PX } from "../lib/fonts";
+import { LOCALES, localeDir, makeTranslator } from "../lib/i18n";
 import type { PortalBranding, StoreSettings } from "../lib/types";
 import { useAuth } from "./AuthContext";
 
@@ -80,9 +81,13 @@ function ColorField({
 function Preview({ b, storeName }: { b: PortalBranding; storeName: string }) {
   const radius = RADIUS_PX[b.cornerRadius] ?? RADIUS_PX.CURVED;
   const light = b.textTone === "LIGHT";
+  // The app's own strings in the chosen language, so switching it shows.
+  const t = makeTranslator(b.locale);
   return (
     <div
       className="pv"
+      lang={b.locale}
+      dir={localeDir(b.locale)}
       style={{
         background: b.backgroundColor,
         ...(b.heroImageUrl
@@ -128,7 +133,7 @@ function Preview({ b, storeName }: { b: PortalBranding; storeName: string }) {
           className="pv__card-title"
           style={{ fontFamily: fontStack(b.headingFont), color: b.headingColor }}
         >
-          Find your order
+          {t("lookup.title")}
         </div>
         <div className="pv__label" style={{ color: b.bodyColor }}>
           {b.orderNumberLabel}
@@ -299,6 +304,26 @@ export default function PortalPage() {
                 </p>
               </div>
             )}
+          </div>
+
+          <div className="panel">
+            <h2>Language</h2>
+            <Row
+              label="Portal language"
+              hint="Every word the app supplies — buttons, prompts, status messages, and how dates and money are formatted. The heading, field labels and footer below stay exactly as you write them, in whatever language you write them."
+            >
+              <select
+                value={b.locale}
+                onChange={(e) => set("locale", e.target.value)}
+              >
+                {LOCALES.map((l) => (
+                  <option key={l.code} value={l.code}>
+                    {l.label}
+                    {l.label === l.english ? "" : ` — ${l.english}`}
+                  </option>
+                ))}
+              </select>
+            </Row>
           </div>
 
           <div className="panel">

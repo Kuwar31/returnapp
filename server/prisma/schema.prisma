@@ -363,6 +363,18 @@ model PortalBranding {
    */
   footerText       String?
 
+  // --- language ----------------------------------------------------------
+  /**
+   * The language the portal speaks, as a BCP-47 code.
+   *
+   * A store setting rather than a per-shopper one: a merchant selling into one
+   * market wants one language, and guessing from the browser would show a
+   * German tourist buying from a French shop a portal the shop never wrote.
+   * The merchant's own copy — headings, labels, footer — is whatever they
+   * typed; this governs the several hundred strings the app supplies.
+   */
+  locale       String @default("en")
+
   // --- visibility --------------------------------------------------------
   /**
    * Whether search engines may index the portal. Off writes a noindex robots

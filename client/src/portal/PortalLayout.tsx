@@ -2,6 +2,14 @@ import { useEffect } from "react";
 import { Outlet, useRouteLoaderData } from "react-router";
 import { api } from "../lib/api";
 import { ensureFontsLoaded, fontStack, RADIUS_PX } from "../lib/fonts";
+import { setFormatLocale } from "../lib/format";
+import {
+  at,
+  localeDir,
+  makeTranslator,
+  setActiveLocale,
+  type TranslateFn,
+} from "../lib/i18n";
 import type { PortalBranding, PortalConfig } from "../lib/types";
 import { isEmbedded, useReportHeight } from "./useEmbedded";
 import type { Route } from "./+types/PortalLayout";
@@ -67,6 +75,9 @@ const useDocumentBranding = (branding: PortalBranding, embedded: boolean) => {
     // frame would be editing the merchant's theme.
     if (embedded) return;
 
+    document.documentElement.lang = branding.locale;
+    document.documentElement.dir = localeDir(branding.locale);
+
     if (branding.faviconUrl) {
       const link =
         document.querySelector<HTMLLinkElement>("link[rel='icon']") ??
@@ -89,8 +100,17 @@ const useDocumentBranding = (branding: PortalBranding, embedded: boolean) => {
     robots.content = branding.searchEngineVisible
       ? "index, follow"
       : "noindex, nofollow";
-  }, [branding.faviconUrl, branding.searchEngineVisible, embedded]);
+  }, [branding.faviconUrl, branding.searchEngineVisible, branding.locale, embedded]);
 };
+
+/**
+ * The portal's language, bound to a translator.
+ *
+ * Reads the same route loader data `usePortal` does, so a screen needs no
+ * provider and no prop threading — and the locale can't disagree with the
+ * branding it arrived alongside.
+ */
+export const useT = (): TranslateFn => makeTranslator(usePortal().branding.locale);
 
 export default function PortalLayout({ loaderData }: Route.ComponentProps) {
   const config = loaderData;
@@ -104,6 +124,14 @@ export default function PortalLayout({ loaderData }: Route.ComponentProps) {
   useReportHeight(embedded);
   useDocumentBranding(branding, embedded);
 
+  /**
+   * Set before the first render rather than in an effect: route actions and
+   * `money()` read these synchronously, and an effect would leave the first
+   * paint — and any submission made against it — in the previous language.
+   */
+  setActiveLocale(branding.locale);
+  setFormatLocale(branding.locale);
+
   // Only the Google faces, and only the ones actually chosen.
   ensureFontsLoaded([branding.headingFont, branding.bodyFont]);
 
@@ -115,6 +143,13 @@ export default function PortalLayout({ loaderData }: Route.ComponentProps) {
           embedded ? " portal--embedded" : ""
         }${branding.textTone === "LIGHT" ? " portal--light-text" : ""}`}
         style={themeVars(branding)}
+        lang={branding.locale}
+        /*
+          Arabic and Hebrew lay out right to left, which is not a translation
+          but a mirror: the browser flips the whole subtree — text alignment,
+          flex order, padding shorthands — from this one attribute.
+        */
+        dir={localeDir(branding.locale)}
       >
         {!embedded && (
         <header className="portal__header">
@@ -154,7 +189,7 @@ export default function PortalLayout({ loaderData }: Route.ComponentProps) {
           ) : (
             branding.supportEmail && (
               <div>
-                Need help?{" "}
+                {at("shell.needHelp")}{" "}
                 <a href={`mailto:${branding.supportEmail}`}>
                   {branding.supportEmail}
                 </a>
@@ -194,10 +229,9 @@ export function ErrorBoundary() {
   return (
     <div className="center-screen">
       <div className="card portal__card">
-        <h2>Portal unavailable</h2>
+        <h2>{at("shell.unavailable.title")}</h2>
         <p className="muted" style={{ marginTop: 8 }}>
-          We couldn't find that store's returns portal. Please use the link the
-          store sent you.
+          {at("shell.unavailable.body")}
         </p>
       </div>
     </div>

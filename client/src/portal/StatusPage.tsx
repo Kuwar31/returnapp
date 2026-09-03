@@ -4,7 +4,8 @@ import { api } from "../lib/api";
 import { money, shortDate } from "../lib/format";
 import type { ReturnDetail, ReturnStatus } from "../lib/types";
 import { ErrorAlert } from "../components/Feedback";
-import { usePortal } from "./PortalLayout";
+import { at, type Key, type TranslateFn } from "../lib/i18n";
+import { usePortal, useT } from "./PortalLayout";
 import type { Route } from "./+types/StatusPage";
 
 /**
@@ -30,56 +31,19 @@ export async function clientLoader({ params, request }: Route.ClientLoaderArgs) 
  * words most shoppers will read, and it should be obvious at a glance that
  * every status says something sensible.
  */
-const NEXT_STEP: Record<
-  ReturnStatus,
-  { heading: string; title: string; body: string }
-> = {
-  DRAFT: {
-    heading: "Your return is saved",
-    title: "You haven't submitted this yet",
-    body: "Pick up where you left off whenever you're ready.",
-  },
-  SUBMITTED: {
-    heading: "Your return has been submitted",
-    title: "We're reviewing your request",
-    body: "You'll hear from us by email once the store has reviewed it, usually within one business day. Nothing to send back just yet.",
-  },
-  APPROVED: {
-    heading: "Your return has been approved",
-    title: "Your return label is on the way",
-    body: "We'll email your return label within 24 hours. If you have any questions or don't receive your email, please reach out to us.",
-  },
-  REJECTED: {
-    heading: "Your return wasn't approved",
-    title: "This request has been declined",
-    body: "Please get in touch if you think this was a mistake — we're happy to take another look.",
-  },
-  IN_TRANSIT: {
-    heading: "Your return is on its way",
-    title: "We're waiting for your parcel",
-    body: "Once it reaches our warehouse we'll check the items over and settle your return.",
-  },
-  RECEIVED: {
-    heading: "We've got your return",
-    title: "Your items are being checked",
-    body: "We're inspecting everything now. Your refund or credit follows shortly after.",
-  },
-  RESOLVED: {
-    heading: "Your return is complete",
-    title: "All settled",
-    body: "Everything has been processed. Thanks for shopping with us.",
-  },
-  CANCELLED: {
-    heading: "Your return was cancelled",
-    title: "Nothing more to do",
-    body: "This request has been cancelled. You can start a new return any time while the window is open.",
-  },
-  EXPIRED: {
-    heading: "This return has expired",
-    title: "The window has closed",
-    body: "We didn't receive your items in time. Please contact us if you'd still like to send them back.",
-  },
-};
+/**
+ * What each status means, in the shopper's language.
+ *
+ * A function of the translator rather than a module constant: a constant is
+ * built once at import, before any store's language is known, so it would pin
+ * every portal to English. The keys are flat — `status.APPROVED.heading` —
+ * so a translator sees the three lines of one state together.
+ */
+const nextStep = (t: TranslateFn, status: ReturnStatus) => ({
+  heading: t(`status.${status}.heading` as Key),
+  title: t(`status.${status}.title` as Key),
+  body: t(`status.${status}.body` as Key),
+});
 
 /** A card header that toggles its own body, like Loop's disclosure rows. */
 function Section({
@@ -115,6 +79,7 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
   const { slug } = useParams();
   const revalidator = useRevalidator();
   const { branding, merchant } = usePortal();
+  const t = useT();
 
   const [showDetails, setShowDetails] = useState(true);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
@@ -122,7 +87,7 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
   const [error, setError] = useState<string | null>(null);
 
   const currency = detail.currency;
-  const copy = NEXT_STEP[detail.status];
+  const copy = nextStep(t, detail.status);
   const auth = { slug: slug!, email: detail.customerEmail };
 
   const finished = detail.status === "RESOLVED";
@@ -142,28 +107,28 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
     ? []
     : [
         {
-          title: "Request submitted",
+          title: t("status.requestSubmitted"),
           detail: shortDate(detail.submittedAt),
           done: true,
         },
         {
-          title: "Store review",
+          title: t("status.storeReview"),
           detail:
             detail.status === "REJECTED"
-              ? (detail.rejectionReason ?? "Declined")
+              ? (detail.rejectionReason ?? t("status.declined"))
               : detail.reviewedAt
-                ? `Approved ${shortDate(detail.reviewedAt)}`
-                : "Waiting for the store to review",
+                ? t("status.approvedOn", { date: shortDate(detail.reviewedAt) })
+                : t("status.awaitingReview"),
           done: Boolean(detail.reviewedAt),
         },
         ...(detail.status === "REJECTED"
           ? []
           : [
               {
-                title: "Resolved",
+                title: t("status.resolved"),
                 detail: finished
                   ? shortDate(detail.resolvedAt ?? detail.submittedAt)
-                  : "Once your items arrive back with us",
+                  : t("status.onceItemsArrive"),
                 done: finished,
               },
             ]),
@@ -219,7 +184,7 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
       setConfirmingCancel(false);
       revalidator.revalidate();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong.");
+      setError(e instanceof Error ? e.message : t("common.error"));
     } finally {
       setBusy(false);
     }
@@ -237,7 +202,9 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
           <div className="card confirm__card">
             <div className="confirm__eyebrow">
               <span>
-                {detail.order ? `Order #${detail.order.orderNumber}` : "Return"}
+                {detail.order
+                  ? t("status.orderNo", { number: detail.order.orderNumber })
+                  : t("status.returnWord")}
               </span>
               <span>{detail.reference}</span>
             </div>
@@ -249,7 +216,7 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
               {branding.supportEmail && detail.status !== "REJECTED" && (
                 <>
                   {" "}
-                  Questions? Email{" "}
+                  {t("status.questionsEmail")}{" "}
                   <a href={`mailto:${branding.supportEmail}`}>
                     {branding.supportEmail}
                   </a>
@@ -301,7 +268,7 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
           )}
 
           <div className="card confirm__card">
-            <h2 className="confirm__card-title">Edit your return</h2>
+            <h2 className="confirm__card-title">{t("status.edit")}</h2>
 
             <button
               type="button"
@@ -313,7 +280,7 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
               <span className="confirm__action-icon" aria-hidden>
                 🗑
               </span>
-              <span className="confirm__action-label">Cancel return</span>
+              <span className="confirm__action-label">{t("status.cancel")}</span>
               <span
                 className={`confirm__caret${confirmingCancel ? " is-open" : ""}`}
                 aria-hidden
@@ -325,7 +292,7 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
             {!cancellable && (
               <p className="muted confirm__note">
                 {detail.status === "CANCELLED"
-                  ? "This return has been cancelled."
+                  ? t("status.cancelled")
                   : "This return has already been reviewed, so it can't be cancelled here. Contact the store if you need to change it."}
               </p>
             )}
@@ -341,14 +308,14 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
                   onClick={cancel}
                   disabled={busy}
                 >
-                  {busy ? "Cancelling…" : "Yes, cancel this return"}
+                  {busy ? t("status.cancelling") : t("status.confirmCancel")}
                 </button>
               </div>
             )}
           </div>
 
           <Section title="Customer information" defaultOpen={false}>
-            <h3 className="confirm__subhead">Contact info</h3>
+            <h3 className="confirm__subhead">{t("status.contactInfo")}</h3>
             <p className="muted">{detail.customerEmail}</p>
             {detail.order?.shippingAddress?.phone && (
               <p className="muted">{detail.order.shippingAddress.phone}</p>
@@ -356,7 +323,7 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
 
             {detail.order?.shippingAddress && (
               <>
-                <h3 className="confirm__subhead">Shipping address</h3>
+                <h3 className="confirm__subhead">{t("review.shippingAddress")}</h3>
                 <p className="muted">
                   {detail.order.shippingAddress.name && (
                     <>
@@ -371,14 +338,14 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
           </Section>
 
           <Link className="confirm__restart" to={`/r/${slug}`}>
-            Start another return
+            {t("status.startAnother")}
           </Link>
         </div>
 
         <aside className="confirm__aside">
           <div className="card confirm__summary">
             <div className="confirm__summary-head">
-              <h2>Return summary</h2>
+              <h2>{t("review.summary")}</h2>
               <button
                 type="button"
                 className="linkish"
@@ -420,20 +387,20 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
                     </div>
                   ))}
                   <div className="summary__line">
-                    <span className="muted">Credit subtotal</span>
+                    <span className="muted">{t("review.creditSubtotal")}</span>
                     <span className="muted">
                       {money(creditSubtotal, currency)}
                     </span>
                   </div>
                   {detail.totals.bonusCredit > 0 && (
                     <div className="summary__line summary__line--credit">
-                      <span>Bonus credit</span>
+                      <span>{t("totals.bonus")}</span>
                       <span>+{money(detail.totals.bonusCredit, currency)}</span>
                     </div>
                   )}
                   {detail.totals.restockingFee > 0 && (
                     <div className="summary__line">
-                      <span className="muted">Restocking fee</span>
+                      <span className="muted">{t("totals.restocking")}</span>
                       <span className="muted">
                         −{money(detail.totals.restockingFee, currency)}
                       </span>
@@ -471,7 +438,7 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
                       </div>
                     ))}
                     <div className="summary__line">
-                      <span className="muted">Purchase subtotal</span>
+                      <span className="muted">{t("review.purchaseSubtotal")}</span>
                       <span className="muted">
                         {money(purchaseSubtotal, currency)}
                       </span>
@@ -482,7 +449,9 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
             )}
 
             <div className="summary__total confirm__total">
-              <span>{finished ? "You received" : "Total estimated refund"}</span>
+              <span>
+                {finished ? t("status.youReceived") : t("review.totalRefund")}
+              </span>
               <strong>{money(payout, currency)}</strong>
             </div>
 
@@ -497,7 +466,7 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
                   exchangePaid ? "summary__total--paid" : "summary__total--due"
                 }`}
               >
-                <span>{exchangePaid ? "Paid" : "To pay for your exchange"}</span>
+                <span>{exchangePaid ? t("status.paid") : t("review.toPay")}</span>
                 <strong>{money(owed, currency)}</strong>
               </div>
             )}
@@ -522,7 +491,7 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
                   target="_blank"
                   rel="noreferrer"
                 >
-                  Pay now
+                  {t("status.payNow")}
                 </a>
                 <p className="confirm__pay-note">
                   Secure checkout with {merchant.name}. We'll ship your
@@ -553,7 +522,7 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
                   ✓
                 </span>
                 <div>
-                  <strong>Payment received</strong>
+                  <strong>{t("status.paymentReceived")}</strong>
                   <p>
                     Your replacement is being prepared. It ships as soon as your
                     return arrives back with us.
@@ -565,7 +534,7 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
 
           {branding.supportEmail && (
             <p className="confirm__help">
-              Questions?
+              {t("status.questions")}
               <br />
               Contact us at{" "}
               <a href={`mailto:${branding.supportEmail}`}>
@@ -582,14 +551,20 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
 
 export function ErrorBoundary() {
   const { slug } = useParams();
+  /*
+    `at` rather than the hook: a boundary renders when the route below it
+    threw, which includes the case where the layout's own data never arrived —
+    so there may be no branding to read a locale from. This falls back to the
+    last language the portal rendered in, and to English on a cold load.
+  */
   return (
     <div className="card portal__card">
-      <h2>We couldn't find that return</h2>
+      <h2>{at("status.notFound.title")}</h2>
       <p className="muted" style={{ margin: "8px 0 20px" }}>
-        The reference and email don't match, or the link has expired.
+        {at("status.notFound.body")}
       </p>
       <Link className="btn btn--secondary btn--block" to={`/r/${slug}`}>
-        Back to returns
+        {at("status.backToReturns")}
       </Link>
     </div>
   );
