@@ -52,6 +52,8 @@ export interface ListFilters {
   from?: Date;
   to?: Date;
   flagged?: boolean;
+  /** Product tags, from the snapshot taken when the order synced. */
+  tags?: string[];
   page: number;
   pageSize: number;
 }
@@ -71,6 +73,22 @@ const listWhere = (
   merchantId,
   ...(filters.resolution?.length ? { resolution: { in: filters.resolution } } : {}),
   ...(filters.flagged ? { flaggedAt: { not: null } } : {}),
+  /**
+   * Any returned item carrying any of the tags — `some` and `hasSome`, not
+   * every and hasEvery. A merchant filtering by "footwear" is looking for
+   * returns that involve footwear, not returns made up exclusively of it.
+   *
+   * Matched against the snapshot stored on the line when the order synced,
+   * the same one advanced exchanges use. A product retagged last week
+   * shouldn't change which returns a report from last month contains.
+   */
+  ...(filters.tags?.length
+    ? {
+        lineItems: {
+          some: { orderLineItem: { productTags: { hasSome: filters.tags } } },
+        },
+      }
+    : {}),
   ...(filters.from || filters.to
     ? {
         submittedAt: {
@@ -128,6 +146,32 @@ export const listReturns = async (merchantId: string, filters: ListFilters) => {
   }
 
   return { total, items, counts, page: filters.page, pageSize: filters.pageSize };
+};
+
+/**
+ * Every product tag that appears on something actually returned.
+ *
+ * Drawn from returned items rather than the whole catalogue so the filter
+ * can't offer a tag that yields nothing — a picker whose options come back
+ * empty is worse than a free-text box, because it looks authoritative.
+ *
+ * Raw SQL because this is an unnest-and-distinct over an array column, which
+ * Prisma has no expression for; the alternative is loading every line item and
+ * folding them in memory.
+ */
+export const listReturnedProductTags = async (
+  merchantId: string,
+): Promise<string[]> => {
+  const rows = await prisma.$queryRaw<Array<{ tag: string }>>`
+    SELECT DISTINCT unnest(oli."productTags") AS tag
+    FROM "order_line_items" oli
+    JOIN "return_line_items" rli ON rli."orderLineItemId" = oli.id
+    JOIN "return_requests" rr ON rr.id = rli."returnRequestId"
+    WHERE rr."merchantId" = ${merchantId}
+    ORDER BY tag
+    LIMIT 300
+  `;
+  return rows.map((r) => r.tag).filter(Boolean);
 };
 
 /**

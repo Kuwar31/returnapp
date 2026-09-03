@@ -419,6 +419,18 @@
   font-weight: 600;
 }
 
+/* Sits above the list rather than inside it, so the list can scroll under a
+   search box that stays put. */
+.filter-pop__search {
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 7px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 13px;
+}
+
 .filter-pop__list {
   display: flex;
   flex-direction: column;

@@ -102,6 +102,88 @@ function CheckList({
   );
 }
 
+/**
+ * The store's own tags, fetched once and kept for the session.
+ *
+ * Module-level rather than component state because the popover unmounts every
+ * time it closes, and re-fetching the same list each time a merchant reopens a
+ * chip is a request per glance.
+ */
+let tagCache: string[] | null = null;
+
+/**
+ * A picker, not a text box.
+ *
+ * Tags match exactly — "Final Sale" and "final sale" are different tags to
+ * Shopify and to the query — so typing one is a coin flip that silently
+ * returns nothing. Offering the tags actually present on returned items means
+ * every option in the list has something behind it.
+ */
+function TagPicker({
+  selected,
+  onChange,
+}: {
+  selected: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const [tags, setTags] = useState<string[] | null>(tagCache);
+  const [failed, setFailed] = useState(false);
+  const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    if (tags !== null) return;
+    let active = true;
+    api
+      .get<{ tags: string[] }>("/admin/returns/tags", { auth: "admin" })
+      .then((r) => {
+        tagCache = r.tags;
+        if (active) setTags(r.tags);
+      })
+      .catch(() => active && setFailed(true));
+    return () => {
+      active = false;
+    };
+  }, [tags]);
+
+  if (failed) return <p className="muted">Couldn't load your tags.</p>;
+  if (tags === null) return <p className="muted">Loading tags…</p>;
+  if (tags.length === 0) {
+    return (
+      <p className="muted">
+        None of your returned items carry product tags yet. Tags are recorded
+        when an order syncs from Shopify.
+      </p>
+    );
+  }
+
+  const shown = tags.filter((t) =>
+    t.toLowerCase().includes(query.trim().toLowerCase()),
+  );
+
+  return (
+    <>
+      {/* Worth its space once a store has more than a handful. */}
+      {tags.length > 8 && (
+        <input
+          className="filter-pop__search"
+          placeholder="Search tags"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      )}
+      {shown.length === 0 ? (
+        <p className="muted">No tag matches that.</p>
+      ) : (
+        <CheckList
+          options={shown.map((t) => ({ value: t, label: t }))}
+          selected={selected}
+          onChange={onChange}
+        />
+      )}
+    </>
+  );
+}
+
 const FILTERS: FilterDef[] = [
   {
     key: "resolution",
@@ -175,6 +257,28 @@ const FILTERS: FilterDef[] = [
             />
           </label>
         </div>
+      </>
+    ),
+  },
+  {
+    key: "tags",
+    label: "Product tag",
+    group: "Return item",
+    params: ["tags"],
+    isSet: (p) => list(p, "tags").length > 0,
+    summary: (p) => {
+      const values = list(p, "tags");
+      return values.length > 1
+        ? `${values[0]} +${values.length - 1}`
+        : values[0];
+    },
+    body: (p, set) => (
+      <>
+        <div className="filter-pop__head">Item is tagged any of</div>
+        <TagPicker
+          selected={list(p, "tags")}
+          onChange={(next) => set({ tags: next.length ? next.join(",") : null })}
+        />
       </>
     ),
   },
@@ -378,6 +482,7 @@ export default function ReturnsListPage() {
         query: {
           status: status || undefined,
           resolution: searchParams.get("resolution") ?? undefined,
+          tags: searchParams.get("tags") ?? undefined,
           search: searchParams.get("search") ?? undefined,
           from: searchParams.get("from") ?? undefined,
           to: searchParams.get("to") ?? undefined,

@@ -62,9 +62,29 @@ const csv = <T extends readonly [string, ...string[]]>(values: T) =>
     )
     .pipe(z.array(z.enum(values)).max(values.length).optional());
 
+/**
+ * The same comma-separated shape, for values we don't own the set of.
+ *
+ * Shopify's own tag input treats a comma as the separator, so a tag can't
+ * contain one — which is what makes this safe to split on.
+ */
+const csvFree = z
+  .string()
+  .optional()
+  .transform((raw) =>
+    raw
+      ? raw
+          .split(",")
+          .map((v) => v.trim())
+          .filter(Boolean)
+          .slice(0, 25)
+      : undefined,
+  );
+
 export const listQuerySchema = z.object({
   status: csv(STATUSES),
   resolution: csv(RESOLUTIONS),
+  tags: csvFree,
   search: z.string().trim().max(100).optional(),
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
@@ -100,6 +120,17 @@ returnsRouter.get(
       ...result,
       items: result.items.map((r) => serializeReturnSummary(r, display)),
     });
+  }),
+);
+
+/**
+ * The tags available to filter by. Sits above `/:id` so the dynamic route
+ * doesn't claim the word "tags" as a return id.
+ */
+returnsRouter.get(
+  "/tags",
+  asyncHandler(async (req, res) => {
+    res.json({ tags: await returnsService.listReturnedProductTags(req.admin!.merchantId) });
   }),
 );
 
