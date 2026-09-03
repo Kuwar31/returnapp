@@ -12,7 +12,11 @@ import {
 import {
   approvedEmail,
   declinedEmail,
+  editedEmail,
+  expiredEmail,
+  expiringEmail,
   receivedEmail,
+  reminderEmail,
   resolvedEmail,
   submittedEmail,
   type EmailBrand,
@@ -122,11 +126,23 @@ const resolvePayment = async (
   return getExchangePaymentUrl(merchantId, request.id);
 };
 
+/**
+ * Extra the templates need that isn't on the return itself.
+ *
+ * Only the nudges use it, and only for a number of days — the thresholds live
+ * with the sweep that applies them, so the copy states the same figure the
+ * schedule actually used rather than a constant repeated here.
+ */
+export interface NotifyOptions {
+  days?: number;
+}
+
 const build = (
   kind: NotificationKind,
   payload: EmailReturn,
   brand: EmailBrand,
   creditCode: string | null,
+  options: NotifyOptions,
 ): Mail => {
   switch (kind) {
     case "SUBMITTED":
@@ -135,10 +151,18 @@ const build = (
       return approvedEmail(payload, brand);
     case "DECLINED":
       return declinedEmail(payload, brand);
+    case "EDITED":
+      return editedEmail(payload, brand);
     case "RECEIVED":
       return receivedEmail(payload, brand);
     case "RESOLVED":
       return resolvedEmail(payload, brand, creditCode);
+    case "REMINDER":
+      return reminderEmail(payload, brand, options.days ?? 0);
+    case "EXPIRING":
+      return expiringEmail(payload, brand, options.days ?? 0);
+    case "EXPIRED":
+      return expiredEmail(payload, brand);
   }
 };
 
@@ -152,6 +176,7 @@ const build = (
 export const notify = async (
   returnRequestId: string,
   kind: NotificationKind,
+  options: NotifyOptions = {},
 ): Promise<void> => {
   try {
     const context = await loadContext(returnRequestId);
@@ -184,6 +209,7 @@ export const notify = async (
       context.payload,
       context.brand,
       context.creditCode,
+      options,
     );
     const { delivered, reason } = await sendMail({
       ...mail,
@@ -220,6 +246,7 @@ export const notify = async (
 export const notifyInBackground = (
   returnRequestId: string,
   kind: NotificationKind,
+  options: NotifyOptions = {},
 ): void => {
-  void notify(returnRequestId, kind);
+  void notify(returnRequestId, kind, options);
 };

@@ -11,6 +11,12 @@ const schema = z.object({
     .enum(["development", "test", "production"])
     .default("development"),
   PORT: z.coerce.number().int().positive().default(4000),
+  /**
+   * How often the reminder sweep runs, in minutes. Zero turns it off, which is
+   * what a second instance or a local machine wants — two servers sweeping the
+   * same database would each try to send the same nudge.
+   */
+  REMINDER_SWEEP_MINUTES: z.coerce.number().int().min(0).max(1440).default(60),
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   JWT_SECRET: z
     .string()

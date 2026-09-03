@@ -612,6 +612,17 @@ model ReturnRequest {
   reviewedAt      DateTime?
   rejectionReason String?
 
+  /**
+   * When the two nudges went out, so the sweep that sends them can't send
+   * them twice.
+   *
+   * On the request rather than inferred from the timeline: "have we already
+   * reminded this shopper" is a question asked on every pass over every open
+   * return, and reading it off an event log would mean scanning one.
+   */
+  reminderSentAt  DateTime?
+  expiringSentAt  DateTime?
+
   submittedAt DateTime  @default(now())
   receivedAt  DateTime?
   resolvedAt  DateTime?
@@ -979,6 +990,14 @@ enum NotificationKind {
   SUBMITTED
   APPROVED
   DECLINED
+  /// A merchant changed what's being accepted, so the payout moved.
+  EDITED
   RECEIVED
   RESOLVED
+  /// Approved a while ago and still nothing sent back.
+  REMINDER
+  /// The same, later, warning that the request is about to close.
+  EXPIRING
+  /// It closed.
+  EXPIRED
 }

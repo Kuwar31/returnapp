@@ -349,6 +349,18 @@ export const inspectLineItem = async (
     });
   }
 
+  /**
+   * Tell the shopper, but only when the money moved.
+   *
+   * Accepting fewer units than were sent back changes what they're paid, and
+   * finding that out from a smaller refund than expected is how a return
+   * becomes a support ticket. A restock flag or an internal note changes
+   * nothing they can see, so it sends nothing.
+   */
+  if (input.acceptedQuantity !== undefined || input.keepItem !== undefined) {
+    notifyInBackground(id, "EDITED");
+  }
+
   return getReturn(merchantId, id);
 };
 

@@ -419,7 +419,11 @@ const notificationsSchema = z
           kind: z.enum([
             "SUBMITTED",
             "APPROVED",
+            "EDITED",
             "DECLINED",
+            "REMINDER",
+            "EXPIRING",
+            "EXPIRED",
             "RECEIVED",
             "RESOLVED",
           ]),

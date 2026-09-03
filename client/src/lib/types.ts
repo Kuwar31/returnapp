@@ -436,7 +436,16 @@ export type VariantExchangeDifference =
 
 /** One lifecycle email, as the settings page describes it. */
 export interface NotificationSetting {
-  kind: "SUBMITTED" | "APPROVED" | "DECLINED" | "RECEIVED" | "RESOLVED";
+  kind:
+    | "SUBMITTED"
+    | "APPROVED"
+    | "EDITED"
+    | "DECLINED"
+    | "REMINDER"
+    | "EXPIRING"
+    | "EXPIRED"
+    | "RECEIVED"
+    | "RESOLVED";
   label: string;
   description: string;
   enabled: boolean;

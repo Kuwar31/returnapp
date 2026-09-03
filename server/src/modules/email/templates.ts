@@ -325,3 +325,92 @@ export const resolvedEmail = (
       footerText(brand),
   };
 };
+
+/**
+ * The merchant changed what's being accepted, so what the shopper is getting
+ * moved. Deliberately states the new figure rather than the change: a customer
+ * doesn't hold the old number in their head, and "we've adjusted it to X" is
+ * the sentence they can act on.
+ */
+export const editedEmail = (request: EmailReturn, brand: EmailBrand): Mail => ({
+  to: request.customerEmail,
+  subject: `An update to your return (${request.reference})`,
+  html: shell({
+    brand,
+    heading: "We've updated your return",
+    intro: `${greeting(request)} we've made a change to your return for order #${esc(request.orderNumber)} after checking the items over. Here's where it stands now.`,
+    body: summaryBlock(request, "Updated total"),
+    ctaLabel: "See your return",
+  }),
+  text:
+    `${greeting(request)}\n\nWe've made a change to your return for order #${request.orderNumber} after checking the items over. ` +
+    `Updated total: ${formatMoney(request.settledTotal ?? request.estimatedTotal, request.currency)}\n\n` +
+    `Reference: ${request.reference}` +
+    footerText(brand),
+});
+
+/**
+ * Approved, and nothing has arrived. A nudge, not a warning — nothing has gone
+ * wrong yet, and treating a slow week as a problem is how a helpful email
+ * turns into a nagging one.
+ */
+export const reminderEmail = (
+  request: EmailReturn,
+  brand: EmailBrand,
+  days: number,
+): Mail => ({
+  to: request.customerEmail,
+  subject: `Don't forget to send your return back (${request.reference})`,
+  html: shell({
+    brand,
+    heading: "Your return is still waiting",
+    intro: `${greeting(request)} we approved your return for order #${esc(request.orderNumber)} ${days} days ago and it hasn't reached us yet. Pop it in the post whenever you're ready — everything below is still reserved for you.`,
+    body: summaryBlock(request, "Estimated total"),
+    ctaLabel: "See return instructions",
+  }),
+  text:
+    `${greeting(request)}\n\nWe approved your return for order #${request.orderNumber} ${days} days ago and it hasn't reached us yet. ` +
+    `Send it back whenever you're ready.\n\nReference: ${request.reference}` +
+    footerText(brand),
+});
+
+/** The last nudge, with the date it stops being possible. */
+export const expiringEmail = (
+  request: EmailReturn,
+  brand: EmailBrand,
+  daysLeft: number,
+): Mail => ({
+  to: request.customerEmail,
+  subject: `Your return closes in ${daysLeft} days (${request.reference})`,
+  html: shell({
+    brand,
+    heading: `${daysLeft} days left to send your return`,
+    intro: `${greeting(request)} your approved return for order #${esc(request.orderNumber)} hasn't reached us. If it isn't on its way within ${daysLeft} days we'll close the request, and you'd need to start a new one.`,
+    body: summaryBlock(request, "Estimated total"),
+    ctaLabel: "See return instructions",
+  }),
+  text:
+    `${greeting(request)}\n\nYour approved return for order #${request.orderNumber} hasn't reached us. ` +
+    `If it isn't on its way within ${daysLeft} days we'll close the request.\n\nReference: ${request.reference}` +
+    footerText(brand),
+});
+
+/**
+ * Closed. Says plainly that a new request is possible, because the alternative
+ * reading — "you've missed your chance entirely" — is both wrong and the one a
+ * shopper will assume.
+ */
+export const expiredEmail = (request: EmailReturn, brand: EmailBrand): Mail => ({
+  to: request.customerEmail,
+  subject: `Your return request has closed (${request.reference})`,
+  html: shell({
+    brand,
+    heading: "Your return request has closed",
+    intro: `${greeting(request)} we never received the items for your return on order #${esc(request.orderNumber)}, so we've closed the request. If you still want to send them back, start a new return and we'll take it from there.`,
+    ctaLabel: "Start a new return",
+  }),
+  text:
+    `${greeting(request)}\n\nWe never received the items for your return on order #${request.orderNumber}, so we've closed the request. ` +
+    `If you still want to send them back, start a new return.\n\nReference: ${request.reference}` +
+    footerText(brand),
+});
