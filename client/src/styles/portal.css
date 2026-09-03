@@ -660,6 +660,16 @@
     max-height: 100%;
   }
 
+  /*
+   * The gallery's caption is the product's name and chosen option, which the
+   * body repeats immediately below as its heading. Two lines of duplication is
+   * cheap on a desktop column and expensive on a phone, where it pushes the
+   * decision itself further down.
+   */
+  .drawer__media:has(.swapper__stage) .drawer__caption {
+    display: none;
+  }
+
   /* 28px of side padding is a desktop measure. On a 375px screen it is 15% of
      the panel spent on nothing, which is what pushed the option cards' own
      content into wrapping awkwardly. */
@@ -1929,6 +1939,31 @@
 
 .swapper__confirm {
   margin-top: 24px;
+}
+
+/*
+ * On a phone the confirm button stays on screen.
+ *
+ * The panel is one scroll surface here, so the button sat wherever the content
+ * ended — below the fold on any product whose picture, price, hint and options
+ * added up past the viewport. A shopper reaching a confirm screen has already
+ * decided; making them scroll to find the button is asking them to hunt for
+ * the thing they came for. Sticky rather than fixed so it travels with the
+ * panel and can't strand itself over another step's content.
+ *
+ * The ring is the band behind it: a white halo the width of the body's own
+ * padding, so text scrolling underneath stops at the button's edge instead of
+ * crowding it.
+ */
+@media (max-width: 760px) {
+  .swapper__confirm,
+  .shop-pdp__add {
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
+    margin-top: 20px;
+    box-shadow: 0 0 0 8px var(--surface);
+  }
 }
 
 
