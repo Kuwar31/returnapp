@@ -434,6 +434,26 @@ export type VariantExchangeDifference =
   | "CHARGE"
   | "ABSORB";
 
+/** One lifecycle email, as the settings page describes it. */
+export interface NotificationSetting {
+  kind: "SUBMITTED" | "APPROVED" | "DECLINED" | "RECEIVED" | "RESOLVED";
+  label: string;
+  description: string;
+  enabled: boolean;
+}
+
+export interface NotificationSender {
+  name: string;
+  /** The platform's verified address. Shown, not editable — see the panel. */
+  address: string;
+  replyTo: string | null;
+}
+
+export interface NotificationSettings {
+  notifications: NotificationSetting[];
+  sender: NotificationSender;
+}
+
 export interface StoreSettings {
   name: string;
   slug: string;

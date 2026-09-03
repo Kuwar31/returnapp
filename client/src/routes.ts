@@ -52,6 +52,7 @@ export default [
       route("settings/shop-now", "admin/SettingsPage.tsx", {
         id: "settings-shop-now",
       }),
+      route("settings/notifications", "admin/NotificationsPage.tsx"),
       route("settings/reasons", "admin/ReasonsPage.tsx"),
       route("settings/rules", "admin/ExchangeRulesPage.tsx"),
     ]),

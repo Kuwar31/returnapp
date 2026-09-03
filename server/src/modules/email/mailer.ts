@@ -9,7 +9,35 @@ export interface Mail {
   subject: string;
   html: string;
   text: string;
+  /**
+   * Who it comes from, when the caller knows. The address is always the
+   * platform's — this names the store beside it, and says where a reply goes.
+   * Omitted, the envelope falls back to MAIL_FROM alone, which is what every
+   * message looked like before stores could set a sender.
+   */
+  fromName?: string;
+  replyTo?: string | null;
 }
+
+/**
+ * The bare address out of a configured From, which may already be `Name <a@b>`.
+ *
+ * Without this, naming a store produced `"Acme" <Returns <a@b>>` — a header no
+ * server will accept — because MAIL_FROM is written either way in practice.
+ */
+export const mailAddress = (from: string): string =>
+  from.match(/<([^>]+)>/)?.[1]?.trim() ?? from.trim();
+
+/**
+ * `Name <address>`, with anything that could break the header taken out.
+ *
+ * A quote or a newline in a display name is how a header injection starts, and
+ * a store's name is merchant-supplied text.
+ */
+export const envelopeFrom = (from: string, name?: string): string => {
+  const clean = name?.replace(/["\\\r\n]/g, "").trim();
+  return clean ? `"${clean}" <${mailAddress(from)}>` : from;
+};
 
 const MAIL_DIR = resolve(process.cwd(), ".mail");
 
@@ -47,7 +75,8 @@ const writeToDisk = async (mail: Mail): Promise<void> => {
   // Keep the envelope visible in the file itself so the preview is self-contained.
   const header =
     `<!-- To: ${mail.to}\n     Subject: ${mail.subject}\n` +
-    `     From: ${env.MAIL_FROM} -->\n`;
+    `     From: ${envelopeFrom(env.MAIL_FROM, mail.fromName)}\n` +
+    `     Reply-To: ${mail.replyTo ?? "(none)"} -->\n`;
   await writeFile(file, header + mail.html, "utf8");
 
   logger.info(
@@ -79,7 +108,8 @@ export const sendMail = async (mail: Mail): Promise<Delivery> => {
     }
 
     const info = await getTransporter().sendMail({
-      from: env.MAIL_FROM,
+      from: envelopeFrom(env.MAIL_FROM, mail.fromName),
+      ...(mail.replyTo ? { replyTo: mail.replyTo } : {}),
       to: mail.to,
       subject: mail.subject,
       text: mail.text,

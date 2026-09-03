@@ -1,10 +1,14 @@
-import type { Prisma } from "@prisma/client";
+import type { NotificationKind, Prisma } from "@prisma/client";
 import { logger } from "../../lib/logger.js";
 import { returnStatusUrl } from "../../lib/portal-links.js";
 import { prisma } from "../../lib/prisma.js";
 import { toDecimal } from "../../lib/money.js";
 import { sendMail, type Mail } from "./mailer.js";
 import { getExchangePaymentUrl } from "../shopify/exchange.service.js";
+import {
+  isNotificationEnabled,
+  resolveSender,
+} from "../settings/notification-settings.js";
 import {
   approvedEmail,
   declinedEmail,
@@ -15,12 +19,13 @@ import {
   type EmailReturn,
 } from "./templates.js";
 
-export type NotificationKind =
-  | "SUBMITTED"
-  | "APPROVED"
-  | "DECLINED"
-  | "RECEIVED"
-  | "RESOLVED";
+/**
+ * Re-exported from the schema so the settings page, the database and these
+ * senders all name the same set. It used to be a union declared here, which
+ * meant adding a notification took two edits that nothing forced you to make
+ * together.
+ */
+export type { NotificationKind };
 
 /**
  * Loads everything the templates need in one query and shapes it. Returns null
@@ -75,7 +80,12 @@ const loadContext = async (returnRequestId: string) => {
     payment: await resolvePayment(request.merchantId, request),
   };
 
-  return { payload, brand, creditCode: request.storeCredit?.code ?? null };
+  return {
+    merchantId: request.merchantId,
+    payload,
+    brand,
+    creditCode: request.storeCredit?.code ?? null,
+  };
 };
 
 /**
@@ -147,13 +157,39 @@ export const notify = async (
     const context = await loadContext(returnRequestId);
     if (!context) return;
 
+    /**
+     * The merchant's switch, checked here rather than at each of the five call
+     * sites: a setting that only applies where somebody remembered to consult
+     * it isn't a setting.
+     *
+     * Turning one off is recorded on the timeline instead of passing in
+     * silence, because "why didn't my customer get that email?" is asked while
+     * looking at the return, and the answer belongs there.
+     */
+    if (!(await isNotificationEnabled(context.merchantId, kind))) {
+      await prisma.returnEvent.create({
+        data: {
+          returnRequestId,
+          type: "EMAIL_SENT",
+          message: `No ${kind.toLowerCase()} email sent — that notification is turned off in settings.`,
+          metadata: { kind, delivered: false, skipped: "disabled" },
+        },
+      });
+      return;
+    }
+
+    const sender = await resolveSender(context.merchantId);
     const mail = build(
       kind,
       context.payload,
       context.brand,
       context.creditCode,
     );
-    const { delivered, reason } = await sendMail(mail);
+    const { delivered, reason } = await sendMail({
+      ...mail,
+      fromName: sender.name,
+      replyTo: sender.replyTo,
+    });
 
     await prisma.returnEvent.create({
       data: {

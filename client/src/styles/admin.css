@@ -2048,6 +2048,72 @@ table.data tbody tr:hover {
   }
 }
 
+/* ---------- notification switches ---------- */
+
+/*
+ * A switch rather than a checkbox, because these answer "is this on" rather
+ * than "have I ticked this". It's a real button with role="switch", so it
+ * reaches the keyboard and a screen reader the same way the rest of the page
+ * does — a styled div would have been neither.
+ */
+.switch {
+  position: relative;
+  width: 42px;
+  height: 24px;
+  flex: none;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: var(--border-strong);
+  cursor: pointer;
+  transition: background 0.16s ease;
+}
+
+.switch.is-on {
+  background: var(--accent);
+}
+
+.switch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.switch__knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 25%);
+  transition: transform 0.16s ease;
+}
+
+.switch.is-on .switch__knob {
+  transform: translateX(18px);
+}
+
+/* Wider than the number fields beside them: an address or a store name is not
+   a quantity, and 130px truncates both. */
+.settings-row .settings-input {
+  width: 232px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 14px;
+  background: var(--surface);
+}
+
+/* The address the app sends from isn't the merchant's to change; it reads as
+   a stated fact rather than a field they failed to fill in. */
+.settings-row .settings-input:disabled {
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  cursor: default;
+}
+
 /* ---------- advanced exchange rules ---------- */
 
 .rule-row {

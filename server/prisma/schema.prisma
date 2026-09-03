@@ -18,60 +18,56 @@ datasource db {
 // ---------------------------------------------------------------------------
 
 model Merchant {
-  id        String   @id @default(cuid())
+  id                        String                    @id @default(cuid())
   // URL-safe identifier used in portal links: /r/:slug
-  slug      String   @unique
-  name      String
+  slug                      String                    @unique
+  name                      String
   // Storefront domain, e.g. acme.myshopify.com or shop.acme.com
-  domain    String?  @unique
-  email     String?
-  currency  String   @default("USD")
+  domain                    String?                   @unique
+  email                     String?
+  currency                  String                    @default("USD")
   /**
    * How exchanges are fulfilled in Shopify. The two paths trade off against
    * each other and neither is strictly better — see ExchangeMethod.
    */
-  exchangeMethod ExchangeMethod @default(DRAFT_ORDER)
+  exchangeMethod            ExchangeMethod            @default(DRAFT_ORDER)
   /**
    * Which currency the app *shows*, independent of what it stores.
-   *
    * All arithmetic stays in shop currency; this only affects presentation.
    * PRESENTMENT converts using each order's own rate — presentment total over
    * shop total — so figures match what the customer was actually charged
    * rather than a rate invented at display time.
    */
-  displayCurrency DisplayCurrency @default(SHOP)
+  displayCurrency           DisplayCurrency           @default(SHOP)
   /**
    * "Shop now" — offering the return's value as credit to spend on anything in
    * the catalogue, rather than swapping one item for another.
-   *
    * Off by default, and deliberately so: turning it on changes what the portal
    * offers every shopper, which is the merchant's decision to make rather than
    * something that should appear because they upgraded.
    */
-  shopNowEnabled Boolean @default(false)
-  shopNowMode    ShopNowMode @default(RETURNS_PAGE)
+  shopNowEnabled            Boolean                   @default(false)
+  shopNowMode               ShopNowMode               @default(RETURNS_PAGE)
   /**
    * A flat sweetener on top of the policy's percentage bonus, e.g. "$15 extra
    * if you spend it with us". Stored in shop currency like every other figure.
    * Null means no flat bonus; the percentage still applies.
    */
-  shopNowBonusAmount Decimal? @db.Decimal(12, 2)
+  shopNowBonusAmount        Decimal?                  @db.Decimal(12, 2)
   /// Whether shopNowBonusAmount is a flat sum or a percentage of the return.
-  shopNowBonusType   BonusType @default(FIXED)
+  shopNowBonusType          BonusType                 @default(FIXED)
   /**
    * The sweetener for exchanging rather than taking the money — a size swap or
    * one of the merchant's advanced-exchange lists.
-   *
    * Null falls back to the policy's bonusCreditPercent, which is what applied
    * before this existed, so a store that never opens the page is unaffected.
    * A FIXED bonus is per return, not per line: a flat 10 EUR is an incentive
    * to exchange, not a multiplier on how many items came back.
    */
-  exchangeBonusType  BonusType @default(PERCENT)
-  exchangeBonusValue Decimal?  @db.Decimal(12, 2)
+  exchangeBonusType         BonusType                 @default(PERCENT)
+  exchangeBonusValue        Decimal?                  @db.Decimal(12, 2)
   /**
    * What to do when a size swap isn't worth exactly what came back.
-   *
    * Separate from "shop now", which is about spending a return's value on
    * purpose. This is about the gap that appears when a shopper wanted the same
    * item in another size and the two aren't priced identically — often not a
@@ -79,34 +75,44 @@ model Merchant {
    * today's catalogue price.
    */
   variantExchangeDifference VariantExchangeDifference @default(CHARGE)
-  timezone  String   @default("UTC")
-  status    MerchantStatus @default(ACTIVE)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  /**
+   * The name customers see in their inbox, when the store wants one other
+   * than its own. Null means the merchant's name, which is what every
+   * notification used before this was configurable.
+   * Only the name: the address itself stays on the platform's verified
+   * sending domain, because a From on a domain we can't sign for is the
+   * fastest way into a spam folder. The merchant's support address travels
+   * as Reply-To instead, so a customer hitting reply still reaches them.
+   */
+  senderName                String?
 
-  branding       PortalBranding?
-  memberships    Membership[]
-  policies       ReturnPolicy[]
-  reasons        ReturnReason[]
-  exchangeRules  ExchangeRule[]
-  reasonGroups   ReturnReasonGroup[]
-  orders         Order[]
-  returnRequests ReturnRequest[]
-  storeCredits   StoreCredit[]
-  integrations   Integration[]
+  timezone  String         @default("UTC")
+  status    MerchantStatus @default(ACTIVE)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  branding             PortalBranding?
+  memberships          Membership[]
+  policies             ReturnPolicy[]
+  reasons              ReturnReason[]
+  exchangeRules        ExchangeRule[]
+  notificationSettings NotificationSetting[]
+  reasonGroups         ReturnReasonGroup[]
+  orders               Order[]
+  returnRequests       ReturnRequest[]
+  storeCredits         StoreCredit[]
+  integrations         Integration[]
 
   @@map("merchants")
 }
 
 /**
  * Which mechanism creates the replacement for an exchange.
- *
  * DRAFT_ORDER reserves the replacement stock the moment the return is
  * approved, so a popular size can't sell out while the parcel is in transit,
  * and any balance is collected through a normal checkout link. The cost is
  * that the exchange is a second order, so it doesn't net against the original
  * in Shopify's own reporting.
- *
  * SHOPIFY_NATIVE puts the replacement on the original order via
  * `exchangeLineItems`, so revenue nets correctly and Shopify holds fulfillment
  * until any balance is paid. The cost is that nothing commits until
@@ -119,44 +125,41 @@ enum ExchangeMethod {
 
 /**
  * "Advanced exchanges": what a shopper may swap a given item *for*.
- *
  * Without a rule, an exchange offers the item's own other variants and the
  * whole catalogue. A rule narrows that: returned items matching it are offered
  * one or more named lists, each backed by a collection — "exchange for a new
  * style", "pre-order", "clearance" — so the merchant decides what a return can
  * turn into rather than leaving it open.
- *
  * Matching is against a snapshot taken when the order synced, not against the
  * product as it stands today. A shopper's options shouldn't change because
  * someone retagged a product last week.
  */
 model ExchangeRule {
-  id         String   @id @default(cuid())
-  merchantId String
-  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  id                String            @id @default(cuid())
+  merchantId        String
+  merchant          Merchant          @relation(fields: [merchantId], references: [id], onDelete: Cascade)
   /// The merchant's own label, e.g. "department:footwear, brand:alohas".
-  name       String
-  active     Boolean  @default(true)
+  name              String
+  active            Boolean           @default(true)
   /// First match wins, so a specific rule can sit above a catch-all.
-  sortOrder  Int      @default(0)
-  matchBy    ExchangeRuleMatch @default(PRODUCT_TAG)
+  sortOrder         Int               @default(0)
+  matchBy           ExchangeRuleMatch @default(PRODUCT_TAG)
   /// Tags, or fragments of a product title, that identify a returned item.
-  matchValues String[]
+  matchValues       String[]
   /// Whether the shopper sees names under the pictures, or just the pictures.
-  showProductTitles Boolean @default(false)
+  showProductTitles Boolean           @default(false)
   /**
    * A sweetener specific to this rule, overriding the store-wide exchange
    * bonus for the items it matches — "10% extra for swapping footwear".
-   *
    * Null value means no override. Where several rules match one item, the
    * first that sets a bonus wins, by the merchant's own ordering: the
    * alternative of summing them would hand a shopper more credit the more
    * rules happened to overlap, which nobody intends.
    */
-  bonusType  BonusType?
-  bonusValue Decimal?  @db.Decimal(12, 2)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  bonusType         BonusType?
+  bonusValue        Decimal?          @db.Decimal(12, 2)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
   options ExchangeRuleOption[]
 
@@ -171,24 +174,28 @@ enum ExchangeRuleMatch {
   PRODUCT_NAME
 }
 
-/** One named list a matching item may be exchanged into. */
+/**
+ * One named list a matching item may be exchanged into.
+ */
 model ExchangeRuleOption {
-  id     String @id @default(cuid())
-  ruleId String
-  rule   ExchangeRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  id              String       @id @default(cuid())
+  ruleId          String
+  rule            ExchangeRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
   /// What the shopper reads, e.g. "Exchange for a new style".
-  label  String
+  label           String
   /// The Shopify collection this option draws from.
   collectionId    String
   /// Kept alongside the id so the admin can name it without a round trip.
   collectionTitle String
-  sortOrder       Int @default(0)
+  sortOrder       Int          @default(0)
 
   @@index([ruleId, sortOrder])
   @@map("exchange_rule_options")
 }
 
-/** How a price gap between two variants of the same product is settled. */
+/**
+ * How a price gap between two variants of the same product is settled.
+ */
 enum VariantExchangeDifference {
   /// Only variants of equal value are offered, so no gap can arise.
   SAME_PRICE_ONLY
@@ -198,7 +205,9 @@ enum VariantExchangeDifference {
   ABSORB
 }
 
-/** How a credit bonus is expressed. */
+/**
+ * How a credit bonus is expressed.
+ */
 enum BonusType {
   /// A share of what came back, e.g. 10%.
   PERCENT
@@ -206,7 +215,9 @@ enum BonusType {
   FIXED
 }
 
-/** Where a shopper spends their return credit under "shop now". */
+/**
+ * Where a shopper spends their return credit under "shop now".
+ */
 enum ShopNowMode {
   /// In the portal itself: catalogue, cart and checkout without leaving.
   RETURNS_PAGE
@@ -221,7 +232,9 @@ enum DisplayCurrency {
   PRESENTMENT
 }
 
-/** How a trade-down's leftover value reaches the shopper. */
+/**
+ * How a trade-down's leftover value reaches the shopper.
+ */
 enum ExchangeSurplusMethod {
   REFUND
   STORE_CREDIT
@@ -236,7 +249,6 @@ enum MerchantStatus {
 
 /**
  * A person, not a person-at-a-store.
- *
  * Merchants routinely run several Shopify stores, and one login should reach
  * all of them. The store a request acts on comes from the session token rather
  * than from this row, which is what keeps every service unchanged: they still
@@ -244,14 +256,14 @@ enum MerchantStatus {
  * to the account.
  */
 model User {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   /// Globally unique now: one person, one account, however many stores.
-  email        String   @unique
+  email        String    @unique
   passwordHash String
   name         String?
   lastLoginAt  DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   memberships     Membership[]
   reviewedReturns ReturnRequest[] @relation("ReviewedBy")
@@ -262,7 +274,6 @@ model User {
 
 /**
  * One person's access to one store, and the role they hold there.
- *
  * Role lives here rather than on the user because it is genuinely per store:
  * someone can own the shop they founded and be an agent on a colleague's.
  */
@@ -319,17 +330,17 @@ model ReturnPolicy {
   active     Boolean  @default(true)
 
   // Eligibility
-  returnWindowDays   Int     @default(30)
+  returnWindowDays  Int         @default(30)
   // Window is measured from this event
-  windowStartsFrom   WindowStart @default(DELIVERY)
-  allowFinalSale     Boolean @default(false)
-  requirePhotoProof  Boolean @default(false)
+  windowStartsFrom  WindowStart @default(DELIVERY)
+  allowFinalSale    Boolean     @default(false)
+  requirePhotoProof Boolean     @default(false)
 
   // Which resolutions the portal offers
-  allowRefund       Boolean @default(true)
-  allowStoreCredit  Boolean @default(true)
-  allowGiftCard     Boolean @default(false)
-  allowExchange     Boolean @default(true)
+  allowRefund          Boolean @default(true)
+  allowStoreCredit     Boolean @default(true)
+  allowGiftCard        Boolean @default(false)
+  allowExchange        Boolean @default(true)
   // Ship the replacement before the original comes back (Loop's instant exchange)
   allowInstantExchange Boolean @default(false)
 
@@ -337,14 +348,14 @@ model ReturnPolicy {
   bonusCreditPercent Decimal @default(0) @db.Decimal(5, 2)
 
   // Fees deducted from the refund
-  restockingFeePercent Decimal @default(0) @db.Decimal(5, 2)
-  returnShippingFee    Decimal @default(0) @db.Decimal(12, 2)
+  restockingFeePercent  Decimal @default(0) @db.Decimal(5, 2)
+  returnShippingFee     Decimal @default(0) @db.Decimal(12, 2)
   // Waive the return shipping fee when the shopper takes credit or an exchange
   waiveShippingOnCredit Boolean @default(true)
 
   // Requests under this value skip manual review
-  autoApprove          Boolean @default(false)
-  autoApproveUnder     Decimal? @db.Decimal(12, 2)
+  autoApprove      Boolean  @default(false)
+  autoApproveUnder Decimal? @db.Decimal(12, 2)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -368,19 +379,19 @@ enum WindowStart {
 /// portal picks a group per line item from the product's type. Exactly one
 /// group per merchant is the default, catching everything unclaimed.
 model ReturnReasonGroup {
-  id         String   @id @default(cuid())
-  merchantId String
-  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  id             String   @id @default(cuid())
+  merchantId     String
+  merchant       Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
   /// Internal name; never shown to shoppers.
-  title      String
+  title          String
   /// Shopify product types this group claims, matched case-insensitively.
-  productTypes String[] @default([])
+  productTypes   String[] @default([])
   /// Shuffle the order per shopper, so position stops biasing the answer —
   /// merchants use this to stop "Too small" absorbing every ambiguous return.
-  randomizeOrder Boolean @default(false)
+  randomizeOrder Boolean  @default(false)
   /// The fallback for products no other group claims.
-  isDefault  Boolean  @default(false)
-  sortOrder  Int      @default(0)
+  isDefault      Boolean  @default(false)
+  sortOrder      Int      @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -401,23 +412,23 @@ model ReturnReasonGroup {
 /// deliberately NOT unique — several differently-worded reasons legitimately
 /// report as WRONG_ITEM.
 model ReturnReason {
-  id            String   @id @default(cuid())
-  merchantId    String
-  merchant      Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  groupId       String?
-  group         ReturnReasonGroup? @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  id         String             @id @default(cuid())
+  merchantId String
+  merchant   Merchant           @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  groupId    String?
+  group      ReturnReasonGroup? @relation(fields: [groupId], references: [id], onDelete: Cascade)
   /// Null for a top-level reason.
-  parentId      String?
-  parent        ReturnReason?  @relation("ReasonTree", fields: [parentId], references: [id], onDelete: Cascade)
-  children      ReturnReason[] @relation("ReasonTree")
+  parentId   String?
+  parent     ReturnReason?      @relation("ReasonTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children   ReturnReason[]     @relation("ReasonTree")
 
   code          String
   label         String
   // Force the shopper to explain (e.g. "Other", "Damaged")
-  requiresNote  Boolean  @default(false)
-  requiresPhoto Boolean  @default(false)
-  active        Boolean  @default(true)
-  sortOrder     Int      @default(0)
+  requiresNote  Boolean @default(false)
+  requiresPhoto Boolean @default(false)
+  active        Boolean @default(true)
+  sortOrder     Int     @default(0)
 
   returnLineItems ReturnLineItem[]
 
@@ -432,38 +443,38 @@ model ReturnReason {
 // ---------------------------------------------------------------------------
 
 model Order {
-  id         String   @id @default(cuid())
+  id         String        @id @default(cuid())
   merchantId String
-  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  merchant   Merchant      @relation(fields: [merchantId], references: [id], onDelete: Cascade)
   policyId   String?
   policy     ReturnPolicy? @relation(fields: [policyId], references: [id], onDelete: SetNull)
 
   // Identifier on the source platform (Shopify order GID, etc.)
-  externalId    String?
+  externalId          String?
   /// The Shopify Customer GID. Needed to credit a store credit account, which
   /// is keyed on the customer rather than the order.
-  customerExternalId String?
+  customerExternalId  String?
   // Human-facing number the shopper types in, e.g. "1001"
-  orderNumber   String
-  email         String
-  customerName  String?
+  orderNumber         String
+  email               String
+  customerName        String?
   /// Shop currency — the merchant's own books. All our line-item maths uses this.
-  currency      String   @default("USD")
-  subtotal      Decimal  @default(0) @db.Decimal(12, 2)
-  total         Decimal  @default(0) @db.Decimal(12, 2)
+  currency            String    @default("USD")
+  subtotal            Decimal   @default(0) @db.Decimal(12, 2)
+  total               Decimal   @default(0) @db.Decimal(12, 2)
   /// The currency the customer was actually charged in. Differs from `currency`
   /// on multi-currency stores, and is what store credit must be denominated in
   /// for the customer to be able to spend it.
   presentmentCurrency String?
   /// Order total in the presentment currency, used to derive the rate that
   /// converts a payout from shop currency into what the customer paid.
-  presentmentTotal    Decimal? @db.Decimal(12, 2)
-  placedAt      DateTime
-  fulfilledAt   DateTime?
-  deliveredAt   DateTime?
-  shippingAddress Json?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  presentmentTotal    Decimal?  @db.Decimal(12, 2)
+  placedAt            DateTime
+  fulfilledAt         DateTime?
+  deliveredAt         DateTime?
+  shippingAddress     Json?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   lineItems      OrderLineItem[]
   returnRequests ReturnRequest[]
@@ -475,36 +486,36 @@ model Order {
 }
 
 model OrderLineItem {
-  id        String @id @default(cuid())
-  orderId   String
-  order     Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
-  externalId   String?
-  productId    String?
-  variantId    String?
-  sku          String?
+  externalId       String?
+  productId        String?
+  variantId        String?
+  sku              String?
   /// Shopify's product type, used to pick which reason group applies.
-  productType  String?
-  title        String
-  variantTitle String?
+  productType      String?
+  title            String
+  variantTitle     String?
   /// The product's tags when the order synced. A snapshot on purpose: advanced
   /// exchange rules match on these, and retagging a product later shouldn't
   /// silently change what an existing order may be exchanged for.
-  productTags  String[]
+  productTags      String[]
   /// The option axis this variant sits on, e.g. [{name:"Size",value:"37"}].
   /// Shopify's variantTitle carries only the values — "37", or "Blue / M" —
   /// so without the names the portal can only print a bare number at the
   /// shopper and hope they recognise it.
-  variantOptions Json?
-  imageUrl     String?
-  quantity     Int     @default(1)
+  variantOptions   Json?
+  imageUrl         String?
+  quantity         Int      @default(1)
   // Per-unit price after line discounts
-  unitPrice    Decimal @default(0) @db.Decimal(12, 2)
-  currency     String  @default("USD")
+  unitPrice        Decimal  @default(0) @db.Decimal(12, 2)
+  currency         String   @default("USD")
   // Excluded from returns entirely
-  finalSale    Boolean @default(false)
+  finalSale        Boolean  @default(false)
   // Units already returned across all requests; returnable = quantity - returnedQuantity
-  returnedQuantity Int @default(0)
+  returnedQuantity Int      @default(0)
 
   returnLineItems ReturnLineItem[]
 
@@ -519,30 +530,29 @@ model OrderLineItem {
 // ---------------------------------------------------------------------------
 
 model ReturnRequest {
-  id         String   @id @default(cuid())
+  id         String        @id @default(cuid())
   merchantId String
-  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  merchant   Merchant      @relation(fields: [merchantId], references: [id], onDelete: Cascade)
   orderId    String
-  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order      Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
   policyId   String?
   policy     ReturnPolicy? @relation(fields: [policyId], references: [id], onDelete: SetNull)
 
   /// Short human-readable reference shown to the shopper, e.g. "R-7F3K2Q"
   /**
+   * /**
    * Merchant-facing, and unique per merchant rather than globally.
-   *
    * Six characters from a 29-letter alphabet is ~594 million combinations,
    * which sounds ample until the birthday bound: a global constraint would hit
    * a coin-flip chance of collision at roughly 24,000 returns across every
    * store on the platform, and a collision fails a shopper's submission. Scoped
    * per merchant, that threshold applies to one store's own returns instead.
    */
-  reference  String
-  status     ReturnStatus   @default(SUBMITTED)
-  resolution ResolutionType
+  reference             String
+  status                ReturnStatus          @default(SUBMITTED)
+  resolution            ResolutionType
   /**
    * Where the surplus goes when an exchange is worth less than what came back.
-   *
    * A trade-down leaves the shopper owed money, and that money deserves the
    * same choice a plain refund gets. Kept apart from `resolution` because an
    * exchange line's resolution is already EXCHANGE — this answers a different
@@ -552,34 +562,33 @@ model ReturnRequest {
   /**
    * The shopper spent their return value in the catalogue rather than swapping
    * item for item.
-   *
    * Recorded on the request because it changes how the money is worked out: a
    * per-item exchange nets each line against its own replacement, while this
    * pools every line's credit against one basket. Without the flag there is no
    * way to tell the two apart after the fact — both end up as EXCHANGE lines
    * with ExchangeItems hanging off them.
    */
-  shopNow Boolean @default(false)
+  shopNow               Boolean               @default(false)
   /// The flat bonus that applied at submission, kept so a later settings change
   /// can't silently restate what the shopper was promised.
-  shopNowBonus Decimal @default(0) @db.Decimal(12, 2)
+  shopNowBonus          Decimal               @default(0) @db.Decimal(12, 2)
 
   customerEmail String
   customerName  String?
   customerNote  String?
 
   // Money breakdown, all in `currency`
-  currency        String  @default("USD")
+  currency       String   @default("USD")
   /// Value of the returned items before any adjustments
-  itemsSubtotal   Decimal @default(0) @db.Decimal(12, 2)
+  itemsSubtotal  Decimal  @default(0) @db.Decimal(12, 2)
   /// Extra credit granted as an incentive (store credit / exchange only)
-  bonusCredit     Decimal @default(0) @db.Decimal(12, 2)
-  restockingFee   Decimal @default(0) @db.Decimal(12, 2)
-  shippingFee     Decimal @default(0) @db.Decimal(12, 2)
+  bonusCredit    Decimal  @default(0) @db.Decimal(12, 2)
+  restockingFee  Decimal  @default(0) @db.Decimal(12, 2)
+  shippingFee    Decimal  @default(0) @db.Decimal(12, 2)
   /// itemsSubtotal + bonusCredit - restockingFee - shippingFee
-  estimatedTotal  Decimal @default(0) @db.Decimal(12, 2)
+  estimatedTotal Decimal  @default(0) @db.Decimal(12, 2)
   /// What was actually paid out once resolved
-  settledTotal    Decimal? @db.Decimal(12, 2)
+  settledTotal   Decimal? @db.Decimal(12, 2)
 
   /// The Return object created on the Shopify order (gid://shopify/Return/...).
   /// Set when the return is approved; null until then, or if Shopify rejected it.
@@ -592,16 +601,15 @@ model ReturnRequest {
 
   /**
    * Merchant flag for a return that needs a second look.
-   *
    * Deliberately orthogonal to status: flagging is a note to the team, not a
    * decision, so a flagged return keeps moving through the same states.
    */
-  flaggedAt    DateTime?
-  flagReason   String?
+  flaggedAt  DateTime?
+  flagReason String?
 
-  reviewedById String?
-  reviewedBy   User?     @relation("ReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
-  reviewedAt   DateTime?
+  reviewedById    String?
+  reviewedBy      User?     @relation("ReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt      DateTime?
   rejectionReason String?
 
   submittedAt DateTime  @default(now())
@@ -671,24 +679,23 @@ model ReturnLineItem {
   /// list views and reporting.
   resolution ResolutionType @default(REFUND)
 
-  quantity   Int     @default(1)
-  reasonNote String?
+  quantity                 Int               @default(1)
+  reasonNote               String?
   /// Shopify's FulfillmentLineItem id, resolved from returnableFulfillments at
   /// approval time. This — not the LineItem id — is what returnCreate needs.
-  fulfillmentLineItemId String?
+  fulfillmentLineItemId    String?
   /// The ReturnLineItem Shopify created, needed later by returnProcess.
   externalReturnLineItemId String?
   /// URLs of shopper-uploaded condition photos
-  photoUrls  String[] @default([])
-  unitPrice  Decimal @default(0) @db.Decimal(12, 2)
+  photoUrls                String[]          @default([])
+  unitPrice                Decimal           @default(0) @db.Decimal(12, 2)
   /// unitPrice * quantity
-  lineTotal  Decimal @default(0) @db.Decimal(12, 2)
+  lineTotal                Decimal           @default(0) @db.Decimal(12, 2)
   /// Set by the warehouse when the item is inspected
-  inspection InspectionResult?
+  inspection               InspectionResult?
 
   /**
    * How many of the requested units the merchant actually accepted.
-   *
    * Null until someone inspects the line. Once set, this — not `quantity` —
    * drives what gets refunded and what gets restocked, so a shopper who sends
    * back six and has four accepted is paid for four.
@@ -702,7 +709,6 @@ model ReturnLineItem {
   rejectionNote    String?
   /**
    * "Change to keep": the shopper is credited but keeps the goods.
-   *
    * Used when return shipping costs more than the item is worth, or the item
    * is unsellable anyway. Nothing physically comes back, so these lines are
    * never disposed in Shopify — but they still pay out.
@@ -726,29 +732,29 @@ enum InspectionResult {
 
 /// What the shopper wants instead, for EXCHANGE / INSTANT_EXCHANGE.
 model ExchangeItem {
-  id              String        @id @default(cuid())
-  returnRequestId String
-  returnRequest   ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+  id               String          @id @default(cuid())
+  returnRequestId  String
+  returnRequest    ReturnRequest   @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
   /// The returned line this replaces. Nullable only for exchanges created
   /// before resolutions moved per-line.
   returnLineItemId String?
   returnLineItem   ReturnLineItem? @relation(fields: [returnLineItemId], references: [id], onDelete: Cascade)
 
-  productId    String?
-  variantId    String?
-  sku          String?
-  title        String
+  productId                  String?
+  variantId                  String?
+  sku                        String?
+  title                      String
   /// Already named where it's set, e.g. "Size: 37" — the portal labels a chosen
   /// variant before storing it, so there is no second field to carry here.
-  variantTitle String?
-  imageUrl     String?
+  variantTitle               String?
+  imageUrl                   String?
   /// The ExchangeLineItem Shopify created, which `returnProcess` needs to
   /// confirm the exchange. Only set on the SHOPIFY_NATIVE path.
   externalExchangeLineItemId String?
-  quantity     Int     @default(1)
-  unitPrice    Decimal @default(0) @db.Decimal(12, 2)
+  quantity                   Int     @default(1)
+  unitPrice                  Decimal @default(0) @db.Decimal(12, 2)
   /// Amount the shopper still owes when the swap costs more
-  priceDifference Decimal @default(0) @db.Decimal(12, 2)
+  priceDifference            Decimal @default(0) @db.Decimal(12, 2)
 
   @@index([returnRequestId])
   @@map("exchange_items")
@@ -765,11 +771,11 @@ model ReturnShipment {
   labelUrl       String?
   status         ShipmentStatus @default(PENDING)
   /// Cost of the label, for merchant reporting
-  labelCost      Decimal? @db.Decimal(12, 2)
+  labelCost      Decimal?       @db.Decimal(12, 2)
   shippedAt      DateTime?
   deliveredAt    DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
   @@map("return_shipments")
 }
@@ -783,27 +789,27 @@ enum ShipmentStatus {
 }
 
 model StoreCredit {
-  id              String        @id @default(cuid())
+  id              String         @id @default(cuid())
   merchantId      String
-  merchant        Merchant      @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  returnRequestId String?       @unique
+  merchant        Merchant       @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  returnRequestId String?        @unique
   returnRequest   ReturnRequest? @relation(fields: [returnRequestId], references: [id], onDelete: SetNull)
 
   /// Distinguishes a store credit balance from a gift card.
-  kind            CreditKind @default(STORE_CREDIT)
+  kind                  CreditKind @default(STORE_CREDIT)
   /// For gift cards this is the real, redeemable Shopify code. For store credit
   /// it is a legacy internal reference with no meaning at checkout.
-  code            String   @unique
+  code                  String     @unique
   /// The Shopify StoreCreditAccount this was credited to, when applicable.
   externalAccountId     String?
   /// The Shopify credit transaction, for reconciliation.
   externalTransactionId String?
-  customerEmail   String
-  amount          Decimal  @db.Decimal(12, 2)
-  balance         Decimal  @db.Decimal(12, 2)
-  currency        String   @default("USD")
-  expiresAt       DateTime?
-  createdAt       DateTime @default(now())
+  customerEmail         String
+  amount                Decimal    @db.Decimal(12, 2)
+  balance               Decimal    @db.Decimal(12, 2)
+  currency              String     @default("USD")
+  expiresAt             DateTime?
+  createdAt             DateTime   @default(now())
 
   @@index([merchantId, customerEmail])
   @@map("store_credits")
@@ -822,11 +828,11 @@ model ReturnEvent {
   actorId         String?
   actor           User?         @relation(fields: [actorId], references: [id], onDelete: SetNull)
 
-  type        ReturnEventType
-  message     String
+  type      ReturnEventType
+  message   String
   /// Arbitrary context: status transitions, API payloads, etc.
-  metadata    Json?
-  createdAt   DateTime @default(now())
+  metadata  Json?
+  createdAt DateTime        @default(now())
 
   @@index([returnRequestId, createdAt])
   @@map("return_events")
@@ -926,17 +932,17 @@ enum ReturnEventType {
 // ---------------------------------------------------------------------------
 
 model Integration {
-  id           String   @id @default(cuid())
-  merchantId   String
-  merchant     Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  provider     IntegrationProvider
+  id             String              @id @default(cuid())
+  merchantId     String
+  merchant       Merchant            @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  provider       IntegrationProvider
   /// Encrypted at rest by the service layer before it lands here
-  accessToken  String?
-  scopes       String?
+  accessToken    String?
+  scopes         String?
   externalShopId String?
-  connectedAt  DateTime @default(now())
-  lastSyncedAt DateTime?
-  active       Boolean  @default(true)
+  connectedAt    DateTime            @default(now())
+  lastSyncedAt   DateTime?
+  active         Boolean             @default(true)
 
   @@unique([merchantId, provider])
   @@map("integrations")
@@ -947,4 +953,32 @@ enum IntegrationProvider {
   WOOCOMMERCE
   BIGCOMMERCE
   CUSTOM
+}
+
+/**
+ * Which lifecycle emails a store sends.
+ * A row is only written when a merchant changes something, so the absence of
+ * one means "on". That way a store that has never opened this page keeps
+ * sending exactly what it sent before, and a notification added later is on
+ * by default rather than silently disabled for everyone.
+ */
+model NotificationSetting {
+  id         String           @id @default(cuid())
+  merchantId String
+  merchant   Merchant         @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  kind       NotificationKind
+  enabled    Boolean          @default(true)
+  updatedAt  DateTime         @updatedAt
+
+  @@unique([merchantId, kind])
+  @@map("notification_settings")
+}
+
+/// The lifecycle moments the app emails a customer about.
+enum NotificationKind {
+  SUBMITTED
+  APPROVED
+  DECLINED
+  RECEIVED
+  RESOLVED
 }

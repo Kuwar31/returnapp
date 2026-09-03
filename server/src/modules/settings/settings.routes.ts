@@ -3,6 +3,11 @@ import { z } from "zod";
 import { notFound } from "../../lib/errors.js";
 import { portalUrl } from "../../lib/portal-links.js";
 import { prisma } from "../../lib/prisma.js";
+import {
+  listNotificationSettings,
+  resolveSender,
+  setNotificationEnabled,
+} from "./notification-settings.js";
 import { asyncHandler } from "../../middleware/asyncHandler.js";
 import { requireRole } from "../../middleware/auth.js";
 import { validate } from "../../middleware/validate.js";
@@ -380,6 +385,94 @@ settingsRouter.put(
       create: { merchantId: req.admin!.merchantId, ...req.body },
     });
     res.json(branding);
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// Customer notifications — which emails a store sends, and who they're from
+// ---------------------------------------------------------------------------
+
+/**
+ * The catalogue and the store's answers in one payload, plus the sender.
+ *
+ * The labels come from the server because the set of notifications is a fact
+ * about what the app sends, not a list the admin should be keeping its own
+ * copy of.
+ */
+settingsRouter.get(
+  "/notifications",
+  asyncHandler(async (req, res) => {
+    const [notifications, sender] = await Promise.all([
+      listNotificationSettings(req.admin!.merchantId),
+      resolveSender(req.admin!.merchantId),
+    ]);
+    res.json({ notifications, sender });
+  }),
+);
+
+const notificationsSchema = z
+  .object({
+    /** Only the switches that changed; anything unnamed keeps its answer. */
+    notifications: z
+      .array(
+        z.object({
+          kind: z.enum([
+            "SUBMITTED",
+            "APPROVED",
+            "DECLINED",
+            "RECEIVED",
+            "RESOLVED",
+          ]),
+          enabled: z.boolean(),
+        }),
+      )
+      .max(20)
+      .optional(),
+    /** Blank clears it, which falls back to the store's own name. */
+    senderName: z.string().trim().max(80).nullable().optional(),
+    /** Where replies land. Null removes the header entirely. */
+    replyTo: z.string().trim().email().nullable().optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, { message: "Nothing to update." });
+
+settingsRouter.patch(
+  "/notifications",
+  validate(notificationsSchema),
+  asyncHandler(async (req, res) => {
+    const merchantId = req.admin!.merchantId;
+    const body = req.body as z.infer<typeof notificationsSchema>;
+
+    for (const { kind, enabled } of body.notifications ?? []) {
+      await setNotificationEnabled(merchantId, kind, enabled);
+    }
+
+    if (body.senderName !== undefined) {
+      await prisma.merchant.update({
+        where: { id: merchantId },
+        // An empty box means "use the store's name", not a store called "".
+        data: { senderName: body.senderName || null },
+      });
+    }
+
+    /**
+     * The reply address is the portal's support address — the same one the
+     * shopper sees on the returns page. Kept as one field rather than two
+     * because a store answering returns from two different mailboxes
+     * depending on whether the customer clicked or replied is a trap.
+     */
+    if (body.replyTo !== undefined) {
+      await prisma.portalBranding.upsert({
+        where: { merchantId },
+        update: { supportEmail: body.replyTo },
+        create: { merchantId, supportEmail: body.replyTo },
+      });
+    }
+
+    const [notifications, sender] = await Promise.all([
+      listNotificationSettings(merchantId),
+      resolveSender(merchantId),
+    ]);
+    res.json({ notifications, sender });
   }),
 );
 
