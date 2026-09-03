@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { FONT_KEYS } from "./portal-fonts.js";
 import { notFound } from "../../lib/errors.js";
 import { portalUrl } from "../../lib/portal-links.js";
 import { prisma } from "../../lib/prisma.js";
@@ -352,15 +353,63 @@ settingsRouter.delete(
   }),
 );
 
+const hex = (label: string) =>
+  z.string().regex(/^#[0-9a-fA-F]{6}$/, `Use a hex colour like ${label}`);
+
+/**
+ * An optional image address.
+ *
+ * Empty string maps to null rather than failing: a merchant clearing a logo
+ * empties the box, and telling them "" is not a valid URL is answering a
+ * question they didn't ask.
+ */
+const imageUrl = z
+  .union([z.string().url(), z.literal(""), z.null()])
+  .transform((v) => (v ? v : null));
+
+const optionalText = (max: number) =>
+  z
+    .union([z.string().trim().max(max), z.null()])
+    .transform((v) => (v ? v : null));
+
 const brandingSchema = z.object({
   headline: z.string().trim().min(1).max(120),
   subheadline: z.string().trim().max(200),
-  logoUrl: z.string().url().nullable(),
-  accentColor: z
-    .string()
-    .regex(/^#[0-9a-fA-F]{6}$/, "Use a hex color like #111213"),
-  supportEmail: z.string().email().nullable(),
-  policyUrl: z.string().url().nullable(),
+  logoUrl: imageUrl,
+  accentColor: hex("#111213"),
+  supportEmail: z
+    .union([z.string().trim().email(), z.literal(""), z.null()])
+    .transform((v) => (v ? v : null)),
+  policyUrl: z.union([z.string().url(), z.literal(""), z.null()]).transform((v) => (v ? v : null)),
+
+  // Theme
+  textTone: z.enum(["DARK", "LIGHT"]),
+  cornerRadius: z.enum(["SHARP", "CURVED", "ROUNDED"]),
+  backgroundColor: hex("#f5f5f6"),
+  heroImageUrl: imageUrl,
+
+  // Branding
+  lightLogoUrl: imageUrl,
+  logoWidth: z.number().int().min(60).max(480),
+  faviconUrl: imageUrl,
+  headingFont: z.enum(FONT_KEYS),
+  headingColor: hex("#1a1a1c"),
+  bodyFont: z.enum(FONT_KEYS),
+  bodyColor: hex("#5f6368"),
+  // Null means "use the accent colour", which is what buttons did before.
+  buttonColor: z.union([hex("#111213"), z.literal(""), z.null()]).transform((v) => (v ? v : null)),
+  buttonTextColor: hex("#ffffff"),
+  suggestionColor: hex("#6d5ce7"),
+
+  // Content
+  orderNumberLabel: z.string().trim().min(1).max(60),
+  emailLabel: z.string().trim().min(1).max(60),
+  lookupHelpText: optionalText(300),
+  startButtonLabel: z.string().trim().min(1).max(40),
+  footerHeading: optionalText(60),
+  footerText: optionalText(300),
+
+  searchEngineVisible: z.boolean(),
 });
 
 settingsRouter.get(

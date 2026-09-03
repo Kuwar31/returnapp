@@ -314,9 +314,78 @@ model PortalBranding {
   accentColor  String   @default("#111213")
   supportEmail String?
   policyUrl    String?
+
+  // --- theme -------------------------------------------------------------
+  /**
+   * Whether the portal's own text sits light or dark.
+   *
+   * A separate answer from the colours below because it governs what reads
+   * over the background image, which the merchant supplies and we can't
+   * measure — a pale photo needs dark text whatever the accent is.
+   */
+  textTone        PortalTextTone @default(DARK)
+  cornerRadius    PortalRadius   @default(CURVED)
+  backgroundColor String         @default("#f5f5f6")
+
+  // --- branding ----------------------------------------------------------
+  /// Rendered width of the lookup logo, in px. Height follows the aspect.
+  logoWidth       Int     @default(180)
+  /**
+   * A second logo for use on white cards.
+   *
+   * The lookup screen puts the logo over the background image, which is often
+   * dark, so a merchant's white wordmark works there and vanishes everywhere
+   * else. Null falls back to the main logo.
+   */
+  lightLogoUrl    String?
+  faviconUrl      String?
+  headingFont     String  @default("SYSTEM")
+  headingColor    String  @default("#1a1a1c")
+  bodyFont        String  @default("SYSTEM")
+  bodyColor       String  @default("#5f6368")
+  /// Null means the accent colour, which is what buttons used before this.
+  buttonColor     String?
+  buttonTextColor String  @default("#ffffff")
+  /// The tint on the "we suggest sizing up" hint in the item drawer.
+  suggestionColor String  @default("#6d5ce7")
+
+  // --- content -----------------------------------------------------------
+  orderNumberLabel String  @default("Order number")
+  emailLabel       String  @default("Email address")
+  /// Shown under the lookup fields, where a shopper looks when stuck.
+  lookupHelpText   String?
+  startButtonLabel String  @default("Find my order")
+  footerHeading    String?
+  /**
+   * The line under it. `{{ link }}` is replaced with the support address as a
+   * mailto link, so a merchant can write the sentence around it rather than
+   * being handed "Need help? <address>" and nothing else.
+   */
+  footerText       String?
+
+  // --- visibility --------------------------------------------------------
+  /**
+   * Whether search engines may index the portal. Off writes a noindex robots
+   * tag; it cannot retract what Google already crawled, which is why the admin
+   * says so rather than implying the page disappears.
+   */
+  searchEngineVisible Boolean @default(true)
+
   updatedAt    DateTime @updatedAt
 
   @@map("portal_branding")
+}
+
+/// Whether portal text is dark on light, or light on dark.
+enum PortalTextTone {
+  DARK
+  LIGHT
+}
+
+enum PortalRadius {
+  SHARP
+  CURVED
+  ROUNDED
 }
 
 /// A merchant can run several policies (e.g. standard, final-sale, holiday)

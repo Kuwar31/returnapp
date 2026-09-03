@@ -149,6 +149,64 @@ export const resolveHeroImage = async (
   }
 };
 
+/**
+ * Branding as the portal should receive it: the merchant's answers, with the
+ * schema's defaults standing in for a store that has never opened the page.
+ *
+ * Spread from one object rather than written as a chain of `??` at the call
+ * site, so adding a field is one edit and a missing default is a type error
+ * rather than a null that reaches the browser.
+ */
+const BRANDING_DEFAULTS = {
+  headline: "Returns & Exchanges",
+  subheadline: "Start a return or exchange in a few clicks",
+  logoUrl: null as string | null,
+  lightLogoUrl: null as string | null,
+  logoWidth: 180,
+  faviconUrl: null as string | null,
+  accentColor: "#111213",
+  backgroundColor: "#f5f5f6",
+  textTone: "DARK" as const,
+  cornerRadius: "CURVED" as const,
+  headingFont: "SYSTEM",
+  headingColor: "#1a1a1c",
+  bodyFont: "SYSTEM",
+  bodyColor: "#5f6368",
+  buttonColor: null as string | null,
+  buttonTextColor: "#ffffff",
+  suggestionColor: "#6d5ce7",
+  orderNumberLabel: "Order number",
+  emailLabel: "Email address",
+  lookupHelpText: null as string | null,
+  startButtonLabel: "Find my order",
+  footerHeading: null as string | null,
+  footerText: null as string | null,
+  supportEmail: null as string | null,
+  policyUrl: null as string | null,
+  searchEngineVisible: true,
+};
+
+export type PortalBrandingPayload = typeof BRANDING_DEFAULTS & {
+  heroImageUrl: string | null;
+};
+
+export const resolvePortalBranding = (
+  branding: Record<string, unknown> | null | undefined,
+  heroImageUrl: string | null,
+): PortalBrandingPayload => {
+  const resolved = { ...BRANDING_DEFAULTS, heroImageUrl };
+  if (!branding) return resolved;
+  for (const key of Object.keys(BRANDING_DEFAULTS)) {
+    const value = branding[key];
+    // Null is a real answer for the optional ones; undefined means the column
+    // predates this row, and only then does the default apply.
+    if (value !== undefined) {
+      (resolved as Record<string, unknown>)[key] = value;
+    }
+  }
+  return resolved;
+};
+
 export const getOrderEligibility = async (
   merchantId: string,
   orderId: string,

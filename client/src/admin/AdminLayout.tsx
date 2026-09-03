@@ -29,6 +29,7 @@ const NAV = [
       { to: "/settings/policy", label: "Return policy", icon: "◷", end: true },
       { to: "/settings/exchanges", label: "Exchanges", icon: "⇄", end: true },
       { to: "/settings/shop-now", label: "Shop now", icon: "◈", end: true },
+      { to: "/settings/portal", label: "Portal", icon: "◎", end: false },
       {
         to: "/settings/notifications",
         label: "Notifications",

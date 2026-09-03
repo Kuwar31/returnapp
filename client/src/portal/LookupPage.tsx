@@ -1,6 +1,7 @@
 import { Form, redirect, useNavigation, useParams } from "react-router";
 import { api, ApiError, setToken } from "../lib/api";
 import { ErrorAlert } from "../components/Feedback";
+import { usePortal } from "./PortalLayout";
 import type { Route } from "./+types/LookupPage";
 
 /**
@@ -36,12 +37,24 @@ export async function clientAction({ request, params }: Route.ClientActionArgs) 
 
 export default function LookupPage({ actionData }: Route.ComponentProps) {
   const { slug } = useParams();
+  const { branding, merchant } = usePortal();
   const navigation = useNavigation();
   const busy = navigation.state !== "idle";
 
   return (
     <>
       <div className="card portal__card">
+        {/*
+          The lookup card carries the light logo when there is one: this sits
+          on white, while the header's logo sits over the background image.
+        */}
+        {branding.lightLogoUrl && (
+          <img
+            className="portal__card-logo"
+            src={branding.lightLogoUrl}
+            alt={merchant.name}
+          />
+        )}
         <h2>Find your order</h2>
         <p className="muted" style={{ margin: "6px 0 20px" }}>
           Enter your order number and the email you used at checkout.
@@ -51,7 +64,7 @@ export default function LookupPage({ actionData }: Route.ComponentProps) {
 
         <Form method="post" key={slug}>
           <div className="field">
-            <label htmlFor="orderNumber">Order number</label>
+            <label htmlFor="orderNumber">{branding.orderNumberLabel}</label>
             <input
               id="orderNumber"
               name="orderNumber"
@@ -61,7 +74,7 @@ export default function LookupPage({ actionData }: Route.ComponentProps) {
             />
           </div>
           <div className="field">
-            <label htmlFor="email">Email address</label>
+            <label htmlFor="email">{branding.emailLabel}</label>
             <input
               id="email"
               name="email"
@@ -70,8 +83,15 @@ export default function LookupPage({ actionData }: Route.ComponentProps) {
               required
             />
           </div>
+          {/*
+            Where a stuck shopper looks: under the fields, before the button,
+            rather than in a tooltip they'd have to know to hover.
+          */}
+          {branding.lookupHelpText && (
+            <p className="portal__help">{branding.lookupHelpText}</p>
+          )}
           <button className="btn btn--block" type="submit" disabled={busy}>
-            {busy ? "Finding your order…" : "Start a return"}
+            {busy ? "Finding your order…" : branding.startButtonLabel}
           </button>
         </Form>
       </div>

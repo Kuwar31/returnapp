@@ -41,17 +41,10 @@ portalRouter.get(
         name: merchant.name,
         currency: merchant.currency,
       },
-      branding: {
-        headline: merchant.branding?.headline ?? "Returns & Exchanges",
-        subheadline:
-          merchant.branding?.subheadline ??
-          "Start a return or exchange in a few clicks",
-        logoUrl: merchant.branding?.logoUrl ?? null,
+      branding: portalService.resolvePortalBranding(
+        merchant.branding,
         heroImageUrl,
-        accentColor: merchant.branding?.accentColor ?? "#111213",
-        supportEmail: merchant.branding?.supportEmail ?? null,
-        policyUrl: merchant.branding?.policyUrl ?? null,
-      },
+      ),
     });
   }),
 );

@@ -19,16 +19,41 @@ export type ResolutionType =
 
 export interface PortalConfig {
   merchant: { slug: string; name: string; currency: string };
-  branding: {
-    headline: string;
-    subheadline: string;
-    logoUrl: string | null;
-    /** Full-bleed backdrop; null falls back to a plain background. */
-    heroImageUrl: string | null;
-    accentColor: string;
-    supportEmail: string | null;
-    policyUrl: string | null;
-  };
+  branding: PortalBranding;
+}
+
+/** Everything a merchant can change about how their portal looks and reads. */
+export interface PortalBranding {
+  headline: string;
+  subheadline: string;
+  logoUrl: string | null;
+  /** A second wordmark for white cards, where a pale logo would vanish. */
+  lightLogoUrl: string | null;
+  logoWidth: number;
+  faviconUrl: string | null;
+  /** Full-bleed backdrop; null falls back to the background colour. */
+  heroImageUrl: string | null;
+  accentColor: string;
+  backgroundColor: string;
+  textTone: "DARK" | "LIGHT";
+  cornerRadius: "SHARP" | "CURVED" | "ROUNDED";
+  headingFont: string;
+  headingColor: string;
+  bodyFont: string;
+  bodyColor: string;
+  /** Null means the accent colour. */
+  buttonColor: string | null;
+  buttonTextColor: string;
+  suggestionColor: string;
+  orderNumberLabel: string;
+  emailLabel: string;
+  lookupHelpText: string | null;
+  startButtonLabel: string;
+  footerHeading: string | null;
+  footerText: string | null;
+  supportEmail: string | null;
+  policyUrl: string | null;
+  searchEngineVisible: boolean;
 }
 
 export interface EligibleLineItem {

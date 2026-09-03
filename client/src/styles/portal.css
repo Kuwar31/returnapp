@@ -54,6 +54,83 @@
 
 
 
+/* ---------- merchant theme ----------
+   Every token here is set by PortalLayout from the store's settings and falls
+   back to the app's own value, so a store that has customised nothing renders
+   exactly as it did before any of this existed. */
+
+.portal .btn {
+  background: var(--btn-bg, var(--accent));
+  color: var(--btn-fg, var(--accent-contrast));
+  border-color: var(--btn-bg, var(--accent));
+}
+
+.portal .btn--secondary {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.portal h1,
+.portal h2,
+.portal h3 {
+  font-family: var(--font-heading, var(--font));
+  color: var(--text);
+}
+
+.portal {
+  font-family: var(--font);
+}
+
+/* The chosen corner radius reaches the cards without touching the small
+   controls, where a 26px radius on a 34px input reads as a mistake. */
+.portal .card,
+.portal .portal__card,
+.portal .pick-card,
+.portal .drawer__panel {
+  border-radius: var(--radius-lg);
+}
+
+/* Light text, for a portal sitting on a dark image or colour. The header and
+   footer only: cards keep their own white background, so their text has to
+   stay dark to be legible on it. */
+.portal--light-text .portal__header h1,
+.portal--light-text .portal__header .muted,
+.portal--light-text .portal__store,
+.portal--light-text .portal__footer,
+.portal--light-text .portal__footer a {
+  color: #ffffff;
+}
+
+.portal--light-text .portal__header .muted,
+.portal--light-text .portal__footer {
+  opacity: 0.85;
+}
+
+/* The merchant's wordmark on the white lookup card, when they've given one
+   that suits a light background. */
+.portal__card-logo {
+  display: block;
+  max-width: 180px;
+  height: auto;
+  margin: 0 auto 18px;
+}
+
+/* Sits between the fields and the button, which is where someone who can't
+   find their order number is already looking. */
+.portal__help {
+  margin: -4px 0 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.portal__footer strong {
+  display: block;
+  margin-bottom: 2px;
+  color: inherit;
+}
+
 /* ---------- item picker ---------- */
 
 .line-item {
@@ -1881,8 +1958,13 @@
   margin: 14px 0 0;
   padding: 12px 14px;
   border-radius: var(--radius-sm);
+  /* The merchant's suggestion colour, at a tenth for the wash behind the
+     text — one setting rather than asking them to pick a pair that works
+     together. The flat lavender first, so a browser without color-mix keeps
+     the look this had before the setting existed. */
   background: #f4f1fb;
-  color: #4a3f7a;
+  background: color-mix(in srgb, var(--suggestion, #6d5ce7) 10%, #ffffff);
+  color: var(--suggestion, #4a3f7a);
   font-size: 13px;
   line-height: 1.5;
 }

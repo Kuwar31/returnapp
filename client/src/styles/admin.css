@@ -2060,6 +2060,195 @@ table.data tbody tr:hover {
   }
 }
 
+/* ---------- portal customisation ---------- */
+
+/*
+ * Form on the left, preview on the right. The preview is the point of this
+ * page — a colour named in hex tells a merchant nothing until they see it land
+ * — so it stays on screen while the form scrolls past it.
+ */
+.portal-settings {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 28px;
+  align-items: start;
+}
+
+.portal-settings .settings-form {
+  max-width: none;
+}
+
+.portal-settings__preview {
+  position: sticky;
+  top: 28px;
+}
+
+.preview-frame {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.preview-frame__bar {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+/* A colour and its hex, read as one control: the swatch is how you pick one,
+   the hex is how you match one you already have written down. */
+.color-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.color-field input[type="color"] {
+  width: 38px;
+  height: 34px;
+  padding: 2px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.settings-row .color-field__hex {
+  width: 96px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- the preview itself ----------
+   Its own scale, not the portal's: this is a picture of a page, so the type
+   is smaller than the real thing throughout and the proportions carry the
+   meaning rather than the measurements. */
+
+.pv {
+  padding: 22px 18px 18px;
+  min-height: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pv__head {
+  text-align: center;
+}
+
+.pv__head img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto 10px;
+}
+
+.pv__store {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.75;
+  margin-bottom: 6px;
+}
+
+.pv__headline {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+.pv__sub {
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+.pv__card {
+  background: #fff;
+  padding: 16px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 6%), 0 8px 24px rgb(0 0 0 / 8%);
+}
+
+.pv__card-logo {
+  display: block;
+  max-width: 120px;
+  height: auto;
+  margin: 0 auto 12px;
+}
+
+.pv__card-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+.pv__label {
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.pv__input {
+  height: 30px;
+  margin-bottom: 10px;
+  border: 1px solid #dcdcde;
+  border-radius: 6px;
+  background: #fbfbfc;
+}
+
+.pv__help {
+  font-size: 11px;
+  line-height: 1.45;
+  margin-bottom: 10px;
+}
+
+.pv__btn {
+  padding: 9px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pv__hint {
+  padding: 9px 11px;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.pv__foot {
+  margin-top: auto;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.pv__foot strong {
+  display: block;
+}
+
+/* The preview drops below the form before it gets too narrow to mean
+   anything. */
+@media (max-width: 1100px) {
+  .portal-settings {
+    grid-template-columns: 1fr;
+  }
+
+  .portal-settings__preview {
+    position: static;
+    max-width: 420px;
+  }
+}
+
 /* ---------- notification switches ---------- */
 
 /*
