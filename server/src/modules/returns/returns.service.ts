@@ -323,6 +323,64 @@ export const rejectReturn = async (
  * already been paid against these numbers, and quietly changing them would put
  * our books and their bank statement at odds.
  */
+/**
+ * Restocking is decided between approval and receipt.
+ *
+ * Before approval nothing is coming back yet, so there is nothing to put on
+ * a shelf — and boxes ticked on a request that may still be declined are how
+ * a rejected return ends up restocked in someone's head. After receipt
+ * Shopify has already recorded each unit's disposition, which it allows
+ * exactly once, so a change here would be a promise the next screen can't
+ * keep.
+ */
+const assertRestockOpen = (request: { status: string }) => {
+  if (request.status === "SUBMITTED" || request.status === "DRAFT") {
+    throw conflict(
+      "Approve the return first — restocking is decided once you know what's coming back.",
+    );
+  }
+  if (!["APPROVED", "IN_TRANSIT"].includes(request.status)) {
+    throw conflict(
+      "These items have already been received; Shopify records where each was restocked only once.",
+    );
+  }
+};
+
+/**
+ * "Restock all": every line back on the shelf at the store's default location.
+ *
+ * Clears the per-item locations as well as setting the flag, because that is
+ * what the button promises; a merchant who wants one item somewhere else
+ * picks it afterwards, per line. Off only clears the flag.
+ */
+export const setRestockAll = async (
+  merchantId: string,
+  id: string,
+  actorId: string,
+  restock: boolean,
+) => {
+  const request = await getReturn(merchantId, id);
+  assertRestockOpen(request);
+
+  await prisma.returnLineItem.updateMany({
+    where: { returnRequestId: id },
+    data: { restock, ...(restock ? { restockLocationId: null } : {}) },
+  });
+
+  await prisma.returnEvent.create({
+    data: {
+      returnRequestId: id,
+      actorId,
+      type: "ITEM_INSPECTED",
+      message: restock
+        ? "All items set to restock at the default location"
+        : "All items set not to restock",
+    },
+  });
+
+  return getReturn(merchantId, id);
+};
+
 export const inspectLineItem = async (
   merchantId: string,
   id: string,
@@ -331,6 +389,8 @@ export const inspectLineItem = async (
   input: {
     acceptedQuantity?: number | null;
     restock?: boolean;
+    /** A Shopify Location GID; null means the store's default. */
+    restockLocationId?: string | null;
     rejectionNote?: string | null;
     keepItem?: boolean;
   },
@@ -340,6 +400,9 @@ export const inspectLineItem = async (
     throw conflict(
       "This return is closed, so its items can no longer be inspected.",
     );
+  }
+  if (input.restock !== undefined || input.restockLocationId !== undefined) {
+    assertRestockOpen(request);
   }
 
   const line = request.lineItems.find((li) => li.id === lineItemId);
@@ -362,6 +425,9 @@ export const inspectLineItem = async (
         ? { acceptedQuantity: input.acceptedQuantity }
         : {}),
       ...(input.restock !== undefined ? { restock: input.restock } : {}),
+      ...(input.restockLocationId !== undefined
+        ? { restockLocationId: input.restockLocationId }
+        : {}),
       ...(input.rejectionNote !== undefined
         ? { rejectionNote: input.rejectionNote }
         : {}),

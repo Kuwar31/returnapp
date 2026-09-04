@@ -8,13 +8,18 @@ import {
   RETURN_CLOSE,
   RETURN_CREATE,
   RETURN_PROCESS,
-  PRIMARY_LOCATION,
   RETURNABLE_FULFILLMENTS,
   REVERSE_FULFILLMENT_ORDER_DISPOSE,
   REVERSE_FULFILLMENT_ORDERS,
   SUGGESTED_FINANCIAL_OUTCOME,
   toShopifyReturnReason,
 } from "./returns.graphql.js";
+import {
+  fulfillmentLocations,
+  listLocationsIfConnected,
+  primaryLocationId,
+  type ShopLocation,
+} from "./locations.service.js";
 import { resolveExchangeMethod } from "../settings/merchant-settings.js";
 
 interface UserError {
@@ -424,24 +429,64 @@ export const createShopifyReturn = async (
   return created.id;
 };
 
-/** Resolves the location returned stock should go back to. */
-const resolveRestockLocation = async (
+/**
+ * Where each line goes back on the shelf.
+ *
+ * Most specific answer first: the location the merchant chose for that item,
+ * then the store's default, then — when the default is "wherever it shipped
+ * from" — the line's own fulfilment location, and the primary location as a
+ * last resort. A choice naming a location Shopify no longer lists falls
+ * through to the next answer rather than failing the receive, because the
+ * alternative is stock that never gets restocked at all.
+ */
+export const restockLocationsFor = async (
   merchantId: string,
-  preferred?: string,
-): Promise<string | undefined> => {
-  if (preferred) return preferred;
-  try {
-    const data = await queryShop<{
-      locations: {
-        nodes: Array<{ id: string; isActive: boolean; fulfillsOnlineOrders: boolean }>;
-      };
-    }>(merchantId, PRIMARY_LOCATION);
-    const active = data.locations.nodes.filter((l) => l.isActive);
-    return active.find((l) => l.fulfillsOnlineOrders)?.id ?? active[0]?.id;
-  } catch (error) {
-    logger.warn({ merchantId, error }, "Could not resolve a restock location");
-    return undefined;
+  request: {
+    order: { externalId: string | null };
+    lineItems: Array<{
+      id: string;
+      fulfillmentLineItemId: string | null;
+      restockLocationId: string | null;
+    }>;
+  },
+): Promise<{ byLine: Map<string, string>; names: Map<string, string> }> => {
+  const [merchant, locations] = await Promise.all([
+    prisma.merchant.findUniqueOrThrow({
+      where: { id: merchantId },
+      select: { restockLocationId: true },
+    }),
+    listLocationsIfConnected(merchantId).catch((error) => {
+      logger.warn({ merchantId, error }, "Could not list Shopify locations");
+      return [] as ShopLocation[];
+    }),
+  ]);
+  const names = new Map(locations.map((l) => [l.id, l.name]));
+  // With no list to check against, take a chosen id on trust: Shopify will
+  // say if it's wrong, and refusing here would restock nothing.
+  const valid = (id: string | null | undefined): string | undefined =>
+    id && (names.size === 0 || names.has(id)) ? id : undefined;
+  const storeDefault = valid(merchant.restockLocationId);
+
+  const needsOrigin =
+    !storeDefault && request.lineItems.some((l) => !valid(l.restockLocationId));
+  const origins =
+    needsOrigin && request.order.externalId
+      ? await fulfillmentLocations(merchantId, request.order.externalId)
+      : new Map<string, string>();
+  const primary = primaryLocationId(locations);
+
+  const byLine = new Map<string, string>();
+  for (const line of request.lineItems) {
+    const chosen =
+      valid(line.restockLocationId) ??
+      storeDefault ??
+      (line.fulfillmentLineItemId
+        ? valid(origins.get(line.fulfillmentLineItemId))
+        : undefined) ??
+      primary;
+    if (chosen) byLine.set(line.id, chosen);
   }
+  return { byLine, names };
 };
 
 /** Reads back the ReverseFulfillmentOrderLineItems for a Shopify return. */
@@ -489,22 +534,14 @@ const reverseLineItems = async (
 export const receiveShopifyReturn = async (
   merchantId: string,
   returnRequestId: string,
-  { locationId }: { locationId?: string } = {},
 ): Promise<void> => {
   const request = await prisma.returnRequest.findFirstOrThrow({
     where: { id: returnRequestId, merchantId },
-    include: { lineItems: true },
+    include: { lineItems: true, order: { select: { externalId: true } } },
   });
   if (!request.externalReturnId) return;
 
-  const restockLocationId = await resolveRestockLocation(merchantId, locationId);
-  if (!restockLocationId) {
-    throw new AppError(
-      409,
-      "NO_LOCATION",
-      "No active Shopify location to restock into.",
-    );
-  }
+  const locations = await restockLocationsFor(merchantId, request);
 
   const reverse = await reverseLineItems(merchantId, request.externalReturnId);
 
@@ -531,13 +568,23 @@ export const receiveShopifyReturn = async (
       const accepted = item.acceptedQuantity ?? item.quantity;
       if (accepted <= 0) return null;
 
+      const locationId = locations.byLine.get(item.id);
+      if (item.restock && !locationId) {
+        throw new AppError(
+          409,
+          "NO_LOCATION",
+          "No active Shopify location to restock into.",
+        );
+      }
+
       return {
+        lineItemId: item.id,
         reverseFulfillmentOrderLineItemId: line.id,
         quantity: Math.min(accepted, line.quantity),
         // An accepted item the merchant can't resell is still accepted — the
         // shopper is paid for it, it just doesn't go back on the shelf.
         dispositionType: item.restock ? "RESTOCKED" : "NOT_RESTOCKED",
-        locationId: restockLocationId,
+        ...(locationId ? { locationId } : {}),
       };
     })
     .filter((d): d is NonNullable<typeof d> => d !== null);
@@ -546,18 +593,50 @@ export const receiveShopifyReturn = async (
 
   const data = await queryShop<{
     reverseFulfillmentOrderDispose: { userErrors: UserError[] };
-  }>(merchantId, REVERSE_FULFILLMENT_ORDER_DISPOSE, { dispositionInputs });
+  }>(merchantId, REVERSE_FULFILLMENT_ORDER_DISPOSE, {
+    // Our own line id is for the write-back below; Shopify doesn't want it.
+    dispositionInputs: dispositionInputs.map(({ lineItemId: _, ...d }) => d),
+  });
 
   throwOnUserErrors(
     data.reverseFulfillmentOrderDispose.userErrors,
     "item disposition",
   );
 
+  /**
+   * Record where each unit actually went. The merchant may have left a line
+   * on "default", and the default may have been "where it shipped from" —
+   * either way the answer is now a specific location, and the return page
+   * should be able to say which.
+   */
+  const restocked = dispositionInputs.filter(
+    (d) => d.dispositionType === "RESTOCKED" && d.locationId,
+  );
+  await prisma.$transaction(
+    restocked.map((d) =>
+      prisma.returnLineItem.update({
+        where: { id: d.lineItemId },
+        data: { restockLocationId: d.locationId },
+      }),
+    ),
+  );
+
+  const restockedUnits = restocked.reduce((n, d) => n + d.quantity, 0);
+  const heldBack = dispositionInputs
+    .filter((d) => d.dispositionType !== "RESTOCKED")
+    .reduce((n, d) => n + d.quantity, 0);
+  const where = [...new Set(restocked.map((d) => d.locationId!))]
+    .map((id) => locations.names.get(id) ?? "a Shopify location")
+    .join(", ");
   await prisma.returnEvent.create({
     data: {
       returnRequestId: request.id,
       type: "ITEM_INSPECTED",
-      message: `Restocked ${dispositionInputs.reduce((n, d) => n + d.quantity, 0)} item(s) in Shopify`,
+      message:
+        (restockedUnits > 0
+          ? `Restocked ${restockedUnits} item(s) at ${where}`
+          : "Items received in Shopify") +
+        (heldBack > 0 ? `; ${heldBack} not restocked` : ""),
     },
   });
 

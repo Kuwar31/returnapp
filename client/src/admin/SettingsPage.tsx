@@ -3,6 +3,7 @@ import { useBlocker, useLocation } from "react-router";
 import type {
   DisplayCurrency,
   ExchangeMethod,
+  ShopLocations,
   StoreSettings,
 } from "../lib/types";
 import { api } from "../lib/api";
@@ -126,6 +127,8 @@ export default function SettingsPage() {
   /** The two tag lists, likewise. */
   const [finalSaleText, setFinalSaleText] = useState("");
   const [exchangeOnlyText, setExchangeOnlyText] = useState("");
+  /** The store's Shopify locations, for the default restock menu. */
+  const [shopLocations, setShopLocations] = useState<ShopLocations | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -151,6 +154,11 @@ export default function SettingsPage() {
           s.exchangeBonusValue === null ? "" : String(s.exchangeBonusValue),
         );
       })
+      .catch(() => undefined);
+
+    api
+      .get<ShopLocations>("/admin/settings/locations", { auth: "admin" })
+      .then((l) => active && setShopLocations(l))
       .catch(() => undefined);
 
     return () => {
@@ -374,6 +382,40 @@ export default function SettingsPage() {
               <p className="muted" style={{ fontSize: 13 }}>
                 No order has a second currency yet, so both options will look
                 the same until one does.
+              </p>
+            )}
+          </div>
+
+          <div className="panel">
+            <h2>Inventory</h2>
+            <div className="settings-row">
+              <div>
+                <div className="settings-row__label">
+                  Default restocking location
+                </div>
+                <div className="settings-row__hint">
+                  Where "Restock all" puts returned items, and where each item
+                  goes unless you pick another location on the return. Shopify
+                  only restocks products that track quantity.
+                </div>
+              </div>
+              <select
+                value={store.restockLocationId ?? ""}
+                onChange={(e) =>
+                  editStore("restockLocationId", e.target.value || null)
+                }
+              >
+                <option value="">Original fulfillment location</option>
+                {(shopLocations?.locations ?? []).map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {shopLocations && shopLocations.locations.length === 0 && (
+              <p className="muted" style={{ fontSize: 13 }}>
+                Connect your Shopify store to choose a specific location.
               </p>
             )}
           </div>

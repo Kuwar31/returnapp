@@ -1531,7 +1531,7 @@ table.data tbody tr:hover {
    is what lets a merchant run down the list ticking without re-reading rows. */
 .ritem__head {
   display: grid;
-  grid-template-columns: 64px minmax(0, 1fr) auto auto 24px;
+  grid-template-columns: 64px minmax(0, 1fr) auto auto auto;
   gap: 16px;
   align-items: start;
 }
@@ -1552,14 +1552,66 @@ table.data tbody tr:hover {
   white-space: nowrap;
 }
 
+/* The restock decision: a tick, and beneath it where the stock goes. Stacked
+   so the column stays narrow — the menu is the wider of the two, and the
+   product description needs the room more than this does. */
+.ritem__restock-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
 .ritem__restock {
-  gap: 0;
-  font-size: 0;
+  gap: 6px;
+  font-size: 13px;
 }
 
 .ritem__restock input {
   width: 17px;
   height: 17px;
+}
+
+.ritem__location {
+  max-width: 190px;
+  padding: 5px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font: inherit;
+  font-size: 13px;
+}
+
+.ritem__location:disabled {
+  color: var(--text-muted);
+  background: var(--surface-muted, #f6f6f7);
+}
+
+/* After receipt: what happened, not what to do. */
+.ritem__restocked {
+  font-size: 13px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* On a narrow screen the menu would squeeze the product name to nothing, so
+   the restock decision drops onto its own row beneath the description. */
+@media (max-width: 900px) {
+  .ritem__head {
+    grid-template-columns: 64px minmax(0, 1fr) auto auto;
+  }
+
+  .ritem__restock-cell,
+  .ritem__restocked {
+    grid-column: 2 / -1;
+    justify-self: start;
+  }
+
+  .ritem__restock-cell {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+  }
 }
 
 .ritem__actions {

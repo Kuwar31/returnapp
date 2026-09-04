@@ -319,11 +319,35 @@ returnsRouter.post(
   }),
 );
 
+const LOCATION_GID = /^gid:\/\/shopify\/Location\/\d+$/;
+
+/**
+ * "Restock all" in one call rather than one per line, so a return with a
+ * dozen items doesn't become a dozen requests racing to recompute the same
+ * totals.
+ */
+returnsRouter.post(
+  "/:id/restock-all",
+  requireRole("OWNER", "ADMIN"),
+  validate(z.object({ restock: z.boolean() })),
+  asyncHandler(async (req, res) => {
+    const updated = await returnsService.setRestockAll(
+      req.admin!.merchantId,
+      req.params.id,
+      req.admin!.sub,
+      req.body.restock,
+    );
+    res.json(serializeReturn(updated, await resolveDisplayMode(req.admin!.merchantId)));
+  }),
+);
+
 const inspectSchema = z
   .object({
     /** Null clears the decision and puts the line back to uninspected. */
     acceptedQuantity: z.number().int().min(0).max(999).nullable().optional(),
     restock: z.boolean().optional(),
+    /** A Shopify Location id; null means the store's default location. */
+    restockLocationId: z.string().regex(LOCATION_GID).nullable().optional(),
     rejectionNote: z.string().trim().max(500).nullable().optional(),
     /** "Change to keep" — credit the shopper without asking for the item back. */
     keepItem: z.boolean().optional(),

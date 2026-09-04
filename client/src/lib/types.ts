@@ -299,6 +299,8 @@ export interface ReturnDetail {
     /** Null until inspected. Drives the refund and the restock once set. */
     acceptedQuantity: number | null;
     restock: boolean;
+    /** Where it goes back on the shelf; null means the store's default. */
+    restockLocationId: string | null;
     rejectionNote: string | null;
     /** Credited without coming back — "change to keep". */
     keepItem: boolean;
@@ -537,6 +539,24 @@ export interface StoreSettings {
   /** What PRESENTMENT resolves to, from the most recent order that has one. */
   presentmentCurrency: string | null;
   exchangeMethod: ExchangeMethod;
+  /**
+   * Where returned stock goes back on the shelf by default. A Shopify
+   * Location id; null means wherever each order was fulfilled from.
+   */
+  restockLocationId: string | null;
+}
+
+/** A place the store keeps stock, as Shopify lists it. */
+export interface ShopLocation {
+  id: string;
+  name: string;
+  fulfillsOnlineOrders: boolean;
+}
+
+export interface ShopLocations {
+  locations: ShopLocation[];
+  /** The store's default restock location; null means "where it shipped from". */
+  defaultLocationId: string | null;
 }
 
 /** Whether Shopify settled a native exchange correctly, and what can be done. */

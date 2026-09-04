@@ -17,6 +17,7 @@ import { SHOPIFY_RETURN_REASONS } from "../shopify/returns.graphql.js";
 import * as reasonsService from "./reasons.service.js";
 import * as exchangeRules from "./exchange-rules.service.js";
 import { browseCollections } from "../shopify/catalogue.service.js";
+import { listLocationsIfConnected } from "../shopify/locations.service.js";
 import { phoneAccessProblem } from "../shopify/order.sync.js";
 import { normalizeCriteria } from "../portal/lookup-match.js";
 import { clearMerchantSettingsCache } from "./merchant-settings.js";
@@ -153,6 +154,7 @@ settingsRouter.get(
         shopNowBonusType: true,
         exchangeBonusType: true,
         exchangeBonusValue: true,
+        restockLocationId: true,
       },
     });
 
@@ -217,6 +219,12 @@ settingsRouter.patch(
         exchangeBonusType: z.enum(["PERCENT", "FIXED"]).optional(),
         /** Null clears it, which falls back to the policy's percentage. */
         exchangeBonusValue: z.number().min(0).max(100000).nullable().optional(),
+        /** Null means the location each order was fulfilled from. */
+        restockLocationId: z
+          .string()
+          .regex(/^gid:\/\/shopify\/Location\/\d+$/)
+          .nullable()
+          .optional(),
       })
       .refine((v) => Object.keys(v).length > 0, {
         message: "Nothing to update.",
@@ -253,6 +261,9 @@ settingsRouter.patch(
         ...(req.body.exchangeBonusValue === undefined
           ? {}
           : { exchangeBonusValue: req.body.exchangeBonusValue }),
+        ...(req.body.restockLocationId === undefined
+          ? {}
+          : { restockLocationId: req.body.restockLocationId }),
       },
       select: {
         currency: true,
@@ -499,6 +510,27 @@ settingsRouter.put(
 // ---------------------------------------------------------------------------
 // Customer notifications — which emails a store sends, and who they're from
 // ---------------------------------------------------------------------------
+
+/**
+ * The store's Shopify locations, for the restock menus, with the store's
+ * default alongside so a return page can label "Default" with a name.
+ * An unconnected store gets an empty list rather than an error: the menus
+ * then offer only the default, which is all they can honestly promise.
+ */
+settingsRouter.get(
+  "/locations",
+  asyncHandler(async (req, res) => {
+    const merchantId = req.admin!.merchantId;
+    const [locations, merchant] = await Promise.all([
+      listLocationsIfConnected(merchantId),
+      prisma.merchant.findUniqueOrThrow({
+        where: { id: merchantId },
+        select: { restockLocationId: true },
+      }),
+    ]);
+    res.json({ locations, defaultLocationId: merchant.restockLocationId });
+  }),
+);
 
 /**
  * The catalogue and the store's answers in one payload, plus the sender.

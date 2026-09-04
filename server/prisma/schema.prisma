@@ -85,6 +85,13 @@ model Merchant {
    * as Reply-To instead, so a customer hitting reply still reaches them.
    */
   senderName                String?
+  /**
+   * Where returned stock goes back on the shelf when nobody has chosen a
+   * location for a particular item — "Restock all" and the default in each
+   * item's menu. A Shopify Location GID. Null means the location each order
+   * was fulfilled from, which is right for most stores and needs no setup.
+   */
+  restockLocationId         String?
 
   timezone  String         @default("UTC")
   status    MerchantStatus @default(ACTIVE)
@@ -867,6 +874,13 @@ model ReturnLineItem {
   /// Shopify's RESTOCKED / NOT_RESTOCKED disposition, which is one-shot per
   /// unit and can't be changed afterwards.
   restock          Boolean @default(true)
+  /**
+   * The Shopify location this line restocks to. Null means the store's
+   * default (see Merchant.restockLocationId). Written back with the location
+   * actually used once the items are disposed, so the record says where the
+   * stock went rather than where someone meant it to go.
+   */
+  restockLocationId String?
   /// Shown to nobody but the merchant; explains a partial or full rejection.
   rejectionNote    String?
   /**

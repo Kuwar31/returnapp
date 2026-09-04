@@ -8,6 +8,8 @@ import type {
   ExchangeDraft,
   RefundPreview,
   ReturnDetail,
+  ShopLocation,
+  ShopLocations,
 } from "../lib/types";
 import { ErrorAlert, Loading } from "../components/Feedback";
 import { StatusBadge } from "../components/StatusBadge";
@@ -112,8 +114,88 @@ type LineItem = ReturnDetail["lineItems"][number];
 interface InspectionPatch {
   acceptedQuantity?: number | null;
   restock?: boolean;
+  /** A Shopify Location id; null means the store's default. */
+  restockLocationId?: string | null;
   rejectionNote?: string | null;
   keepItem?: boolean;
+}
+
+/**
+ * What the restock column can do, by where the return is in its life.
+ *
+ * Hidden until approval, because nothing is coming back yet; editable until
+ * the items are received, which is when Shopify records where each one went;
+ * read-only after that, showing what happened.
+ */
+type RestockPhase = "hidden" | "editable" | "readonly";
+
+interface RestockControls {
+  phase: RestockPhase;
+  locations: ShopLocation[];
+  /** What the "default" option is called — named after the store's setting. */
+  defaultLabel: string;
+}
+
+function RestockCell({
+  item,
+  restock,
+  disabled,
+  onChange,
+}: {
+  item: LineItem;
+  restock: RestockControls;
+  disabled: boolean;
+  onChange: (patch: InspectionPatch) => void;
+}) {
+  const nameOf = (id: string | null) =>
+    restock.locations.find((l) => l.id === id)?.name;
+
+  if (restock.phase === "readonly") {
+    const went =
+      item.restock &&
+      !item.keepItem &&
+      (item.acceptedQuantity ?? item.quantity) > 0;
+    const at = nameOf(item.restockLocationId);
+    return (
+      <div className="ritem__restocked">
+        {went ? `Restocked${at ? ` · ${at}` : ""}` : "Not restocked"}
+      </div>
+    );
+  }
+
+  return (
+    <div className="ritem__restock-cell">
+      <label className="ritem__restock" title="Put back into inventory">
+        <input
+          type="checkbox"
+          checked={item.restock}
+          disabled={disabled}
+          onChange={(e) => onChange({ restock: e.target.checked })}
+        />
+        Restock
+      </label>
+      {/*
+        Picking a location is also saying "yes, restock it": nobody chooses
+        a warehouse for something they mean to write off.
+      */}
+      <select
+        className="ritem__location"
+        aria-label="Restock location"
+        value={item.restockLocationId ?? ""}
+        disabled={disabled || !item.restock}
+        onChange={(e) =>
+          onChange({ restock: true, restockLocationId: e.target.value || null })
+        }
+      >
+        <option value="">{restock.defaultLabel}</option>
+        {restock.locations.map((l) => (
+          <option key={l.id} value={l.id}>
+            {l.name}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
 }
 
 /**
@@ -128,11 +210,13 @@ function InspectionRow({
   item,
   currency,
   disabled,
+  restock,
   onChange,
 }: {
   item: LineItem;
   currency: string;
   disabled: boolean;
+  restock: RestockControls;
   onChange: (patch: InspectionPatch) => void;
 }) {
   const [note, setNote] = useState(item.rejectionNote ?? "");
@@ -181,15 +265,14 @@ function InspectionRow({
         <div className="ritem__right">
           <span className={`badge badge--${state.tone}`}>{state.label}</span>
           <span className="ritem__price">{money(item.lineTotal, currency)}</span>
-          <label className="ritem__restock" title="Put back into inventory">
-            <input
-              type="checkbox"
-              checked={item.restock}
+          {restock.phase !== "hidden" && (
+            <RestockCell
+              item={item}
+              restock={restock}
               disabled={disabled || rejected || item.keepItem}
-              onChange={(e) => onChange({ restock: e.target.checked })}
+              onChange={onChange}
             />
-            Restock
-          </label>
+          )}
         </div>
       </div>
 
@@ -300,6 +383,23 @@ export default function ReturnDetailPage() {
       active = false;
     };
   }, [id]);
+
+  /**
+   * The store's locations, for the restock menus. Fetched once per visit;
+   * a store that isn't connected gets an empty list, and the menus then
+   * offer only the default.
+   */
+  const [shopLocations, setShopLocations] = useState<ShopLocations | null>(null);
+  useEffect(() => {
+    let active = true;
+    api
+      .get<ShopLocations>("/admin/settings/locations", { auth: "admin" })
+      .then((data) => active && setShopLocations(data))
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Ask Shopify what it would actually pay out, so the button can show the
   // real figure rather than our estimate. Non-critical: failure just means the
@@ -417,16 +517,6 @@ export default function ReturnDetailPage() {
     }
   };
 
-  /** Loop's "Restock all" — one call per line, applied in sequence. */
-  const restockAll = async (restock: boolean) => {
-    if (!detail) return;
-    for (const line of detail.lineItems) {
-      if (line.restock !== restock) {
-        await inspect(line.id, { restock });
-      }
-    }
-  };
-
   /**
    * Restocks and refunds in one step. Confirmed first because it moves real
    * money and Shopify will not reverse it automatically.
@@ -480,6 +570,24 @@ export default function ReturnDetailPage() {
     detail.status,
   );
   const allRestocked = detail.lineItems.every((li) => li.restock);
+
+  const restockPhase: RestockPhase = ["APPROVED", "IN_TRANSIT"].includes(
+    detail.status,
+  )
+    ? "editable"
+    : ["RECEIVED", "RESOLVED"].includes(detail.status)
+      ? "readonly"
+      : "hidden";
+  const defaultLocationName = shopLocations?.locations.find(
+    (l) => l.id === shopLocations.defaultLocationId,
+  )?.name;
+  const restockControls: RestockControls = {
+    phase: restockPhase,
+    locations: shopLocations?.locations ?? [],
+    defaultLabel: defaultLocationName
+      ? `Default · ${defaultLocationName}`
+      : "Default · where it shipped from",
+  };
 
   // Units the merchant has actually signed off. An uninspected line counts at
   // what the shopper asked for, matching what the server will pay.
@@ -654,21 +762,32 @@ export default function ReturnDetailPage() {
                 />
                 Return credits
               </h2>
-              <label className="restock-all">
-                <input
-                  type="checkbox"
-                  checked={allRestocked}
-                  disabled={acting || closed}
-                  onChange={(e) => void restockAll(e.target.checked)}
-                />
-                Restock all
-              </label>
+              {restockPhase === "editable" && (
+                <label className="restock-all">
+                  <input
+                    type="checkbox"
+                    checked={allRestocked}
+                    disabled={acting}
+                    onChange={(e) =>
+                      void act("restock-all", { restock: e.target.checked })
+                    }
+                  />
+                  Restock all
+                </label>
+              )}
             </div>
+            {restockPhase === "editable" && (
+              <p className="settings-row__hint" style={{ margin: "-6px 0 12px" }}>
+                Ticked items go back into Shopify inventory when you mark the
+                return received — all of them at {defaultLocationName ?? "the location they shipped from"}, or pick a location per item.
+              </p>
+            )}
 
             {detail.lineItems.map((item) => (
               <InspectionRow
                 key={item.id}
                 item={item}
+                restock={restockControls}
                 currency={detail.currency}
                 disabled={acting || closed}
                 onChange={(patch) => void inspect(item.id, patch)}

@@ -197,21 +197,6 @@ export const REVERSE_FULFILLMENT_ORDERS = `#graphql
 `;
 
 /**
- * Restocking has to name the location the stock goes back to; Shopify won't
- * infer one. This picks the shop's default fulfillment location.
- */
-export const PRIMARY_LOCATION = `#graphql
-  query PrimaryLocation {
-    shop {
-      fulfillmentServices { location { id name } serviceName }
-    }
-    locations(first: 5, includeInactive: false) {
-      nodes { id name isActive fulfillsOnlineOrders }
-    }
-  }
-`;
-
-/**
  * Marks returned items as physically received and decides where they go.
  *
  * This is a separate step from the refund on purpose: until items are disposed,

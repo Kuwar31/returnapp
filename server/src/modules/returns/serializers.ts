@@ -168,6 +168,8 @@ export const serializeReturn = (
     /** Null until inspected; drives the refund and the restock once set. */
     acceptedQuantity: item.acceptedQuantity,
     restock: item.restock,
+    /** Null means the store's default; a specific location once received. */
+    restockLocationId: item.restockLocationId,
     rejectionNote: item.rejectionNote,
     keepItem: item.keepItem,
   })),
