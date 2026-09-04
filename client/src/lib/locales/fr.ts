@@ -206,4 +206,5 @@ export const fr: Dict = {
   "ineligible.returnOpen": "Un retour est déjà en cours pour cet article.",
   "ineligible.alreadyReturned": "Cet article a déjà été retourné.",
   "ineligible.exchangeOnlyUnavailable": "Cet article ne peut qu'être échangé, et aucune option d'échange n'est disponible.",
+  "ineligible.exchangeLimit": "Cet article a déjà été échangé le nombre de fois autorisé par cette boutique.",
 };

@@ -45,6 +45,9 @@ const serializePolicy = (policy: {
   tagRulesEnabled: boolean;
   finalSaleTags: string[];
   exchangeOnlyTags: string[];
+  allowExchangeOfExchange: boolean;
+  sequentialExchangeLimit: number | null;
+  matchStoreAvailability: boolean;
 }) => ({
   ...policy,
   bonusCreditPercent: Number(policy.bonusCreditPercent),
@@ -79,6 +82,10 @@ const policySchema = z.object({
   restockingFeePercent: z.number().min(0).max(100),
   autoApprove: z.boolean(),
   autoApproveUnder: z.number().min(0).nullable(),
+  allowExchangeOfExchange: z.boolean(),
+  /** Null is "no limit"; a number caps how far the chain runs. */
+  sequentialExchangeLimit: z.number().int().min(1).max(10).nullable(),
+  matchStoreAvailability: z.boolean(),
   tagRulesEnabled: z.boolean(),
   /**
    * Tags are trimmed and de-duplicated but not lowercased on the way in: the

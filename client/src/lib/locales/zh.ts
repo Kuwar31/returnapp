@@ -204,4 +204,5 @@ export const zh: Dict = {
   "ineligible.returnOpen": "该商品已有一笔正在处理的退货。",
   "ineligible.alreadyReturned": "该商品已退货。",
   "ineligible.exchangeOnlyUnavailable": "该商品仅支持换货，但目前没有可用的换货方式。",
+  "ineligible.exchangeLimit": "该商品的换货次数已达到本店允许的上限。",
 };

@@ -206,4 +206,5 @@ export const da: Dict = {
   "ineligible.returnOpen": "Der er allerede en igangværende returnering for denne vare.",
   "ineligible.alreadyReturned": "Denne vare er allerede returneret.",
   "ineligible.exchangeOnlyUnavailable": "Denne vare kan kun byttes, og der er ingen byttemuligheder tilgængelige.",
+  "ineligible.exchangeLimit": "Denne vare er allerede byttet så mange gange, som butikken tillader.",
 };

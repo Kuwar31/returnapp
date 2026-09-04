@@ -206,4 +206,5 @@ export const nl: Dict = {
   "ineligible.returnOpen": "Er loopt al een retour voor dit artikel.",
   "ineligible.alreadyReturned": "Dit artikel is al geretourneerd.",
   "ineligible.exchangeOnlyUnavailable": "Dit artikel kan alleen worden geruild, en er zijn geen ruilopties beschikbaar.",
+  "ineligible.exchangeLimit": "Dit artikel is al zo vaak geruild als deze winkel toestaat.",
 };

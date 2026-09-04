@@ -206,4 +206,5 @@ export const sv: Dict = {
   "ineligible.returnOpen": "Det finns redan en pågående retur för den här varan.",
   "ineligible.alreadyReturned": "Den här varan har redan returnerats.",
   "ineligible.exchangeOnlyUnavailable": "Den här varan kan bara bytas, och inga bytesalternativ är tillgängliga.",
+  "ineligible.exchangeLimit": "Den här varan har redan bytts så många gånger som butiken tillåter.",
 };

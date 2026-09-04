@@ -206,4 +206,5 @@ export const it: Dict = {
   "ineligible.returnOpen": "Per questo articolo è già aperto un reso.",
   "ineligible.alreadyReturned": "Questo articolo è già stato restituito.",
   "ineligible.exchangeOnlyUnavailable": "Questo articolo può solo essere cambiato e non ci sono opzioni di cambio disponibili.",
+  "ineligible.exchangeLimit": "Questo articolo è già stato cambiato tutte le volte consentite da questo negozio.",
 };

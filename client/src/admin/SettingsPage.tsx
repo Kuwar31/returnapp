@@ -21,6 +21,9 @@ interface Policy {
   tagRulesEnabled: boolean;
   finalSaleTags: string[];
   exchangeOnlyTags: string[];
+  allowExchangeOfExchange: boolean;
+  sequentialExchangeLimit: number | null;
+  matchStoreAvailability: boolean;
   allowRefund: boolean;
   allowStoreCredit: boolean;
   allowGiftCard: boolean;
@@ -491,6 +494,106 @@ export default function SettingsPage() {
                   <option value="FIXED">{store.currency}</option>
                 </select>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {policy && section === "exchanges" && (
+        <div className="settings-form">
+          <div className="panel">
+            <h2>Exchanges of exchanges</h2>
+            <p className="settings-row__hint" style={{ marginBottom: 14 }}>
+              Whether something a customer received as an exchange can be
+              exchanged again.
+            </p>
+
+            <div className="settings-row">
+              <div>
+                <div className="settings-row__label">
+                  Allow exchanging an exchange
+                </div>
+                <div className="settings-row__hint">
+                  Off, a replacement is closed to further returns — what this
+                  app has always done. On, it can come back like anything else.
+                </div>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={policy.allowExchangeOfExchange}
+                aria-label="Allow exchanging an exchange"
+                className={`switch${policy.allowExchangeOfExchange ? " is-on" : ""}`}
+                onClick={() =>
+                  update(
+                    "allowExchangeOfExchange",
+                    !policy.allowExchangeOfExchange,
+                  )
+                }
+              >
+                <span className="switch__knob" />
+              </button>
+            </div>
+
+            {policy.allowExchangeOfExchange && (
+              <div className="settings-row">
+                <div>
+                  <div className="settings-row__label">
+                    Limit sequential exchanges
+                  </div>
+                  <div className="settings-row__hint">
+                    How many times in a row an item may be swapped. 1 means a
+                    customer can exchange their exchange once, and not again.
+                    Leave empty for no limit. Past the limit the item can still
+                    be refunded or credited — only the swap stops being offered.
+                  </div>
+                </div>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={policy.sequentialExchangeLimit ?? ""}
+                  placeholder="No limit"
+                  onChange={(e) =>
+                    update(
+                      "sequentialExchangeLimit",
+                      e.target.value === "" ? null : Number(e.target.value),
+                    )
+                  }
+                />
+              </div>
+            )}
+          </div>
+
+          <div className="panel">
+            <h2>Product availability</h2>
+            <div className="settings-row">
+              <div>
+                <div className="settings-row__label">
+                  Match your online store
+                </div>
+                <div className="settings-row__hint">
+                  Only offer products published to the online store sales
+                  channel when a customer browses for an exchange or shops with
+                  their credit. Turning this off also offers products you've
+                  taken off the storefront.
+                </div>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={policy.matchStoreAvailability}
+                aria-label="Match your online store"
+                className={`switch${policy.matchStoreAvailability ? " is-on" : ""}`}
+                onClick={() =>
+                  update(
+                    "matchStoreAvailability",
+                    !policy.matchStoreAvailability,
+                  )
+                }
+              >
+                <span className="switch__knob" />
+              </button>
             </div>
           </div>
         </div>

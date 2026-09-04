@@ -262,4 +262,5 @@ export const en = {
   "ineligible.exchangeOnlyUnavailable":
     "This item can only be exchanged, and no exchange options are available.",
   "shop.alreadyInCart": "{count} already in your cart",
+  "ineligible.exchangeLimit": "This item has already been exchanged as many times as this store allows.",
 } as const;

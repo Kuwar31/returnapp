@@ -210,4 +210,5 @@ export const pl: Dict = {
   "ineligible.returnOpen": "Dla tego produktu trwa już zwrot.",
   "ineligible.alreadyReturned": "Ten produkt został już zwrócony.",
   "ineligible.exchangeOnlyUnavailable": "Ten produkt można tylko wymienić, a żadne opcje wymiany nie są dostępne.",
+  "ineligible.exchangeLimit": "Ten produkt był już wymieniany tyle razy, na ile pozwala ten sklep.",
 };

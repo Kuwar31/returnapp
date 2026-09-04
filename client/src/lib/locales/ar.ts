@@ -213,4 +213,5 @@ export const ar: Dict = {
   "ineligible.returnOpen": "يوجد بالفعل طلب إرجاع قيد التنفيذ لهذا المنتج.",
   "ineligible.alreadyReturned": "تم إرجاع هذا المنتج بالفعل.",
   "ineligible.exchangeOnlyUnavailable": "هذا المنتج قابل للاستبدال فقط، ولا تتوفر أي خيارات استبدال.",
+  "ineligible.exchangeLimit": "تم استبدال هذا المنتج بالفعل بعدد المرات التي يسمح بها هذا المتجر.",
 };

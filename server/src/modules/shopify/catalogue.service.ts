@@ -1,4 +1,5 @@
 import { badRequest } from "../../lib/errors.js";
+import { storeAvailabilityRequired } from "../settings/merchant-settings.js";
 import { logger } from "../../lib/logger.js";
 import { queryShop } from "./shopify.client.js";
 import {
@@ -172,8 +173,18 @@ export const browseProducts = async (
     limit = 24,
   }: { search?: string; cursor?: string; collectionId?: string; limit?: number },
 ): Promise<{ products: ExchangeProduct[]; nextCursor: string | null }> => {
-  // Only offer what a shopper could actually buy right now.
-  const query = ["status:active", "published_status:published"]
+  /**
+   * Only what a shopper could actually buy right now.
+   *
+   * `published_status:published` is the online store channel specifically, and
+   * it is a merchant setting rather than a constant: a store that keeps some
+   * products off the storefront but still wants them offered as exchanges can
+   * turn it off. On by default, because offering something the storefront
+   * won't sell is the surprising behaviour.
+   */
+  const matchAvailability = await storeAvailabilityRequired(merchantId);
+  const query = ["status:active"]
+    .concat(matchAvailability ? ["published_status:published"] : [])
     .concat(search ? [`title:*${search.replace(/[*"\\]/g, "")}*`] : [])
     // Shopify's product search takes the numeric id, not the GID.
     .concat(

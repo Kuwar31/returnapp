@@ -206,4 +206,5 @@ export const pt: Dict = {
   "ineligible.returnOpen": "Já existe uma devolução em curso para este artigo.",
   "ineligible.alreadyReturned": "Este artigo já foi devolvido.",
   "ineligible.exchangeOnlyUnavailable": "Este artigo só pode ser trocado e não há opções de troca disponíveis.",
+  "ineligible.exchangeLimit": "Este artigo já foi trocado tantas vezes quantas esta loja permite.",
 };

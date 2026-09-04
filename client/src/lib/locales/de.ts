@@ -206,4 +206,5 @@ export const de: Dict = {
   "ineligible.returnOpen": "Für diesen Artikel läuft bereits eine Rückgabe.",
   "ineligible.alreadyReturned": "Dieser Artikel wurde bereits zurückgegeben.",
   "ineligible.exchangeOnlyUnavailable": "Dieser Artikel kann nur umgetauscht werden, und es sind keine Umtauschoptionen verfügbar.",
+  "ineligible.exchangeLimit": "Dieser Artikel wurde bereits so oft umgetauscht, wie dieser Shop erlaubt.",
 };

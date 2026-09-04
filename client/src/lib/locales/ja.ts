@@ -204,4 +204,5 @@ export const ja: Dict = {
   "ineligible.returnOpen": "この商品にはすでに返品手続きがあります。",
   "ineligible.alreadyReturned": "この商品はすでに返品済みです。",
   "ineligible.exchangeOnlyUnavailable": "この商品は交換のみ対応ですが、現在ご利用いただける交換方法がありません。",
+  "ineligible.exchangeLimit": "この商品は、当店で認められている回数まで交換済みです。",
 };

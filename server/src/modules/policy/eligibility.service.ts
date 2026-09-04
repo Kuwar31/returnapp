@@ -5,6 +5,7 @@ import type {
   ReturnPolicy,
 } from "@prisma/client";
 import { toDecimal } from "../../lib/money.js";
+import { canExchangeAgain } from "../returns/exchange-chain.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -132,6 +133,11 @@ const hasAnyTag = (line: OrderLineItem, tags: string[]): boolean => {
  * excludes is cash leaving the business, which is the reason a merchant tags an
  * item this way in the first place.
  */
+const EXCHANGE_RESOLUTIONS: ResolutionType[] = [
+  "EXCHANGE",
+  "INSTANT_EXCHANGE",
+];
+
 const KEEPS_MONEY_IN_STORE: ResolutionType[] = [
   "EXCHANGE",
   "INSTANT_EXCHANGE",
@@ -160,6 +166,15 @@ export const evaluateOrder = (
   order: Order & { lineItems: OrderLineItem[] },
   policy: ReturnPolicy,
   now: Date = new Date(),
+  /**
+   * How many exchanges this order is from an original purchase, walked from
+   * our own records before this is called. Zero for something bought outright.
+   *
+   * Passed in rather than looked up, because this function is pure — which is
+   * what lets the admin, the portal and the tests all reason about the same
+   * decision without a database between them.
+   */
+  exchangeGeneration = 0,
   /**
    * What Shopify says is still returnable, keyed by line-item external id.
    *
@@ -218,11 +233,18 @@ export const evaluateOrder = (
       line.externalId && exchangeReplacements?.has(line.externalId),
     );
 
-    const returnable = isExchangeReplacement
-      ? 0
-      : fromShopify === undefined
-        ? ours
-        : Math.min(ours, fromShopify);
+    /*
+      A replacement is zeroed out only while the chain is closed. With
+      exchanges-of-exchanges switched on it is an ordinary line again, and
+      leaving the count at zero would have reported it as "already returned" —
+      a true-sounding sentence about the wrong thing.
+    */
+    const returnable =
+      isExchangeReplacement && !policy.allowExchangeOfExchange
+        ? 0
+        : fromShopify === undefined
+          ? ours
+          : Math.min(ours, fromShopify);
 
     /**
      * The merchant's tag rules, read from the snapshot the order synced with.
@@ -235,10 +257,25 @@ export const evaluateOrder = (
     const finalSaleByTag = tagRules && hasAnyTag(line, policy.finalSaleTags);
     const exchangeOnly = tagRules && hasAnyTag(line, policy.exchangeOnlyTags);
 
+    /**
+     * How many exchanges deep this particular line is.
+     *
+     * The order's own depth, plus one where Shopify says the line itself is a
+     * replacement — a native exchange puts the new item on the original order,
+     * so the order is still generation zero while that line is not.
+     */
+    const lineGeneration = exchangeGeneration + (isExchangeReplacement ? 1 : 0);
+    const exchangeable = canExchangeAgain(lineGeneration, policy);
+
     let ineligibleReason: string | null = null;
     let ineligibleCode: string | null = null;
     let ineligibleVars: Record<string, string | number> | null = null;
-    if (isExchangeReplacement) {
+    if (isExchangeReplacement && !policy.allowExchangeOfExchange) {
+      /*
+        Closed outright, which is what this app has always done with a
+        replacement. Opening the chain is what the setting is for; until a
+        merchant does, nothing about this changes.
+      */
       ineligibleReason =
         "This item is a replacement from an earlier exchange, so it can't be returned again.";
       ineligibleCode = "ineligible.replacement";
@@ -288,23 +325,38 @@ export const evaluateOrder = (
      * refund. Intersected rather than replaced: a store that doesn't offer gift
      * cards shouldn't start offering them because a product was tagged.
      */
-    const lineResolutions = exchangeOnly
+    let lineResolutions = exchangeOnly
       ? policyResolutions.filter((r) => KEEPS_MONEY_IN_STORE.includes(r))
       : policyResolutions;
+
+    /**
+     * Out of exchanges, but not out of options.
+     *
+     * Once the chain reaches its limit the swap is what stops being offered —
+     * the item can still be refunded or credited. Closing it entirely would
+     * strand a shopper holding something they never chose to buy twice.
+     */
+    if (!exchangeable) {
+      lineResolutions = lineResolutions.filter(
+        (r) => !EXCHANGE_RESOLUTIONS.includes(r),
+      );
+    }
 
     /**
      * Tagged exchange-only, but the store offers nothing that qualifies — no
      * exchanges, no credit, no gift cards. Saying the item can't be returned is
      * more honest than offering a choice of nothing.
      */
-    if (
-      ineligibleReason === null &&
-      exchangeOnly &&
-      lineResolutions.length === 0
-    ) {
-      ineligibleReason =
-        "This item can only be exchanged, and no exchange options are available.";
-      ineligibleCode = "ineligible.exchangeOnlyUnavailable";
+    if (ineligibleReason === null && lineResolutions.length === 0) {
+      if (!exchangeable) {
+        ineligibleReason =
+          "This item has already been exchanged as many times as this store allows.";
+        ineligibleCode = "ineligible.exchangeLimit";
+      } else {
+        ineligibleReason =
+          "This item can only be exchanged, and no exchange options are available.";
+        ineligibleCode = "ineligible.exchangeOnlyUnavailable";
+      }
     }
 
     return {

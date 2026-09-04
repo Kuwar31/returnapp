@@ -39,6 +39,7 @@ import {
 } from "../shopify/returns.service.js";
 import { ensureExchangeDraftOrder } from "../shopify/exchange.service.js";
 import { syncOrderByNumber } from "../shopify/order.sync.js";
+import { exchangeGeneration } from "../returns/exchange-chain.js";
 import { generateReference } from "../returns/reference.js";
 import type { QuoteInput, SubmitInput } from "./portal.schemas.js";
 
@@ -301,6 +302,8 @@ export const getOrderEligibility = async (
     order,
     policy,
     new Date(),
+    // How many exchanges back this order sits, walked from our own records.
+    await exchangeGeneration(merchantId, orderId),
     shopifyReturnable,
     unfulfilledQuantities,
     exchangeReplacements,

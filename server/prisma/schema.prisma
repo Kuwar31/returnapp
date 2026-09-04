@@ -449,6 +449,28 @@ model ReturnPolicy {
    * Comparison is case-insensitive: merchants type "Final Sale" in Shopify and
    * "final-sale" here, and neither spelling is wrong.
    */
+  /**
+   * Whether an item received as an exchange may be exchanged again.
+   *
+   * Off keeps what this app has always done: a replacement is closed to
+   * further returns. On opens the chain, and `sequentialExchangeLimit` caps
+   * how far it runs — null for no cap. Once the cap is reached the item can
+   * still be refunded or credited; it just stops being exchangeable, which is
+   * the distinction the merchant is actually making.
+   */
+  allowExchangeOfExchange Boolean @default(false)
+  sequentialExchangeLimit Int?
+
+  /**
+   * Whether the catalogue a shopper browses is limited to products published
+   * to the online store.
+   *
+   * On by default because it is what the app has always done, and because an
+   * unpublished product is one the merchant has deliberately taken off sale —
+   * offering it as an exchange would sell something the storefront won't.
+   */
+  matchStoreAvailability Boolean @default(true)
+
   tagRulesEnabled  Boolean  @default(false)
   finalSaleTags    String[] @default(["final-sale"])
   exchangeOnlyTags String[] @default(["exchange-only"])

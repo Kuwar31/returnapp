@@ -115,3 +115,23 @@ export const resolveShopNowBonus = async (merchantId: string) =>
 export const clearMerchantSettingsCache = (merchantId: string): void => {
   cache.delete(merchantId);
 };
+
+/**
+ * Whether the browsable catalogue is limited to the online store's own
+ * products, per the store's default return policy.
+ *
+ * Read here rather than threaded down from the portal because the catalogue
+ * service is called from several places — the shop screen, advanced exchange
+ * previews, the hero image — and none of them should have to remember.
+ * Defaults to true if there is no policy to ask, which is the behaviour this
+ * app had before the setting existed.
+ */
+export const storeAvailabilityRequired = async (
+  merchantId: string,
+): Promise<boolean> => {
+  const policy = await prisma.returnPolicy.findFirst({
+    where: { merchantId, isDefault: true, active: true },
+    select: { matchStoreAvailability: true },
+  });
+  return policy?.matchStoreAvailability ?? true;
+};
