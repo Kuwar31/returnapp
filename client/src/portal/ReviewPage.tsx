@@ -311,10 +311,7 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
               </span>
               <div>
                 <div className="review__ship-title">{t("review.boxAndShip")}</div>
-                <p className="muted">
-                  We'll email instructions once your return is approved. Pack the
-                  items securely and send them back to us.
-                </p>
+                <p className="muted">{t("review.shipInstructions")}</p>
               </div>
             </div>
           </div>

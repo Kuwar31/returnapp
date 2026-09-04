@@ -32,6 +32,10 @@ export const en = {
   "lookup.error.missingBy": "Enter your order number and {field}.",
   "lookup.zipPlaceholder": "e.g. 94103",
   "lookup.phonePlaceholder": "e.g. +1 415 555 0100",
+  "drawer.noOtherOptions": "This item has no other options. Try exchanging for another product instead.",
+  "drawer.optionsFailed": "We couldn't load the other options just now.",
+  "drawer.tryAgain": "Try again",
+  "review.shipInstructions": "We'll email instructions once your return is approved. Pack the items securely and send them back to us.",
 
   // --- shell -------------------------------------------------------------
   "shell.needHelp": "Need help?",

@@ -270,8 +270,8 @@ export function ItemDrawer({
          * Writing an empty variant list here hid the exchange option outright,
          * so a shopper whose network hiccuped was quietly told the only thing
          * they could do was take a refund. The flag stops the effect retrying
-         * forever while leaving the card on offer — the size step fetches
-         * again and can report what actually went wrong.
+         * forever while leaving the card on offer; the size step says the
+         * options couldn't be loaded and offers a retry, which clears it.
          */
         setOptionsFailed(true);
       })
@@ -675,10 +675,28 @@ export function ItemDrawer({
           {(step === "size" || step === "product") && (
             <>
               {loading && <p className="muted">{t("drawer.loadingOptions")}</p>}
+              {/*
+                The preview couldn't be read — Shopify unreachable, store not
+                connected — which is not the same thing as "no other sizes".
+                Say so and offer another go: the flag is what the fetch effect
+                waits on, so clearing it is the retry. Size step only; the
+                product step's list carries its own failure state.
+              */}
+              {step === "size" && !loading && !swap && optionsFailed && (
+                <div className="alert alert--error">
+                  {t("drawer.optionsFailed")}{" "}
+                  <button
+                    type="button"
+                    className="linkish"
+                    onClick={() => setOptionsFailed(false)}
+                  >
+                    {t("drawer.tryAgain")}
+                  </button>
+                </div>
+              )}
               {!loading && swap && swap.variants.length === 0 && (
                 <div className="alert alert--info">
-                  This item has no other options. Try exchanging for another
-                  product instead.
+                  {t("drawer.noOtherOptions")}
                 </div>
               )}
 
