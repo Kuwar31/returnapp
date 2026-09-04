@@ -349,9 +349,24 @@ model PortalBranding {
   /// The tint on the "we suggest sizing up" hint in the item drawer.
   suggestionColor String  @default("#6d5ce7")
 
+  // --- order lookup ------------------------------------------------------
+  /**
+   * What a shopper enters beside their order number to prove the order is
+   * theirs. Email is what the portal has always asked for, so it is the
+   * default; a store that never opens the page keeps it.
+   *
+   * With several enabled, the portal shows one field that accepts any of
+   * them rather than one field per criterion: the shopper has their order
+   * number and *something* from the order, and shouldn't need to know which
+   * of the three the store chose to verify.
+   */
+  lookupCriteria LookupCriterion[] @default([EMAIL])
+
   // --- content -----------------------------------------------------------
   orderNumberLabel String  @default("Order number")
   emailLabel       String  @default("Email address")
+  zipLabel         String  @default("Postal code")
+  phoneLabel       String  @default("Phone number")
   /// Shown under the lookup fields, where a shopper looks when stuck.
   lookupHelpText   String?
   startButtonLabel String  @default("Find my order")
@@ -398,6 +413,14 @@ enum PortalRadius {
   SHARP
   CURVED
   ROUNDED
+}
+
+/// A detail from the order a shopper can prove it's theirs with.
+enum LookupCriterion {
+  EMAIL
+  /// The postal code of the shipping address.
+  ZIP
+  PHONE
 }
 
 /// A merchant can run several policies (e.g. standard, final-sale, holiday)
@@ -578,6 +601,13 @@ model Order {
   // Human-facing number the shopper types in, e.g. "1001"
   orderNumber         String
   email               String
+  /**
+   * As Shopify holds it, formatting and all; matching normalises at compare
+   * time. Filled in lazily — only stores that verify shoppers by phone ever
+   * ask Shopify for it, because the field is protected customer data and a
+   * query that names it without approval fails outright.
+   */
+  phone               String?
   customerName        String?
   /// Shop currency — the merchant's own books. All our line-item maths uses this.
   currency            String    @default("USD")

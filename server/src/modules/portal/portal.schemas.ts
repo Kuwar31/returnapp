@@ -9,7 +9,17 @@ export const lookupSchema = z.object({
     .min(1, "Enter your order number")
     .max(50)
     .transform((v) => v.replace(/^#/, "")),
-  email: z.string().trim().toLowerCase().email("Enter a valid email address"),
+  /**
+   * Whatever the store verifies with — email, postal code or phone — typed
+   * into one field. Which it is gets decided against the order, not here:
+   * the shopper shouldn't have to say, and a format check would need to know
+   * every country's postcodes and dialling plans to be anything but wrong.
+   */
+  identifier: z
+    .string()
+    .trim()
+    .min(1, "Enter the details from your order")
+    .max(120),
 });
 export type LookupInput = z.infer<typeof lookupSchema>;
 

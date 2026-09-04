@@ -138,7 +138,12 @@ export const handleWebhook = async ({
       }),
       prisma.order.updateMany({
         where: { merchantId: target, email: { equals: email, mode: "insensitive" } },
-        data: { email: REDACTED_EMAIL, customerName: null, shippingAddress: Prisma.DbNull },
+        data: {
+          email: REDACTED_EMAIL,
+          phone: null,
+          customerName: null,
+          shippingAddress: Prisma.DbNull,
+        },
       }),
     ]);
     log.info(

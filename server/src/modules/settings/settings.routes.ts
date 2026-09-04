@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { FONT_KEYS } from "./portal-fonts.js";
 import { LOCALE_CODES } from "./portal-locales.js";
-import { notFound } from "../../lib/errors.js";
+import { notFound, unprocessable } from "../../lib/errors.js";
 import { portalUrl } from "../../lib/portal-links.js";
 import { prisma } from "../../lib/prisma.js";
 import {
@@ -17,6 +17,8 @@ import { SHOPIFY_RETURN_REASONS } from "../shopify/returns.graphql.js";
 import * as reasonsService from "./reasons.service.js";
 import * as exchangeRules from "./exchange-rules.service.js";
 import { browseCollections } from "../shopify/catalogue.service.js";
+import { phoneAccessProblem } from "../shopify/order.sync.js";
+import { normalizeCriteria } from "../portal/lookup-match.js";
 import { clearMerchantSettingsCache } from "./merchant-settings.js";
 
 export const settingsRouter = Router();
@@ -426,9 +428,17 @@ const brandingSchema = z.object({
   buttonTextColor: hex("#ffffff"),
   suggestionColor: hex("#6d5ce7"),
 
+  // Order lookup
+  lookupCriteria: z
+    .array(z.enum(["EMAIL", "ZIP", "PHONE"]))
+    .min(1, "Customers need at least one way to verify their order")
+    .transform(normalizeCriteria),
+
   // Content
   orderNumberLabel: z.string().trim().min(1).max(60),
   emailLabel: z.string().trim().min(1).max(60),
+  zipLabel: z.string().trim().min(1).max(60),
+  phoneLabel: z.string().trim().min(1).max(60),
   lookupHelpText: optionalText(300),
   startButtonLabel: z.string().trim().min(1).max(40),
   footerHeading: optionalText(60),
@@ -454,10 +464,33 @@ settingsRouter.put(
   "/branding",
   validate(brandingSchema.partial()),
   asyncHandler(async (req, res) => {
+    const merchantId = req.admin!.merchantId;
+
+    /**
+     * Phone verification is checked against Shopify as it's switched on, not
+     * on every save: a criterion that can never match is worse than a refused
+     * save, but a merchant changing a colour shouldn't be held up by Shopify
+     * being slow. Whether it's *being* switched on is read from the stored
+     * row, since the body is the whole form either way.
+     */
+    const criteria = req.body.lookupCriteria as
+      | Array<"EMAIL" | "ZIP" | "PHONE">
+      | undefined;
+    if (criteria?.includes("PHONE")) {
+      const current = await prisma.portalBranding.findUnique({
+        where: { merchantId },
+        select: { lookupCriteria: true },
+      });
+      if (!current?.lookupCriteria.includes("PHONE")) {
+        const problem = await phoneAccessProblem(merchantId);
+        if (problem) throw unprocessable(problem);
+      }
+    }
+
     const branding = await prisma.portalBranding.upsert({
-      where: { merchantId: req.admin!.merchantId },
+      where: { merchantId },
       update: req.body,
-      create: { merchantId: req.admin!.merchantId, ...req.body },
+      create: { merchantId, ...req.body },
     });
     res.json(branding);
   }),

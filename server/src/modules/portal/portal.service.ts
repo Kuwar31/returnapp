@@ -1,5 +1,10 @@
-import { Prisma, type ResolutionType } from "@prisma/client";
+import {
+  Prisma,
+  type LookupCriterion,
+  type ResolutionType,
+} from "@prisma/client";
 import { badRequest, notFound, unprocessable } from "../../lib/errors.js";
+import { matchesCriterion, normalizeCriteria } from "./lookup-match.js";
 import { logger } from "../../lib/logger.js";
 import { prisma } from "../../lib/prisma.js";
 import { displayConverter, round2, toDecimal, ZERO } from "../../lib/money.js";
@@ -38,7 +43,7 @@ import {
   getShopifyReturnableQuantities,
 } from "../shopify/returns.service.js";
 import { ensureExchangeDraftOrder } from "../shopify/exchange.service.js";
-import { syncOrderByNumber } from "../shopify/order.sync.js";
+import { fetchOrderPhone, syncOrderByNumber } from "../shopify/order.sync.js";
 import { exchangeGeneration } from "../returns/exchange-chain.js";
 import { generateReference } from "../returns/reference.js";
 import type { QuoteInput, SubmitInput } from "./portal.schemas.js";
@@ -84,10 +89,27 @@ export const getMerchantBySlug = async (slug: string) => {
  * throwing so the route can send one generic message for "wrong number" and
  * "wrong email" — revealing which was wrong lets anyone enumerate orders.
  */
+/**
+ * What this store lets a shopper verify with. Never empty: a row with nothing
+ * ticked — which the settings schema refuses, but a database doesn't — falls
+ * back to email rather than locking every customer out.
+ */
+const lookupCriteriaFor = async (
+  merchantId: string,
+): Promise<LookupCriterion[]> => {
+  const branding = await prisma.portalBranding.findUnique({
+    where: { merchantId },
+    select: { lookupCriteria: true },
+  });
+  const criteria = normalizeCriteria(branding?.lookupCriteria ?? []);
+  return criteria.length ? criteria : ["EMAIL"];
+};
+
 export const lookupOrder = async (
   merchantId: string,
   orderNumber: string,
-  email: string,
+  /** Whatever the shopper typed beside the number; see lookupSchema. */
+  identifier: string,
 ) => {
   /**
    * Refresh from Shopify before answering, in place of the order and
@@ -106,8 +128,27 @@ export const lookupOrder = async (
     include: { lineItems: { orderBy: { title: "asc" } } },
   });
   if (!order) return null;
-  if (order.email.toLowerCase() !== email.toLowerCase()) return null;
-  return order;
+
+  const criteria = await lookupCriteriaFor(merchantId);
+
+  /**
+   * The phone number is fetched here, the first time a phone-verifying store
+   * needs this order's, rather than by the sync above — which can't name the
+   * field without risking every store's order sync. See fetchOrderPhone.
+   * Stored once found, so the second lookup costs nothing extra.
+   */
+  if (criteria.includes("PHONE") && !order.phone && order.externalId) {
+    const phone = await fetchOrderPhone(merchantId, order.externalId);
+    if (phone) {
+      await prisma.order.update({ where: { id: order.id }, data: { phone } });
+      order.phone = phone;
+    }
+  }
+
+  // Any one criterion the store allows is proof enough. Which one matched is
+  // not reported, so a wrong guess learns nothing about the order.
+  const proven = criteria.some((c) => matchesCriterion(order, c, identifier));
+  return proven ? order : null;
 };
 
 /**
@@ -176,8 +217,11 @@ const BRANDING_DEFAULTS = {
   buttonColor: null as string | null,
   buttonTextColor: "#ffffff",
   suggestionColor: "#6d5ce7",
+  lookupCriteria: ["EMAIL"] as LookupCriterion[],
   orderNumberLabel: "Order number",
   emailLabel: "Email address",
+  zipLabel: "Postal code",
+  phoneLabel: "Phone number",
   lookupHelpText: null as string | null,
   startButtonLabel: "Find my order",
   footerHeading: null as string | null,

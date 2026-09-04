@@ -22,6 +22,16 @@ export const en = {
   "lookup.busy": "Finding your order…",
   "lookup.error.missing": "Enter both your order number and email address.",
   "lookup.error.failed": "We couldn't look up your order. Please try again.",
+  "lookup.error.notFound": "We couldn't find an order matching those details. Check them and try again.",
+  // How each criterion is named mid-sentence; the field labels are the store's own.
+  "lookup.criterion.email": "email address",
+  "lookup.criterion.zip": "postal code",
+  "lookup.criterion.phone": "phone number",
+  // {field} is one criterion, or several joined as "A, B or C".
+  "lookup.introBy": "Enter your order number and the {field} on your order.",
+  "lookup.error.missingBy": "Enter your order number and {field}.",
+  "lookup.zipPlaceholder": "e.g. 94103",
+  "lookup.phonePlaceholder": "e.g. +1 415 555 0100",
 
   // --- shell -------------------------------------------------------------
   "shell.needHelp": "Need help?",

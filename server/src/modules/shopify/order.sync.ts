@@ -1,8 +1,13 @@
+import { AppError } from "../../lib/errors.js";
 import { logger } from "../../lib/logger.js";
 import { prisma } from "../../lib/prisma.js";
 import { toDecimal } from "../../lib/money.js";
 import { fetchVariantImages } from "./catalogue.service.js";
-import { getShopCredentials, shopifyGraphQL } from "./shopify.client.js";
+import {
+  getShopCredentials,
+  queryShop,
+  shopifyGraphQL,
+} from "./shopify.client.js";
 import {
   mapGraphQLOrder,
   type GraphQLOrderNode,
@@ -46,6 +51,8 @@ export const upsertOrder = async (
       : {}),
     placedAt: order.placedAt,
     shippingAddress: (order.shippingAddress ?? undefined) as never,
+    // Only a source that carried a number may set one — see NormalizedOrder.
+    ...(order.phone ? { phone: order.phone } : {}),
   };
 
   /**
@@ -363,5 +370,113 @@ export const syncOrderByNumber = async (
       "Could not refresh this order from Shopify; using the stored copy",
     );
     return false;
+  }
+};
+
+/**
+ * Everywhere Shopify might hold an order's phone number, in one query.
+ *
+ * Kept out of SYNC_ORDERS_QUERY on purpose. Phone is protected customer data,
+ * and an app Shopify hasn't approved for it doesn't get the field back empty —
+ * it gets the whole query refused, and that query is what every lookup and
+ * the install backfill run on. This one is asked only by stores that verify
+ * shoppers by phone, and only for an order that has none stored, so an
+ * approval that lapses costs those stores phone lookup and nothing else.
+ */
+const ORDER_PHONE_QUERY = `#graphql
+  query OrderPhone($id: ID!) {
+    order(id: $id) {
+      phone
+      customer { phone }
+      shippingAddress { phone }
+      billingAddress { phone }
+    }
+  }
+`;
+
+interface OrderPhoneResult {
+  order: {
+    phone: string | null;
+    customer: { phone: string | null } | null;
+    shippingAddress: { phone: string | null } | null;
+    billingAddress: { phone: string | null } | null;
+  } | null;
+}
+
+/** Best-effort: null both when there is no number and when Shopify won't say. */
+export const fetchOrderPhone = async (
+  merchantId: string,
+  orderExternalId: string,
+): Promise<string | null> => {
+  try {
+    const { order } = await queryShop<OrderPhoneResult>(
+      merchantId,
+      ORDER_PHONE_QUERY,
+      { id: orderExternalId },
+    );
+    if (!order) return null;
+    /**
+     * The order's own number first: it is what the shopper typed at checkout.
+     * The addresses and the customer record are where one lands when checkout
+     * asked for an email instead and the number came with the address.
+     */
+    const found = [
+      order.phone,
+      order.shippingAddress?.phone,
+      order.billingAddress?.phone,
+      order.customer?.phone,
+    ].find((p): p is string => typeof p === "string" && p.trim().length > 0);
+    return found?.trim() ?? null;
+  } catch (error) {
+    logger.warn(
+      { merchantId, orderExternalId, error },
+      "Could not read this order's phone number from Shopify",
+    );
+    return null;
+  }
+};
+
+/**
+ * Whether Shopify will give this app phone numbers at all.
+ *
+ * Asked when a merchant turns phone verification on, so the switch is refused
+ * with a reason rather than saved as a criterion that never matches. Reading
+ * one order's `phone` is the smallest question with the same answer as every
+ * later query: the approval is checked when the query is validated, so it
+ * fails the same way on a store with no orders at all.
+ *
+ * Resolves to null when access is fine, otherwise the sentence to show the
+ * merchant — the three ways it can fail each want a different next step.
+ */
+export const phoneAccessProblem = async (
+  merchantId: string,
+): Promise<string | null> => {
+  try {
+    await queryShop(
+      merchantId,
+      `#graphql
+        query PhoneAccessProbe { orders(first: 1) { nodes { phone } } }
+      `,
+    );
+    return null;
+  } catch (error) {
+    const code = error instanceof AppError ? error.code : null;
+    if (
+      code === "NOT_CONNECTED" ||
+      code === "TOKEN_UNREADABLE" ||
+      code === "SHOPIFY_UNAUTHORIZED"
+    ) {
+      return "Connect your Shopify store before verifying customers by phone number.";
+    }
+    if (code === "SHOPIFY_GRAPHQL_ERROR") {
+      logger.warn({ merchantId, error }, "Shopify refused a phone-number query");
+      return (
+        "Shopify hasn't approved this app to read customer phone numbers yet. " +
+        "Request the Phone field under Protected customer data in your Partner " +
+        "Dashboard, then turn this on again."
+      );
+    }
+    logger.warn({ merchantId, error }, "Could not check phone-number access");
+    return "Shopify couldn't be reached to check phone-number access. Try again in a moment.";
   }
 };

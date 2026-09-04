@@ -40,8 +40,26 @@ export interface NormalizedOrder {
   fulfilledAt: Date | null;
   deliveredAt: Date | null;
   shippingAddress: unknown;
+  /**
+   * Null when the source carried no number; absent when it didn't ask. The
+   * GraphQL sync doesn't — see the query for why — and a re-sync from it
+   * must not erase a number a webhook or a phone fetch already established.
+   */
+  phone?: string | null;
   lineItems: NormalizedLineItem[];
 }
+
+const firstPhone = (...values: unknown[]): string | null => {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+};
+
+const addressPhone = (address: unknown): unknown =>
+  address && typeof address === "object"
+    ? (address as { phone?: unknown }).phone
+    : undefined;
 
 const num = (value: unknown): number => {
   const parsed = typeof value === "string" ? parseFloat(value) : Number(value);
@@ -81,6 +99,7 @@ export interface WebhookOrder {
   name: string;
   email?: string | null;
   contact_email?: string | null;
+  phone?: string | null;
   currency: string;
   subtotal_price?: string;
   total_price?: string;
@@ -96,6 +115,7 @@ export interface WebhookOrder {
     admin_graphql_api_id?: string | null;
     first_name?: string | null;
     last_name?: string | null;
+    phone?: string | null;
   } | null;
   shipping_address?: unknown;
   line_items?: WebhookLineItem[];
@@ -159,6 +179,12 @@ export const mapWebhookOrder = (
     fulfilledAt,
     deliveredAt,
     shippingAddress: payload.shipping_address ?? null,
+    // The order's own number first: it is what the shopper typed at checkout.
+    phone: firstPhone(
+      payload.phone,
+      addressPhone(payload.shipping_address),
+      payload.customer?.phone,
+    ),
     lineItems: (payload.line_items ?? []).map((line) => {
       // REST gives list price plus a line-level discount; the portal needs the
       // per-unit price actually paid.

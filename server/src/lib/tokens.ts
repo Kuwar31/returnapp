@@ -20,7 +20,8 @@ export interface AdminTokenPayload {
 }
 
 /**
- * Issued after a shopper proves they own an order (order number + email).
+ * Issued after a shopper proves they own an order: order number plus whatever
+ * the store verifies with — email, postal code or phone.
  * Scopes every portal request to that one order — no account needed.
  */
 export interface PortalTokenPayload {

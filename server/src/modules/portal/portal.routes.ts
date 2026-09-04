@@ -58,19 +58,18 @@ portalRouter.post(
   rateLimit({ windowMs: 15 * 60_000, max: 10 }),
   validate(lookupSchema),
   asyncHandler(async (req, res) => {
-    const { merchantSlug, orderNumber, email } = req.body;
+    const { merchantSlug, orderNumber, identifier } = req.body;
     const merchant = await portalService.getMerchantBySlug(merchantSlug);
     const order = await portalService.lookupOrder(
       merchant.id,
       orderNumber,
-      email,
+      identifier,
     );
 
     if (!order) {
-      // Deliberately vague: don't confirm whether the order exists.
-      throw notFound(
-        "We couldn't find an order matching that number and email.",
-      );
+      // Deliberately vague: don't confirm whether the order exists, nor which
+      // of the store's criteria the details were checked against.
+      throw notFound("We couldn't find an order matching those details.");
     }
 
     const token = signPortalToken({

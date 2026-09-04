@@ -145,9 +145,11 @@ convert to numbers at the edge.
 
 ### Security posture
 
-- Shoppers never get an account. Proving order number + email mints a short-lived
-  JWT scoped to that one order; every portal write re-derives prices and
-  quantities from the database rather than trusting the request body.
+- Shoppers never get an account. Proving order number plus a detail from the
+  order — email by default; postal code or phone number if the store allows
+  them — mints a short-lived JWT scoped to that one order; every portal write
+  re-derives prices and quantities from the database rather than trusting the
+  request body.
 - Order lookup is rate limited and deliberately vague on failure, so it can't be
   used to enumerate orders.
 - Every merchant query is scoped by `merchantId` from the token, never a

@@ -22,6 +22,9 @@ export interface PortalConfig {
   branding: PortalBranding;
 }
 
+/** A detail from the order a shopper can prove it's theirs with. */
+export type LookupCriterion = "EMAIL" | "ZIP" | "PHONE";
+
 /** Everything a merchant can change about how their portal looks and reads. */
 export interface PortalBranding {
   headline: string;
@@ -45,8 +48,15 @@ export interface PortalBranding {
   buttonColor: string | null;
   buttonTextColor: string;
   suggestionColor: string;
+  /**
+   * What the shopper enters beside their order number. Several means one
+   * field that accepts any of them, not one field each.
+   */
+  lookupCriteria: LookupCriterion[];
   orderNumberLabel: string;
   emailLabel: string;
+  zipLabel: string;
+  phoneLabel: string;
   lookupHelpText: string | null;
   startButtonLabel: string;
   footerHeading: string | null;

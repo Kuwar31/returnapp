@@ -5,7 +5,12 @@ import { CopyLink } from "../components/CopyLink";
 import { ErrorAlert, Loading } from "../components/Feedback";
 import { ensureFontsLoaded, FONTS, fontStack, RADIUS_PX } from "../lib/fonts";
 import { LOCALES, localeDir, makeTranslator } from "../lib/i18n";
-import type { PortalBranding, StoreSettings } from "../lib/types";
+import { lookupFieldLabel } from "../lib/lookup";
+import type {
+  LookupCriterion,
+  PortalBranding,
+  StoreSettings,
+} from "../lib/types";
 import { useAuth } from "./AuthContext";
 
 /**
@@ -15,14 +20,17 @@ import { useAuth } from "./AuthContext";
 function Row({
   label,
   hint,
+  stacked = false,
   children,
 }: {
   label: string;
   hint?: ReactNode;
+  /** The control drops under the description instead of beside it. */
+  stacked?: boolean;
   children: ReactNode;
 }) {
   return (
-    <div className="settings-row">
+    <div className={`settings-row${stacked ? " settings-row--stacked" : ""}`}>
       <div>
         <div className="settings-row__label">{label}</div>
         {hint && <div className="settings-row__hint">{hint}</div>}
@@ -69,6 +77,32 @@ function ColorField({
     </div>
   );
 }
+
+/**
+ * The ways a shopper can prove an order is theirs, as the merchant picks
+ * them. Email first because it is what every store starts with.
+ */
+const CRITERIA: Array<{
+  key: LookupCriterion;
+  label: string;
+  hint: string;
+}> = [
+  {
+    key: "EMAIL",
+    label: "Email address",
+    hint: "The address on the order.",
+  },
+  {
+    key: "ZIP",
+    label: "Zip / postal code",
+    hint: "The postal code of the shipping address.",
+  },
+  {
+    key: "PHONE",
+    label: "Phone number",
+    hint: "Shopify only shares phone numbers with apps it has approved for them. Turning this on checks, and tells you if that approval is missing.",
+  },
+];
 
 /**
  * What the shopper sees, rendered from the same tokens the portal reads.
@@ -140,7 +174,7 @@ function Preview({ b, storeName }: { b: PortalBranding; storeName: string }) {
         </div>
         <div className="pv__input" />
         <div className="pv__label" style={{ color: b.bodyColor }}>
-          {b.emailLabel}
+          {lookupFieldLabel(b, b.locale)}
         </div>
         <div className="pv__input" />
         {b.lookupHelpText && (
@@ -497,6 +531,102 @@ export default function PortalPage() {
           </div>
 
           <div className="panel">
+            <h2>Order lookup</h2>
+            <Row
+              label="Verify customers with"
+              hint="What a shopper enters beside their order number to prove it's theirs. Most stores pick one. Tick several and the portal shows one field that accepts any of them."
+              stacked
+            >
+              <div className="criteria">
+                {CRITERIA.map(({ key, label, hint }) => {
+                  const on = b.lookupCriteria.includes(key);
+                  // The last one ticked stays: without any, nobody gets in.
+                  const last = on && b.lookupCriteria.length === 1;
+                  return (
+                    <label
+                      key={key}
+                      className="criteria__item"
+                      title={
+                        last
+                          ? "Customers need at least one way to verify their order"
+                          : undefined
+                      }
+                    >
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        disabled={last}
+                        onChange={(e) =>
+                          set(
+                            "lookupCriteria",
+                            e.target.checked
+                              ? [...b.lookupCriteria, key]
+                              : b.lookupCriteria.filter((c) => c !== key),
+                          )
+                        }
+                      />
+                      <span>
+                        <span className="criteria__label">{label}</span>
+                        <span className="criteria__hint">{hint}</span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </Row>
+            <Row label="Order number field">
+              <input
+                type="text"
+                className="settings-input"
+                value={b.orderNumberLabel}
+                onChange={(e) => set("orderNumberLabel", e.target.value)}
+              />
+            </Row>
+            {b.lookupCriteria.includes("EMAIL") && (
+              <Row label="Email field">
+                <input
+                  type="text"
+                  className="settings-input"
+                  value={b.emailLabel}
+                  onChange={(e) => set("emailLabel", e.target.value)}
+                />
+              </Row>
+            )}
+            {b.lookupCriteria.includes("ZIP") && (
+              <Row label="Postal code field">
+                <input
+                  type="text"
+                  className="settings-input"
+                  value={b.zipLabel}
+                  onChange={(e) => set("zipLabel", e.target.value)}
+                />
+              </Row>
+            )}
+            {b.lookupCriteria.includes("PHONE") && (
+              <Row label="Phone field">
+                <input
+                  type="text"
+                  className="settings-input"
+                  value={b.phoneLabel}
+                  onChange={(e) => set("phoneLabel", e.target.value)}
+                />
+              </Row>
+            )}
+            <Row
+              label="Help text"
+              hint="Shown under the fields, for a shopper who can't find their order number."
+            >
+              <input
+                type="text"
+                className="settings-input"
+                value={b.lookupHelpText ?? ""}
+                placeholder="Your order number is in your confirmation email."
+                onChange={(e) => set("lookupHelpText", e.target.value || null)}
+              />
+            </Row>
+          </div>
+
+          <div className="panel">
             <h2>Content</h2>
             <Row label="Heading">
               <input
@@ -512,34 +642,6 @@ export default function PortalPage() {
                 className="settings-input"
                 value={b.subheadline}
                 onChange={(e) => set("subheadline", e.target.value)}
-              />
-            </Row>
-            <Row label="Order number field">
-              <input
-                type="text"
-                className="settings-input"
-                value={b.orderNumberLabel}
-                onChange={(e) => set("orderNumberLabel", e.target.value)}
-              />
-            </Row>
-            <Row label="Email field">
-              <input
-                type="text"
-                className="settings-input"
-                value={b.emailLabel}
-                onChange={(e) => set("emailLabel", e.target.value)}
-              />
-            </Row>
-            <Row
-              label="Help text"
-              hint="Shown under the fields, for a shopper who can't find their order number."
-            >
-              <input
-                type="text"
-                className="settings-input"
-                value={b.lookupHelpText ?? ""}
-                placeholder="Your order number is in your confirmation email."
-                onChange={(e) => set("lookupHelpText", e.target.value || null)}
               />
             </Row>
             <Row label="Start button">
