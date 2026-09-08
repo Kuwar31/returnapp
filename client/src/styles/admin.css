@@ -1860,9 +1860,15 @@ table.data tbody tr:hover {
   color: var(--text-muted);
 }
 
-.aip__link {
-  text-decoration: underline;
+/* Mirrors the portal's small secondary button. */
+.aip__switch {
+  display: inline-block;
   margin-bottom: 8px;
+  padding: 4px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: #fff;
+  font-weight: 500;
 }
 
 .aip__card {

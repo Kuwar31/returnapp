@@ -739,12 +739,12 @@ export function ItemDrawer({
                   {recs.candidates.length > 1 && (
                     <button
                       type="button"
-                      className="linkish ai__switch"
+                      className="btn btn--secondary btn--sm ai__switch"
                       onClick={() =>
                         setRecIndex((recIndex + 1) % recs.candidates.length)
                       }
                     >
-                      {copy(branding.aiSwitchLabel, "ai.switch")}
+                      ↻ {copy(branding.aiSwitchLabel, "ai.switch")}
                     </button>
                   )}
 

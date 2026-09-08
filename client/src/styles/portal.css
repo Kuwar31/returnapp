@@ -1999,9 +1999,12 @@
   color: var(--suggestion, #6d5ce7);
 }
 
+/* A button rather than a link: it does something on this screen — swaps the
+   card — and a link reads as leaving it. Kept small and secondary so the
+   card, not the control, stays the point. */
 .ai__switch {
   align-self: flex-start;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 /*

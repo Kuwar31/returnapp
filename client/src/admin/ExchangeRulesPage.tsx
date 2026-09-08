@@ -216,7 +216,7 @@ function AiExchangePanel() {
                 <div className="aip__intro">
                   Based on your return, we found an exchange option you may prefer.
                 </div>
-                <div className="aip__link">{preview("aiSwitchLabel")}</div>
+                <div className="aip__switch">↻ {preview("aiSwitchLabel")}</div>
                 <div className="aip__card">
                   <div className="aip__media">
                     <span className="aip__flag">✦ Best match</span>
