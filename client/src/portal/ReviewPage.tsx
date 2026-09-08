@@ -344,12 +344,15 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
             </div>
 
             {/*
-              The basket, when the shopper spent their value in the catalogue.
-              Rendered separately from the per-line swaps below because it isn't
-              one: these items answer to the whole return, not to any single
-              item going back.
+              Everything coming the other way, from both routes at once: the
+              basket paid for with pooled value, and the items swapped for a
+              specific replacement. These used to be an either/or — the basket
+              when there was one, else the swaps — which was fine until a
+              return could do both, when it showed two things bought while the
+              summary opposite charged for five. Same order as the summary, so
+              a shopper checking one against the other finds them in step.
             */}
-            {shopping && (
+            {(shopping || exchanges.length > 0) && (
               <>
                 <h2 style={{ marginTop: 28 }}>{t("review.getting")}</h2>
                 <div className="review__grid">
@@ -370,33 +373,6 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
                       </div>
                     </div>
                   ))}
-                </div>
-                {/*
-                  Going back to change the basket is a real action, not an
-                  aside — it was set in the same underlined grey as the count
-                  beside it, which read as a footnote rather than the way back
-                  into the catalogue.
-                */}
-                <div className="review__shop-total">
-                  <span>
-                    {cart.length} item{cart.length === 1 ? "" : "s"} ·{" "}
-                    <strong>{money(cartTotal(cart), currency)}</strong>
-                  </span>
-                  <button
-                    type="button"
-                    className="btn btn--secondary btn--sm"
-                    onClick={() => navigate(`/r/${slug}/shop`)}
-                  >
-                    {t("review.editBasket")}
-                  </button>
-                </div>
-              </>
-            )}
-
-            {!shopping && exchanges.length > 0 && (
-              <>
-                <h2 style={{ marginTop: 28 }}>{t("review.getting")}</h2>
-                <div className="review__grid">
                   {exchanges.map(([id, d]) => (
                     <div key={`x-${id}`} className="review__tile">
                       {/* Was always a blank square — the picture is in the
@@ -422,6 +398,45 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
                       )}
                     </div>
                   ))}
+                </div>
+                {/*
+                  The count and total cover both routes, like the summary's
+                  "Purchasing" line — the server's figure once it has quoted,
+                  since it prices swaps at today's catalogue and converts for
+                  display; the browser's own sum until then.
+
+                  Going back to change the basket is a real action, not an
+                  aside — it was once set in the same underlined grey as the
+                  count beside it, which read as a footnote rather than the
+                  way back into the catalogue.
+                */}
+                <div className="review__shop-total">
+                  <span>
+                    {t.plural("review.itemCount", cart.length + exchanges.length)}{" "}
+                    ·{" "}
+                    <strong>
+                      {money(
+                        quote
+                          ? quote.purchaseSubtotal
+                          : cartTotal(cart) +
+                              exchanges.reduce(
+                                (sum, [, d]) =>
+                                  sum + (exchangePriceIn(d, currency) ?? 0),
+                                0,
+                              ),
+                        currency,
+                      )}
+                    </strong>
+                  </span>
+                  {shopping && (
+                    <button
+                      type="button"
+                      className="btn btn--secondary btn--sm"
+                      onClick={() => navigate(`/r/${slug}/shop`)}
+                    >
+                      {t("review.editBasket")}
+                    </button>
+                  )}
                 </div>
               </>
             )}

@@ -20,6 +20,7 @@ export const zh: Dict = {
   "drawer.noOtherOptions": "此商品没有其他款式可选，请尝试换成其他商品。",
   "drawer.optionsFailed": "暂时无法加载其他款式。",
   "drawer.tryAgain": "重试",
+  "review.itemCount_other": "{count} 件商品",
   "review.shipInstructions": "退货获批后，我们会通过电子邮件发送寄回说明。请将商品妥善包装并寄回给我们。",
   "shell.needHelp": "需要帮助？",
   "shell.unavailable.title": "无法访问退货门户",

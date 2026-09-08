@@ -35,6 +35,8 @@ export const en = {
   "drawer.noOtherOptions": "This item has no other options. Try exchanging for another product instead.",
   "drawer.optionsFailed": "We couldn't load the other options just now.",
   "drawer.tryAgain": "Try again",
+  "review.itemCount_one": "{count} item",
+  "review.itemCount_other": "{count} items",
   "review.shipInstructions": "We'll email instructions once your return is approved. Pack the items securely and send them back to us.",
 
   // --- shell -------------------------------------------------------------

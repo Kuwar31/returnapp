@@ -20,6 +20,8 @@ export const sv: Dict = {
   "drawer.noOtherOptions": "Den här varan finns inte i några andra alternativ. Prova att byta till en annan produkt i stället.",
   "drawer.optionsFailed": "Vi kunde inte läsa in de andra alternativen just nu.",
   "drawer.tryAgain": "Försök igen",
+  "review.itemCount_one": "{count} vara",
+  "review.itemCount_other": "{count} varor",
   "review.shipInstructions": "Vi mejlar instruktioner så snart din retur har godkänts. Packa varorna ordentligt och skicka tillbaka dem till oss.",
   "shell.needHelp": "Behöver du hjälp?",
   "shell.unavailable.title": "Portalen är inte tillgänglig",

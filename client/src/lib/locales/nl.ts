@@ -20,6 +20,8 @@ export const nl: Dict = {
   "drawer.noOtherOptions": "Dit artikel heeft geen andere opties. Ruil het in plaats daarvan om voor een ander product.",
   "drawer.optionsFailed": "We konden de andere opties nu niet laden.",
   "drawer.tryAgain": "Opnieuw proberen",
+  "review.itemCount_one": "{count} artikel",
+  "review.itemCount_other": "{count} artikelen",
   "review.shipInstructions": "Zodra je retour is goedgekeurd, mailen we je de instructies. Verpak de artikelen goed en stuur ze naar ons terug.",
   "shell.needHelp": "Hulp nodig?",
   "shell.unavailable.title": "Portaal niet beschikbaar",
