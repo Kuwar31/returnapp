@@ -1999,14 +1999,43 @@
   margin-bottom: 12px;
 }
 
+/*
+ * The recommendation step wants the body, not the picture: the card carries
+ * its own image, the option chips need a row to sit in, and the returned
+ * item on the left is context rather than the point. So the pane narrows
+ * and the panel widens for this step only. The stacked phone layout below
+ * is later in the file and wins there, as it should.
+ */
+.drawer__panel--ai {
+  grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
+  max-width: 1000px;
+}
+
+.drawer__panel--ai .drawer__media {
+  padding: 20px;
+}
+
+.drawer__panel--ai .drawer__body {
+  padding-top: 40px;
+}
+
 /* The recommendation, framed: one product, its options, what it costs. */
 .ai-card {
   display: grid;
-  grid-template-columns: 160px minmax(0, 1fr);
-  gap: 18px;
-  padding: 18px;
+  grid-template-columns: 136px minmax(0, 1fr);
+  gap: 16px;
+  padding: 16px;
   border: 2px solid var(--accent);
   border-radius: var(--radius);
+}
+
+.ai-card .swapper__label {
+  margin: 14px 0 8px;
+}
+
+.ai-card .size {
+  min-width: 48px;
+  padding: 10px 12px;
 }
 
 .ai-card__media {
@@ -2046,6 +2075,7 @@
   gap: 8px;
   margin-top: 4px;
   font-size: 16px;
+  white-space: nowrap;
 }
 
 .ai-card__price s {
@@ -2099,6 +2129,8 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
+  /* Room to scroll the last row clear of the pinned footer. */
+  padding-bottom: 12px;
 }
 
 .ai-similar__item {
@@ -2136,8 +2168,11 @@
 .ai__footer {
   position: sticky;
   bottom: 0;
-  margin-top: auto;
-  padding-top: 14px;
+  /* Bleeds to the body's edges — sides and bottom — so it sits flush with
+     the panel like a real footer and the content scrolls under it cleanly. */
+  margin: auto -28px -28px;
+  padding: 12px 28px 20px;
+  border-top: 1px solid var(--border);
   background: var(--surface);
 }
 

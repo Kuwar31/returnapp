@@ -535,7 +535,7 @@ export function ItemDrawer({
   return (
     <div className="drawer" role="dialog" aria-modal="true">
       <div className="drawer__backdrop" onClick={onCancel} />
-      <div className="drawer__panel">
+      <div className={`drawer__panel${step === "ai" ? " drawer__panel--ai" : ""}`}>
         {/*
           One image pane, shared by every step.
           On the swap step it becomes the replacement's gallery — the drawer is
