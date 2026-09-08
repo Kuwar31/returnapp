@@ -1093,6 +1093,11 @@
   .drawer__placeholder {
     max-height: 24vh;
     width: auto;
+    /* `width: auto` sizes a landscape shot from its height, which on a
+       narrow phone can come out wider than the pane and hang off the right
+       of the panel. Cap it, and let it letterbox rather than crop. */
+    max-width: 100%;
+    object-fit: contain;
     margin: 0 auto;
   }
 }
@@ -2006,17 +2011,24 @@
  * and the panel widens for this step only. The stacked phone layout below
  * is later in the file and wins there, as it should.
  */
-.drawer__panel--ai {
-  grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
-  max-width: 1000px;
-}
+@media (min-width: 761px) {
+  /*
+   * Desktop only, said explicitly. These rules sit later in the file than
+   * the phone's stacked layout, so an unguarded `.drawer__panel--ai` beat it
+   * there and put a 300px picture beside a body one word wide.
+   */
+  .drawer__panel--ai {
+    grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
+    max-width: 1000px;
+  }
 
-.drawer__panel--ai .drawer__media {
-  padding: 20px;
-}
+  .drawer__panel--ai .drawer__media {
+    padding: 20px;
+  }
 
-.drawer__panel--ai .drawer__body {
-  padding-top: 40px;
+  .drawer__panel--ai .drawer__body {
+    padding-top: 40px;
+  }
 }
 
 /* The recommendation, framed: one product, its options, what it costs. */
@@ -2188,13 +2200,24 @@
   gap: 12px;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 760px) {
   .ai-card {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    padding: 14px;
   }
 
   .ai-card__media {
-    max-width: 200px;
+    max-width: 180px;
+  }
+
+  /* The phone body pads 16px at the sides and 20px below; bleed to match. */
+  .ai__footer {
+    margin: auto -16px -20px;
+    padding: 12px 16px 16px;
+  }
+
+  .ai-similar {
+    gap: 8px;
   }
 }
 
