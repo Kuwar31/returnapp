@@ -10,19 +10,30 @@ import {
   rulesForLine,
 } from "../settings/exchange-rules.service.js";
 import { catalogueConverter, getOrderEligibility } from "./portal.service.js";
+import {
+  carrySizeAcross,
+  readIntent,
+  recommendVariant,
+  type Intent,
+  type VariantPick,
+} from "./variant-intelligence.js";
 
 /**
  * "AI exchange": one recommended replacement, offered the moment a shopper
  * has said why an item is coming back — before the ordinary choice between
  * exchanging and returning.
  *
- * The ranking is deliberate rather than learned. Nothing here models other
- * shoppers; there is no data for that, and inventing it would be worse than
- * saying nothing. What it uses is what the store actually knows: the reason
- * given ("too small" means the same item in another size), the exchange
- * groups the merchant wrote for this item, then the catalogue's own type and
- * tags, and finally how close in price a candidate is to what came back.
- * The order is the recommendation; the shopper can step through the rest.
+ * Three inputs, as Loop and AfterShip describe theirs: the reason and the
+ * comment beside it, read for what the shopper wants (see
+ * variant-intelligence); what other shoppers chose after returning the same
+ * variant for the same reason; and the variants actually in stock. The
+ * merchant's exchange groups add products the item is allowed to become.
+ *
+ * A recommendation is only made when there is a real signal — a variant
+ * that answers the reason, or a group the merchant wrote for this item.
+ * Products that are merely alike are shown beneath as similar choices, never
+ * as the recommendation on their own: an irrelevant suggestion is worse
+ * than none, and the flow proceeds without one.
  */
 
 export interface Recommendation extends ExchangeProduct {
@@ -32,21 +43,53 @@ export interface Recommendation extends ExchangeProduct {
   pricing: "EVEN" | "DIFFERENCE";
   /** The returned item itself, in its other options. */
   sameProduct: boolean;
+  /** The option to open on — the one that answers the reason, when one does. */
+  recommendedVariantId: string | null;
+  /** Why that option, for the line under the card. Null when it's a guess. */
+  rationale: VariantPick["rationale"] | null;
 }
-
-/** Reasons that mean "the item was right, the option wasn't". */
-const FIT = /small|large|big|tight|loose|fit|size|long|short/i;
 
 const phrase = (value: string) => `"${value.replace(/["\\]/g, "").trim()}"`;
 
 /** How many candidates the shopper can page through. */
 const LIMIT = 6;
 
+/** A pool ranks as a recommendation only from here up; below is "similar". */
+const STRONG = 40;
+
+/**
+ * What other shoppers ended up with after returning this very variant for
+ * the same reason: the variant they exchanged into, and how many did.
+ */
+const exchangeHistory = async (
+  merchantId: string,
+  line: { productId: string | null; variantId: string | null },
+  reasonCode: string | null,
+): Promise<Map<string, number>> => {
+  if (!line.productId || !line.variantId || !reasonCode) return new Map();
+  const rows = await prisma.exchangeItem.groupBy({
+    by: ["variantId"],
+    where: {
+      variantId: { not: null },
+      returnRequest: { merchantId },
+      returnLineItem: {
+        orderLineItem: { productId: line.productId, variantId: line.variantId },
+        reason: { code: reasonCode },
+      },
+    },
+    _count: { _all: true },
+  });
+  return new Map(
+    rows.flatMap((r) => (r.variantId ? [[r.variantId, r._count._all] as [string, number]] : [])),
+  );
+};
+
 export const recommendExchanges = async (
   merchantId: string,
   orderId: string,
   orderLineItemId: string,
   reasonId?: string,
+  comment?: string,
 ): Promise<{ candidates: Recommendation[]; currentVariantId: string | null } | null> => {
   const merchant = await prisma.merchant.findUniqueOrThrow({
     where: { id: merchantId },
@@ -77,7 +120,11 @@ export const recommendExchanges = async (
         select: { code: true, label: true },
       })
     : null;
-  const fit = reason ? FIT.test(`${reason.code} ${reason.label}`) : false;
+  const intent: Intent = readIntent(
+    `${reason?.label ?? ""} ${reason?.code ?? ""}`,
+    comment ?? "",
+  );
+  const history = await exchangeHistory(merchantId, line, reason?.code ?? null);
 
   const rules = await rulesForLine(merchantId, line);
 
@@ -104,67 +151,98 @@ export const recommendExchanges = async (
   };
 
   /**
-   * The item itself, in its other options: the strongest answer when the
-   * reason was fit, and a fallback candidate otherwise. Shopify's product
-   * search takes the numeric id, not the GID.
+   * The item itself, in its other options. Whether it leads is decided
+   * below, by whether one of those options answers the reason — not by the
+   * reason's wording alone. Shopify's product search takes the numeric id.
    */
   const numericId = line.productId?.split("/").pop();
-  if (numericId) await gather({ filter: `id:${numericId}` }, null, "DIFFERENCE", fit ? 100 : 0);
+  if (numericId) await gather({ filter: `id:${numericId}` }, null, "DIFFERENCE", 0);
 
   // The merchant's own pairings, in their order.
   for (const [i, rule] of rules.entries()) {
-    await gather({ filter: offerQuery(rule) }, rule.id, rule.pricing, 40 - i);
+    await gather({ filter: offerQuery(rule) }, rule.id, rule.pricing, STRONG - i);
   }
 
-  // Without groups, things like it: same type first, then shared tags.
-  if (rules.length === 0) {
-    if (line.productType) {
-      await gather({ filter: `product_type:${phrase(line.productType)}` }, null, "DIFFERENCE", 20);
-    }
-    const tags = line.productTags.filter(Boolean).slice(0, 5);
-    if (tags.length > 0) {
-      const clause = tags.map((t) => `tag:${phrase(t)}`).join(" OR ");
-      await gather({ filter: tags.length === 1 ? clause : `(${clause})` }, null, "DIFFERENCE", 10);
-    }
+  // Things like it, for the similar-choices row: same type, then shared tags.
+  if (line.productType) {
+    await gather({ filter: `product_type:${phrase(line.productType)}` }, null, "DIFFERENCE", 20);
   }
-
-  // A store with nothing alike still has a catalogue.
-  if (pools.every((p) => p.products.length === 0)) {
-    await gather({}, null, "DIFFERENCE", 0);
+  const tags = line.productTags.filter(Boolean).slice(0, 5);
+  if (tags.length > 0) {
+    const clause = tags.map((t) => `tag:${phrase(t)}`).join(" OR ");
+    await gather({ filter: tags.length === 1 ? clause : `(${clause})` }, null, "DIFFERENCE", 10);
   }
 
   const unit = Number(line.unitPrice);
+  const currentOptions =
+    pools
+      .flatMap((p) => p.products)
+      .find((p) => p.id === line.productId)
+      ?.variants.find((v) => v.id === line.variantId)?.options ?? [];
+
   const best = new Map<
     string,
-    { product: ExchangeProduct; score: number; ruleId: string | null; pricing: "EVEN" | "DIFFERENCE"; sameProduct: boolean }
+    {
+      product: ExchangeProduct;
+      score: number;
+      ruleId: string | null;
+      pricing: "EVEN" | "DIFFERENCE";
+      sameProduct: boolean;
+      pick: VariantPick | null;
+      preselect: string | null;
+    }
   >();
   for (const pool of pools) {
     for (const product of pool.products) {
       const sameProduct = product.id === line.productId;
-      // Their own item is only worth offering in an option they don't have.
+      // Their own item is only worth offering in an option they don't have —
+      // unless the unit was faulty, when the same option again is the point.
       const available = product.variants.filter(
-        (v) => v.available && !(sameProduct && v.id === line.variantId),
+        (v) =>
+          v.available &&
+          !(sameProduct && !intent.replacement && v.id === line.variantId),
       );
       if (available.length === 0) continue;
+
       let score = pool.weight;
+      let pick: VariantPick | null = null;
+      let preselect: string | null = null;
+      if (sameProduct) {
+        /**
+         * The reason, answered: a variant that fixes what the shopper said
+         * makes the item itself the recommendation, above any group. No
+         * answer means the item sits with the similar choices, at best.
+         */
+        pick = recommendVariant(product.variants, line.variantId, intent, history);
+        if (pick) {
+          score = 100;
+          preselect = pick.variantId;
+        }
+      } else {
+        // Another product: open it on the shopper's own size, stepped if asked.
+        preselect = carrySizeAcross(product.variants, currentOptions, intent);
+      }
+
       // Close in price reads as a like-for-like swap; far apart reads as a sale.
       const gap = Math.abs(product.minPrice - unit) / Math.max(unit, 1);
       score -= Math.min(10, gap * 10);
+
       const prev = best.get(product.id);
       if (!prev || prev.score < score) {
-        best.set(product.id, { product, score, ruleId: pool.ruleId, pricing: pool.pricing, sameProduct });
+        best.set(product.id, { product, score, ruleId: pool.ruleId, pricing: pool.pricing, sameProduct, pick, preselect });
       }
     }
   }
 
   const ranked = [...best.values()].sort((a, b) => b.score - a.score).slice(0, LIMIT);
-  if (ranked.length === 0) return null;
+  // No variant answers the reason and no group covers the item: say nothing.
+  if (ranked.length === 0 || ranked[0].score < STRONG - LIMIT) return null;
 
   // Priced like everything else the shopper sees, at this order's own rate.
   const fx = await catalogueConverter(merchantId, orderId);
   return {
     currentVariantId: line.variantId,
-    candidates: ranked.map(({ product, ruleId, pricing, sameProduct }) => ({
+    candidates: ranked.map(({ product, ruleId, pricing, sameProduct, pick, preselect }) => ({
       ...product,
       minPrice: fx.price(product.minPrice),
       maxPrice: fx.price(product.maxPrice),
@@ -173,6 +251,8 @@ export const recommendExchanges = async (
       ruleId,
       pricing,
       sameProduct,
+      recommendedVariantId: preselect,
+      rationale: pick?.rationale ?? null,
     })),
   };
 };

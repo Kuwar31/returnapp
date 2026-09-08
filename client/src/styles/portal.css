@@ -2061,6 +2061,17 @@
   margin-top: 14px;
 }
 
+/* Why this option: the reason, answered, in one line. */
+.ai-card__why {
+  margin: 10px 0 0;
+  font-size: 14px;
+  color: var(--suggestion, #6d5ce7);
+}
+
+.size__spark {
+  color: var(--suggestion, #6d5ce7);
+}
+
 .ai-card__details {
   margin-top: 16px;
   padding-top: 12px;

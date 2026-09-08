@@ -205,6 +205,8 @@ portalRouter.get(
     z.object({
       orderLineItemId: z.string().min(1),
       reasonId: z.string().max(60).optional(),
+      /** The shopper's own words beside the reason; read for what they want. */
+      note: z.string().max(500).optional(),
     }),
     "query",
   ),
@@ -216,6 +218,7 @@ portalRouter.get(
         orderId,
         String(req.query.orderLineItemId),
         req.query.reasonId ? String(req.query.reasonId) : undefined,
+        req.query.note ? String(req.query.note) : undefined,
       ),
     );
   }),

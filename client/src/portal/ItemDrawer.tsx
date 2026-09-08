@@ -293,7 +293,15 @@ export function ItemDrawer({
     api
       .get<ExchangeRecommendations | null>(
         "/portal/session/exchange/recommendations",
-        { auth: "portal", query: { orderLineItemId: item.id, reasonId } },
+        {
+          auth: "portal",
+          query: {
+            orderLineItemId: item.id,
+            reasonId,
+            // Their own words carry the detail — "wanted the black one".
+            note: reasonNote.trim() || undefined,
+          },
+        },
       )
       .then((data) => setRecs(data && data.candidates.length > 0 ? data : null))
       .catch(() => setRecs(null));
@@ -312,7 +320,15 @@ export function ItemDrawer({
   useEffect(() => {
     if (!rec) return;
     if (recVariantId && recVariants.some((v) => v.id === recVariantId)) return;
-    setRecVariantId(recVariants.find((v) => v.available)?.id ?? null);
+    // Open on the option that answers the reason; else the first in stock.
+    setRecVariantId(
+      (rec.recommendedVariantId &&
+      recVariants.some((v) => v.id === rec.recommendedVariantId && v.available)
+        ? rec.recommendedVariantId
+        : null) ??
+        recVariants.find((v) => v.available)?.id ??
+        null,
+    );
     // recVariants is derived from rec; listing rec is what matters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rec?.id]);
@@ -330,6 +346,27 @@ export function ItemDrawer({
   /** The merchant's own words for the screen, else the app's. */
   const copy = (override: string | null | undefined, key: Key) =>
     override?.trim() || t(key);
+  /** Why this option, in a line under the price — only when it's a real answer. */
+  const RATIONALE_KEY: Record<string, Key> = {
+    SIZE_UP: "ai.why.sizeUp",
+    SIZE_DOWN: "ai.why.sizeDown",
+    SHORTER: "ai.why.shorter",
+    LONGER: "ai.why.longer",
+    COLOR: "ai.why.colour",
+    REPLACEMENT: "ai.why.replacement",
+    HISTORY: "ai.why.history",
+  };
+  const recWhy =
+    rec?.rationale && recVariantId === rec.recommendedVariantId
+      ? t(RATIONALE_KEY[rec.rationale.kind], { from: rec.rationale.from ?? "" })
+      : null;
+  /** The recommended option's values, so its chips can carry the spark. */
+  const recStarred = new Set(
+    (rec?.recommendedVariantId
+      ? recVariants.find((v) => v.id === rec.recommendedVariantId)?.options ?? []
+      : []
+    ).map((o) => `${o.name}:${o.value}`),
+  );
   /** The option axes of the candidate — "Color", "Size" — with their values. */
   const recAxes = (() => {
     const axes = new Map<string, string[]>();
@@ -736,6 +773,11 @@ export function ItemDrawer({
                       {recDue < 0.005 && (
                         <span className="chip ai-card__chip">{t("ai.free")}</span>
                       )}
+                      {recWhy && (
+                        <p className="ai-card__why">
+                          <span aria-hidden="true">✦</span> {recWhy}
+                        </p>
+                      )}
 
                       {recAxes.map(([axis, values]) => (
                         <div key={axis} className="ai-card__axis">
@@ -763,6 +805,10 @@ export function ItemDrawer({
                                   aria-pressed={selected}
                                   onClick={() => pickAxis(axis, value)}
                                 >
+                                  {/* The spark marks the answer to their reason. */}
+                                  {recStarred.has(`${axis}:${value}`) && (
+                                    <span className="size__spark" aria-hidden="true">✦ </span>
+                                  )}
                                   {value}
                                 </button>
                               );

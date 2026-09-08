@@ -36,6 +36,13 @@ export interface ExchangeRecommendation extends ExchangeProduct {
   pricing: "EVEN" | "DIFFERENCE";
   /** The item being returned itself, offered in its other options. */
   sameProduct: boolean;
+  /** The option to open on — the one that answers the reason, when one does. */
+  recommendedVariantId: string | null;
+  /** Why that option, for the line under the card. Null when it's a guess. */
+  rationale: {
+    kind: "SIZE_UP" | "SIZE_DOWN" | "SHORTER" | "LONGER" | "COLOR" | "REPLACEMENT" | "HISTORY";
+    from?: string;
+  } | null;
 }
 
 export interface ExchangeRecommendations {
