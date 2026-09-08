@@ -141,18 +141,44 @@ enum ExchangeMethod {
  * product as it stands today. A shopper's options shouldn't change because
  * someone retagged a product last week.
  */
+/**
+ * An exchange group — "advanced exchange".
+ *
+ * Pairs the items it applies to with the products they may become: a return
+ * condition on the item coming back, and an offer condition on what's shown
+ * in its place. The name is what the shopper reads on the option card. An
+ * item that matches several groups is offered all of them, in sortOrder.
+ */
 model ExchangeRule {
   id                String            @id @default(cuid())
   merchantId        String
   merchant          Merchant          @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  /// The merchant's own label, e.g. "department:footwear, brand:alohas".
+  /// Shown to the shopper as the exchange option, e.g. "Exchange for a new style".
   name              String
   active            Boolean           @default(true)
-  /// First match wins, so a specific rule can sit above a catch-all.
+  /// The order the shopper sees matching groups in.
   sortOrder         Int               @default(0)
+
+  // --- return item condition -------------------------------------------
   matchBy           ExchangeRuleMatch @default(PRODUCT_TAG)
-  /// Tags, or fragments of a product title, that identify a returned item.
+  /// Tags, types, title fragments or collection GIDs — "is any of".
   matchValues       String[]
+
+  // --- exchange item condition -----------------------------------------
+  offerBy           ExchangeOfferMatch @default(COLLECTION)
+  /// Tags, types or collection GIDs the offered products must carry.
+  offerValues       String[]           @default([])
+
+  // --- pricing and presentation ----------------------------------------
+  /**
+   * EVEN settles any price gap flat, whichever way it runs and whatever the
+   * product; DIFFERENCE charges or credits it, as a variant swap would.
+   */
+  pricing           ExchangePricing    @default(DIFFERENCE)
+  /// Off shows sold-out products too, greyed, so the shopper knows they exist.
+  inStockOnly       Boolean            @default(true)
+  /// Whether the shopper may leave a note with the replacement they pick.
+  allowNote         Boolean            @default(false)
   /// Whether the shopper sees names under the pictures, or just the pictures.
   showProductTitles Boolean           @default(false)
   /**
@@ -168,10 +194,21 @@ model ExchangeRule {
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
-  options ExchangeRuleOption[]
-
   @@index([merchantId, active, sortOrder])
   @@map("exchange_rules")
+}
+
+enum ExchangeOfferMatch {
+  PRODUCT_TAG
+  PRODUCT_TYPE
+  COLLECTION
+}
+
+enum ExchangePricing {
+  /// The store covers the gap either way: nothing owed, nothing credited.
+  EVEN
+  /// The shopper pays more or is credited the difference.
+  DIFFERENCE
 }
 
 enum ExchangeRuleMatch {
@@ -179,26 +216,15 @@ enum ExchangeRuleMatch {
   PRODUCT_TAG
   /// The returned product's title contains one of the listed fragments.
   PRODUCT_NAME
+  /// The returned product's type is one of the listed ones.
+  PRODUCT_TYPE
+  /// The returned product sits in one of the listed collections (read live).
+  COLLECTION
 }
 
 /**
  * One named list a matching item may be exchanged into.
  */
-model ExchangeRuleOption {
-  id              String       @id @default(cuid())
-  ruleId          String
-  rule            ExchangeRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
-  /// What the shopper reads, e.g. "Exchange for a new style".
-  label           String
-  /// The Shopify collection this option draws from.
-  collectionId    String
-  /// Kept alongside the id so the admin can name it without a round trip.
-  collectionTitle String
-  sortOrder       Int          @default(0)
-
-  @@index([ruleId, sortOrder])
-  @@map("exchange_rule_options")
-}
 
 /**
  * How a price gap between two variants of the same product is settled.
@@ -931,6 +957,13 @@ model ExchangeItem {
   unitPrice                  Decimal @default(0) @db.Decimal(12, 2)
   /// Amount the shopper still owes when the swap costs more
   priceDifference            Decimal @default(0) @db.Decimal(12, 2)
+  /// The exchange group this came through, when it did. Kept for the record;
+  /// the pricing it implied is copied into evenExchange below.
+  ruleId                     String?
+  /// The group settled the price gap flat, so nothing is owed or credited.
+  evenExchange               Boolean @default(false)
+  /// What the shopper wrote alongside the pick, when the group allowed it.
+  note                       String?
 
   @@index([returnRequestId])
   @@map("exchange_items")

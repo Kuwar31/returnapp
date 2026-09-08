@@ -17,6 +17,13 @@ export interface QuoteLine {
    * did not offer to hand over 2,400.
    */
   sameProduct?: boolean;
+  /**
+   * The replacement came through an exchange group priced as an even
+   * exchange: the store settles the gap whichever way it runs and whatever
+   * the product — the merchant's choice, per group, rather than the
+   * store-wide rule for size swaps.
+   */
+  evenExchange?: boolean;
 }
 
 /**
@@ -188,9 +195,9 @@ export const quoteReturn = ({
      * the real item at the real price — only who covers the gap changes.
      */
     const absorbed =
-      variantDifference === "ABSORB" &&
       exchangeValue.greaterThan(0) &&
-      line.sameProduct === true;
+      (line.evenExchange === true ||
+        (variantDifference === "ABSORB" && line.sameProduct === true));
 
     // An exchange consumes its own line's value. Anything left over is still
     // owed to the shopper; anything short is owed by them.

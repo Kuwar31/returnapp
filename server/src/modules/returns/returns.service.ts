@@ -549,6 +549,11 @@ const recalculateTotals = async (merchantId: string, id: string) => {
         li.exchangeItems.every(
           (ex) => ex.productId === li.orderLineItem?.productId,
         ),
+      // Priced flat by the exchange group it came through; see QuoteLine.
+      evenExchange:
+        !request.shopNow &&
+        li.exchangeItems.length > 0 &&
+        li.exchangeItems.every((ex) => ex.evenExchange),
     })),
     ...shopNowPool(request),
   });
@@ -664,6 +669,11 @@ const payoutSplit = async (merchantId: string, id: string) => {
         li.exchangeItems.every(
           (ex) => ex.productId === li.orderLineItem?.productId,
         ),
+      // Priced flat by the exchange group it came through; see QuoteLine.
+      evenExchange:
+        !request.shopNow &&
+        li.exchangeItems.length > 0 &&
+        li.exchangeItems.every((ex) => ex.evenExchange),
     })),
     ...shopNowPool(request),
   });

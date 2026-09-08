@@ -20,6 +20,8 @@ export const ja: Dict = {
   "drawer.noOtherOptions": "この商品には他のオプションがありません。代わりに別の商品との交換をお試しください。",
   "drawer.optionsFailed": "他のオプションを読み込めませんでした。",
   "drawer.tryAgain": "再試行",
+  "drawer.exchangeNote": "この交換について何か伝えたいことはありますか？",
+  "drawer.exchangeNotePlaceholder": "任意",
   "review.itemCount_other": "{count}点",
   "review.shipInstructions": "返品が承認され次第、手順をメールでお送りします。商品をしっかりと梱包し、当店までご返送ください。",
   "shell.needHelp": "お困りですか？",

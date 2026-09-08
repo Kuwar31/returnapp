@@ -212,14 +212,20 @@ export interface ExchangeOptions {
  * whole catalogue is on offer.
  */
 export interface AdvancedExchange {
-  /** Every rule that matched — all of them contribute their options. */
+  /** Every group that matched — all of them are offered. */
   ruleIds: string[];
   showProductTitles: boolean;
   currency: string;
+  /** One option per matching exchange group, in the merchant's order. */
   options: Array<{
+    /** The group's id; sent back with a pick so the server prices it. */
     id: string;
+    /** The group's name, as the shopper reads it. */
     label: string;
-    collectionId: string;
+    /** EVEN settles any price gap flat; DIFFERENCE charges or credits it. */
+    pricing: "EVEN" | "DIFFERENCE";
+    /** Whether the shopper may leave a note with the pick. */
+    allowNote: boolean;
     /** A few real products, so the card shows what's behind it. */
     preview: Array<{ id: string; title: string; imageUrl: string | null }>;
   }>;
@@ -315,6 +321,10 @@ export interface ReturnDetail {
     quantity: number;
     unitPrice: number;
     priceDifference: number;
+    /** Settled flat by the exchange group it came through. */
+    evenExchange: boolean;
+    /** What the shopper wrote with the pick, when the group allowed it. */
+    note: string | null;
   }>;
   shipment: {
     carrier: string | null;

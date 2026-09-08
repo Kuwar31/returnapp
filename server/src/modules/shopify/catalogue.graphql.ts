@@ -96,8 +96,22 @@ export const VARIANTS_BY_ID = `#graphql
           id
           title
           featuredMedia { preview { image { url } } }
+          # What an exchange group's offer condition is checked against, so a
+          # request naming a group is verified rather than trusted.
+          tags
+          productType
+          collections(first: 50) { nodes { id } }
         }
       }
+    }
+  }
+`;
+
+/** The collections a product sits in, for groups that match on collection. */
+export const PRODUCT_COLLECTIONS = `#graphql
+  query ProductCollections($id: ID!) {
+    product(id: $id) {
+      collections(first: 50) { nodes { id } }
     }
   }
 `;

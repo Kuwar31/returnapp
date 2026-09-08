@@ -20,6 +20,8 @@ export const pl: Dict = {
   "drawer.noOtherOptions": "Ten produkt nie ma innych wariantów. Spróbuj wymienić go na inny produkt.",
   "drawer.optionsFailed": "Nie udało się teraz wczytać pozostałych wariantów.",
   "drawer.tryAgain": "Spróbuj ponownie",
+  "drawer.exchangeNote": "Czy powinniśmy wiedzieć coś o tej wymianie?",
+  "drawer.exchangeNotePlaceholder": "Opcjonalnie",
   "review.itemCount_one": "{count} produkt",
   "review.itemCount_few": "{count} produkty",
   "review.itemCount_many": "{count} produktów",

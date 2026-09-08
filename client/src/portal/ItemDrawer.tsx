@@ -41,6 +41,13 @@ export interface ItemDecision {
    * for the same item. Stale prices are dropped on render rather than relabelled.
    */
   exchangeCurrency: string | null;
+  /**
+   * The exchange group a catalogue pick came through, and the note the
+   * shopper left with it when the group allows one. Both travel to the
+   * server, which prices the swap by the group and keeps the note.
+   */
+  exchangeRuleId?: string | null;
+  exchangeNote?: string | null;
 }
 
 /**
@@ -108,8 +115,10 @@ export function ItemDrawer({
   const [advanced, setAdvanced] = useState<AdvancedExchange | null | undefined>(
     undefined,
   );
-  /** Which collection the browse step is scoped to, if any. */
-  const [collectionId, setCollectionId] = useState<string | null>(null);
+  /** The exchange group the browse step is scoped to, if any. */
+  const [ruleId, setRuleId] = useState<string | null>(null);
+  /** What the shopper wrote with a pick, where the group allows a note. */
+  const [exchangeNote, setExchangeNote] = useState("");
   /** Preview lookups that failed. Distinct from "loaded, and empty". */
   const [optionsFailed, setOptionsFailed] = useState(false);
   const [productsFailed, setProductsFailed] = useState(false);
@@ -175,6 +184,17 @@ export function ItemDrawer({
   const chosen = swap?.variants.find((v) => v.id === chosenId) ?? null;
   /** Positive means they owe the difference; negative means they're owed it. */
   const delta = chosen ? chosen.price - item.unitPrice : 0;
+  /**
+   * The exchange group a catalogue pick came through. Only on the product
+   * step: a size swap is the item's own siblings, whatever group the shopper
+   * may have looked at first.
+   */
+  const activeRule =
+    step === "product"
+      ? (advanced?.options.find((o) => o.id === ruleId) ?? null)
+      : null;
+  /** The group settles the gap flat, so the money line says so up front. */
+  const evenGroup = activeRule?.pricing === "EVEN";
   const gallery = swap?.product?.images?.length
     ? swap.product.images
     : [chosen?.imageUrl ?? swap?.variants[0]?.imageUrl ?? item.imageUrl].filter(
@@ -312,7 +332,9 @@ export function ItemDrawer({
             auth: "portal",
             query: {
               search: search || undefined,
-              collectionId: collectionId ?? undefined,
+              // The group's own list, for the item it applies to.
+              ruleId: ruleId ?? undefined,
+              orderLineItemId: ruleId ? item.id : undefined,
             },
           },
         )
@@ -321,7 +343,7 @@ export function ItemDrawer({
         .finally(() => setLoading(false));
     }, 250);
     return () => clearTimeout(timer);
-  }, [step, search, collectionId]);
+  }, [step, search, ruleId, item.id]);
 
   // A newly picked variant with its own shot should lead the gallery.
   useEffect(() => {
@@ -334,6 +356,8 @@ export function ItemDrawer({
     resolution: ResolutionType,
     variant?: ExchangeVariant,
     productTitle?: string,
+    /** The exchange group a catalogue pick came through, if any. */
+    viaRule?: AdvancedExchange["options"][number] | null,
   ) => {
     if (reason?.requiresNote && !reasonNote.trim()) {
       setError(`Please tell us a little more about "${reason.label}".`);
@@ -345,6 +369,11 @@ export function ItemDrawer({
       reasonLabel,
       reasonNote,
       resolution,
+      exchangeRuleId: variant && viaRule ? viaRule.id : null,
+      exchangeNote:
+        variant && viaRule?.allowNote && exchangeNote.trim()
+          ? exchangeNote.trim()
+          : null,
       exchangeVariantId: variant?.id ?? null,
       exchangeLabel: variant
         ? `${productTitle ?? options?.product?.title ?? ""} · ${variant.title}`.trim()
@@ -591,7 +620,7 @@ export function ItemDrawer({
                     key={option.id}
                     className="choice choice--list"
                     onClick={() => {
-                      setCollectionId(option.collectionId);
+                      setRuleId(option.id);
                       setProducts(null);
                       setStep("browse");
                     }}
@@ -630,7 +659,7 @@ export function ItemDrawer({
                 <button
                   className="choice"
                   onClick={() => {
-                    setCollectionId(null);
+                    setRuleId(null);
                     setStep("browse");
                   }}
                 >
@@ -764,7 +793,9 @@ export function ItemDrawer({
                         and nothing coming back, so promising a credit here was
                         simply false — the summary would then show zero.
                       */}
-                      {absorbing && sameProduct && Math.abs(delta) > 0.005
+                      {evenGroup
+                        ? t("drawer.evenSwap")
+                        : absorbing && sameProduct && Math.abs(delta) > 0.005
                         ? t("drawer.absorbed", { store: merchantName })
                         : delta > 0.005
                           ? t("drawer.youPay", {
@@ -807,11 +838,33 @@ export function ItemDrawer({
                     })}
                   </div>
 
+                  {/*
+                    A word from the shopper, where the group asked for one —
+                    "the blue if this sells out", that sort of thing. Kept
+                    with the pick, shown to the merchant beside it.
+                  */}
+                  {activeRule?.allowNote && (
+                    <div className="field swapper__note">
+                      <label htmlFor="exchange-note">
+                        {t("drawer.exchangeNote")}
+                      </label>
+                      <textarea
+                        id="exchange-note"
+                        rows={2}
+                        maxLength={300}
+                        value={exchangeNote}
+                        placeholder={t("drawer.exchangeNotePlaceholder")}
+                        onChange={(e) => setExchangeNote(e.target.value)}
+                      />
+                    </div>
+                  )}
+
                   <button
                     className="btn btn--block swapper__confirm"
                     disabled={!chosen}
                     onClick={() =>
-                      chosen && finish("EXCHANGE", chosen, picked?.title)
+                      chosen &&
+                      finish("EXCHANGE", chosen, picked?.title, activeRule)
                     }
                   >
                     {chosen

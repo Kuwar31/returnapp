@@ -139,6 +139,11 @@ export const priceExchange = async (
         li.exchangeItems.every(
           (ex) => ex.productId === li.orderLineItem?.productId,
         ),
+      // Priced flat by the exchange group it came through; see QuoteLine.
+      evenExchange:
+        !request.shopNow &&
+        li.exchangeItems.length > 0 &&
+        li.exchangeItems.every((ex) => ex.evenExchange),
     })),
     ...(request.shopNow
       ? {

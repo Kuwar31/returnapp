@@ -199,6 +199,9 @@ portalRouter.get(
       search: z.string().trim().max(100).optional(),
       cursor: z.string().optional(),
       collectionId: z.string().trim().max(120).optional(),
+      /** An exchange group's own list, for the item it applies to. */
+      ruleId: z.string().trim().max(60).optional(),
+      orderLineItemId: z.string().trim().max(60).optional(),
     }),
     "query",
   ),
@@ -208,6 +211,8 @@ portalRouter.get(
       search?: string;
       cursor?: string;
       collectionId?: string;
+      ruleId?: string;
+      orderLineItemId?: string;
     };
     // Scoped to the order, not just the merchant: catalogue prices convert at
     // that order's own rate, so the browse needs to know which one.

@@ -1614,6 +1614,211 @@ table.data tbody tr:hover {
   }
 }
 
+/* ---------- exchange groups ---------- */
+
+/* A text field with its length beside it, for a name customers will read. */
+.counted {
+  position: relative;
+}
+
+.counted .settings-input {
+  width: 100%;
+  padding-right: 72px;
+}
+
+.counted__count {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* One half of the product pairing: the kind, "is any of", and the values. */
+.pairing__label {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.pairing__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.pairing__head select {
+  width: 200px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font: inherit;
+  font-size: 14px;
+}
+
+.pairing__op {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.pairing__input {
+  width: 100%;
+}
+
+.pairing__divider {
+  border-top: 1px solid var(--border);
+  margin: 20px 0;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* The store's collections, ticked. Scrolls rather than growing: a store with
+   sixty collections shouldn't push the rest of the form off the screen. */
+.collection-picker {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+}
+
+.collection-picker__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.collection-picker__item input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+.radio-list,
+.check-list__item {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.radio-list__item,
+.check-list__item {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.check-list__item + .check-list__item {
+  margin-top: 12px;
+}
+
+.radio-list__item input,
+.check-list__item input {
+  flex: 0 0 auto;
+  width: 17px;
+  height: 17px;
+  margin-top: 1px;
+  accent-color: var(--accent);
+}
+
+.radio-list__label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.radio-list__hint {
+  display: block;
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.checkout-method {
+  margin-left: 27px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  font-size: 13px;
+}
+
+.group-summary ul {
+  margin: 4px 0 14px;
+  padding-left: 18px;
+  font-size: 14px;
+}
+
+.group-summary li + li {
+  margin-top: 4px;
+}
+
+.group-summary__head {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+
+/* The customer's resolution step, as the group will appear on it. */
+.gp {
+  padding: 18px;
+  border-radius: var(--radius);
+  background: linear-gradient(160deg, #fbf3df, #f5f5f6 70%);
+}
+
+.gp__title {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.gp__card {
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: #fff;
+  padding: 12px 14px;
+  font-size: 14px;
+}
+
+.gp__card + .gp__card {
+  margin-top: 8px;
+}
+
+.gp__card-label {
+  font-weight: 500;
+  margin-bottom: 10px;
+}
+
+.gp__strip {
+  display: flex;
+  gap: 8px;
+}
+
+.gp__strip span {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+}
+
 .ritem__actions {
   border-top: 1px solid var(--border);
   margin-top: 16px;

@@ -183,6 +183,10 @@ export const serializeReturn = (
       quantity: item.quantity,
       unitPrice: fx.money(item.unitPrice),
       priceDifference: fx.money(item.priceDifference),
+      /** Settled flat by the exchange group it came through. */
+      evenExchange: item.evenExchange,
+      /** What the shopper wrote with the pick, when the group allowed it. */
+      note: item.note,
     })) ?? [],
   shipment: request.shipment
     ? {

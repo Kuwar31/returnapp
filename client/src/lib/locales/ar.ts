@@ -20,6 +20,8 @@ export const ar: Dict = {
   "drawer.noOtherOptions": "لا تتوفر خيارات أخرى لهذا المنتج. جرّب استبداله بمنتج آخر.",
   "drawer.optionsFailed": "تعذّر تحميل الخيارات الأخرى في الوقت الحالي.",
   "drawer.tryAgain": "حاول مرة أخرى",
+  "drawer.exchangeNote": "هل هناك ما تودّ إخبارنا به عن هذا الاستبدال؟",
+  "drawer.exchangeNotePlaceholder": "اختياري",
   "review.itemCount_one": "منتج واحد",
   "review.itemCount_two": "منتجان",
   "review.itemCount_few": "{count} منتجات",

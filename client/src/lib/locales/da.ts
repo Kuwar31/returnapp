@@ -20,6 +20,8 @@ export const da: Dict = {
   "drawer.noOtherOptions": "Denne vare findes ikke i andre varianter. Prøv i stedet at bytte den til et andet produkt.",
   "drawer.optionsFailed": "Vi kunne ikke indlæse de andre varianter lige nu.",
   "drawer.tryAgain": "Prøv igen",
+  "drawer.exchangeNote": "Er der noget, vi bør vide om denne ombytning?",
+  "drawer.exchangeNotePlaceholder": "Valgfrit",
   "review.itemCount_one": "{count} vare",
   "review.itemCount_other": "{count} varer",
   "review.shipInstructions": "Vi sender instruktioner på e-mail, så snart din returnering er godkendt. Pak varerne forsvarligt, og send dem tilbage til os.",

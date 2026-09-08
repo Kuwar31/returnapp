@@ -20,6 +20,8 @@ export const it: Dict = {
   "drawer.noOtherOptions": "Questo articolo non ha altre opzioni. Prova a cambiarlo con un altro prodotto.",
   "drawer.optionsFailed": "Al momento non è stato possibile caricare le altre opzioni.",
   "drawer.tryAgain": "Riprova",
+  "drawer.exchangeNote": "C'è qualcosa che dovremmo sapere su questo cambio?",
+  "drawer.exchangeNotePlaceholder": "Facoltativo",
   "review.itemCount_one": "{count} articolo",
   "review.itemCount_other": "{count} articoli",
   "review.shipInstructions": "Ti invieremo le istruzioni via e-mail non appena il reso sarà approvato. Imballa con cura gli articoli e rispediscili a noi.",

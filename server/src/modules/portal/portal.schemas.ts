@@ -35,6 +35,14 @@ export const resolutionEnum = z.enum([
 export const exchangeChoiceSchema = z.object({
   variantId: z.string().min(1),
   quantity: z.number().int().positive().max(99).default(1),
+  /**
+   * The exchange group the pick came through, when it did. Verified server
+   * side — the group has to apply to the returned item and the chosen product
+   * has to satisfy its offer condition — because the group decides the price.
+   */
+  ruleId: z.string().min(1).max(60).optional(),
+  /** Kept only when the group allows notes; otherwise dropped. */
+  note: z.string().trim().max(300).optional(),
 });
 
 /**

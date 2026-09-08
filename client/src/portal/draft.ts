@@ -177,7 +177,15 @@ export const toSelections = (draft: Draft) =>
     photoUrls: [] as string[],
     resolution: d.resolution,
     ...(d.exchangeVariantId
-      ? { exchange: { variantId: d.exchangeVariantId, quantity: 1 } }
+      ? {
+          exchange: {
+            variantId: d.exchangeVariantId,
+            quantity: 1,
+            // The group the pick came through decides its price; see the server.
+            ...(d.exchangeRuleId ? { ruleId: d.exchangeRuleId } : {}),
+            ...(d.exchangeNote ? { note: d.exchangeNote } : {}),
+          },
+        }
       : {}),
   }));
 

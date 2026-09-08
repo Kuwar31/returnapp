@@ -4,71 +4,186 @@ import type { BonusType, ExchangeCollection } from "../lib/types";
 import { ErrorAlert, Loading } from "../components/Feedback";
 
 /**
- * Advanced exchanges: what a returned item may be swapped into.
+ * Exchange groups — "advanced exchanges".
  *
- * Without a rule an exchange offers the whole catalogue. A rule names the items
- * it covers — by product tag, or by a fragment of the title — and lists what
- * they may become, each list backed by a collection. Every rule that matches an
- * item contributes its options; the order here is the order the customer sees
- * them in.
+ * Without a group, an exchange offers the whole catalogue. A group pairs the
+ * items it applies to with the products they may become: a return condition
+ * on the item coming back and an offer condition on what's shown instead.
+ * Its name is what the customer reads on the option. Every group that matches
+ * an item is offered; the order here is the order the customer sees them in.
  */
 
-type MatchBy = "PRODUCT_TAG" | "PRODUCT_NAME";
+type MatchBy = "PRODUCT_TAG" | "PRODUCT_TYPE" | "PRODUCT_NAME" | "COLLECTION";
+type OfferBy = "PRODUCT_TAG" | "PRODUCT_TYPE" | "COLLECTION";
+type Pricing = "EVEN" | "DIFFERENCE";
 
-interface RuleOption {
-  id?: string;
-  label: string;
-  collectionId: string;
-  collectionTitle: string;
-}
-
-interface Rule {
+interface Group {
   id: string;
   name: string;
   active: boolean;
   matchBy: MatchBy;
   matchValues: string[];
+  offerBy: OfferBy;
+  offerValues: string[];
+  pricing: Pricing;
+  inStockOnly: boolean;
+  allowNote: boolean;
   showProductTitles: boolean;
-  /** Null means this rule doesn't override the store-wide exchange bonus. */
+  /** Null means this group doesn't override the store-wide exchange bonus. */
   bonusType: BonusType | null;
   bonusValue: number | null;
-  options: RuleOption[];
 }
 
-/** A rule that has never been saved, so the editor has something to open on. */
-const blankRule = (): Rule => ({
+const MATCH_LABELS: Record<MatchBy, string> = {
+  PRODUCT_TAG: "Product tag",
+  PRODUCT_TYPE: "Product type",
+  PRODUCT_NAME: "Product name",
+  COLLECTION: "Collection",
+};
+
+const OFFER_LABELS: Record<OfferBy, string> = {
+  PRODUCT_TAG: "Product tag",
+  PRODUCT_TYPE: "Product type",
+  COLLECTION: "Collection",
+};
+
+const PLACEHOLDERS: Record<MatchBy, string> = {
+  PRODUCT_TAG: "e.g. snowboard, winter-2026",
+  PRODUCT_TYPE: "e.g. Snowboard, Bindings",
+  PRODUCT_NAME: "e.g. Collection Snowboard",
+  COLLECTION: "",
+};
+
+/** A group that has never been saved, so the editor has something to open on. */
+const blankGroup = (): Group => ({
   id: "",
   name: "",
   active: true,
   matchBy: "PRODUCT_TAG",
   matchValues: [],
+  offerBy: "COLLECTION",
+  offerValues: [],
+  pricing: "EVEN",
+  inStockOnly: true,
+  allowNote: false,
   showProductTitles: false,
   bonusType: "PERCENT",
   bonusValue: null,
-  options: [],
 });
 
+const splitValues = (text: string) =>
+  [...new Set(text.split(",").map((v) => v.trim()).filter(Boolean))];
+
+/**
+ * One half of the product pairing: what kind of thing to match on, and the
+ * values it may be any of. Collections are picked from the store's list; the
+ * rest are typed, comma-separated, and shown back as chips.
+ */
+function Condition<K extends string>({
+  label,
+  kinds,
+  kind,
+  onKind,
+  text,
+  onText,
+  picked,
+  onToggle,
+  collections,
+  hint,
+}: {
+  label: string;
+  kinds: Record<K, string>;
+  kind: K;
+  onKind: (kind: K) => void;
+  text: string;
+  onText: (text: string) => void;
+  picked: string[];
+  onToggle: (collectionId: string) => void;
+  collections: ExchangeCollection[];
+  hint: string;
+}) {
+  return (
+    <div className="pairing">
+      <div className="pairing__label">{label}</div>
+      <div className="pairing__head">
+        <select value={kind} onChange={(e) => onKind(e.target.value as K)}>
+          {(Object.keys(kinds) as K[]).map((k) => (
+            <option key={k} value={k}>
+              {kinds[k]}
+            </option>
+          ))}
+        </select>
+        <span className="pairing__op">is any of</span>
+      </div>
+
+      {kind === "COLLECTION" ? (
+        <div className="collection-picker">
+          {collections.length === 0 && (
+            <p className="muted" style={{ margin: 0 }}>
+              No collections found in your store. Connect Shopify, or add a
+              collection there first.
+            </p>
+          )}
+          {collections.map((c) => (
+            <label key={c.id} className="collection-picker__item">
+              <input
+                type="checkbox"
+                checked={picked.includes(c.id)}
+                onChange={() => onToggle(c.id)}
+              />
+              {c.title}
+            </label>
+          ))}
+        </div>
+      ) : (
+        <>
+          <input
+            type="text"
+            className="settings-input pairing__input"
+            value={text}
+            placeholder={PLACEHOLDERS[kind as MatchBy] ?? ""}
+            onChange={(e) => onText(e.target.value)}
+          />
+          {splitValues(text).length > 0 && (
+            <div className="chips">
+              {splitValues(text).map((v) => (
+                <span key={v} className="chip">
+                  {v}
+                </span>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+      <p className="settings-row__hint" style={{ marginTop: 8 }}>
+        {hint}
+      </p>
+    </div>
+  );
+}
+
 export default function ExchangeRulesPage() {
-  const [rules, setRules] = useState<Rule[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
   const [collections, setCollections] = useState<ExchangeCollection[]>([]);
-  const [editing, setEditing] = useState<Rule | null>(null);
+  const [editing, setEditing] = useState<Group | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
-  /** Tags are typed as text and split on save; see the hint under the field. */
-  const [valuesText, setValuesText] = useState("");
+  /** Typed values stay text until save; see splitValues. */
+  const [matchText, setMatchText] = useState("");
+  const [offerText, setOfferText] = useState("");
   /** Text while it's being typed; "1." on the way to "1.5" must survive. */
   const [bonusText, setBonusText] = useState("");
 
   const load = () =>
     api
-      .get<{ rules: Rule[]; collections: ExchangeCollection[] }>(
+      .get<{ rules: Group[]; collections: ExchangeCollection[] }>(
         "/admin/settings/exchange-rules",
         { auth: "admin" },
       )
       .then((r) => {
-        setRules(r.rules);
+        setGroups(r.rules);
         setCollections(r.collections);
       })
       .catch((e) => setError(e instanceof Error ? e.message : null))
@@ -78,13 +193,30 @@ export default function ExchangeRulesPage() {
     void load();
   }, []);
 
-  const open = (rule: Rule) => {
-    setEditing(rule);
-    setValuesText(rule.matchValues.join(", "));
-    setBonusText(rule.bonusValue === null ? "" : String(rule.bonusValue));
+  const open = (group: Group) => {
+    setEditing(group);
+    setMatchText(group.matchBy === "COLLECTION" ? "" : group.matchValues.join(", "));
+    setOfferText(group.offerBy === "COLLECTION" ? "" : group.offerValues.join(", "));
+    setBonusText(group.bonusValue === null ? "" : String(group.bonusValue));
     setStatus(null);
     setError(null);
   };
+
+  const collectionName = (id: string) =>
+    collections.find((c) => c.id === id)?.title ?? "a collection no longer in your store";
+
+  /** The values as they'll be saved, whichever way they're being edited. */
+  const matchValues = (g: Group) =>
+    g.matchBy === "COLLECTION" ? g.matchValues : splitValues(matchText);
+  const offerValues = (g: Group) =>
+    g.offerBy === "COLLECTION" ? g.offerValues : splitValues(offerText);
+
+  const describeValues = (kind: string, values: string[]) =>
+    values.length === 0
+      ? "—"
+      : kind === "COLLECTION"
+        ? values.map(collectionName).join(", ")
+        : values.join(", ");
 
   const save = async () => {
     if (!editing) return;
@@ -95,59 +227,57 @@ export default function ExchangeRulesPage() {
         name: editing.name.trim(),
         active: editing.active,
         matchBy: editing.matchBy,
-        matchValues: valuesText
-          .split(",")
-          .map((v) => v.trim())
-          .filter(Boolean),
+        matchValues: matchValues(editing),
+        offerBy: editing.offerBy,
+        offerValues: offerValues(editing),
+        pricing: editing.pricing,
+        inStockOnly: editing.inStockOnly,
+        allowNote: editing.allowNote,
         showProductTitles: editing.showProductTitles,
         bonusType: editing.bonusType ?? "PERCENT",
         bonusValue: bonusText.trim() === "" ? null : Number(bonusText),
-        options: editing.options.map((o) => ({
-          label: o.label.trim(),
-          collectionId: o.collectionId,
-          collectionTitle: o.collectionTitle,
-        })),
       };
       if (editing.id) {
         await api.patch(`/admin/settings/exchange-rules/${editing.id}`, body, {
           auth: "admin",
         });
       } else {
-        await api.post("/admin/settings/exchange-rules", body, {
-          auth: "admin",
-        });
+        await api.post("/admin/settings/exchange-rules", body, { auth: "admin" });
       }
       await load();
       setEditing(null);
       setStatus("Saved.");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't save that rule.");
+      setError(e instanceof Error ? e.message : "Couldn't save that group.");
     } finally {
       setSaving(false);
     }
   };
 
-  const remove = async (rule: Rule) => {
+  const remove = async (group: Group) => {
+    if (!window.confirm(`Delete "${group.name}"? Customers will stop seeing it as an option.`)) {
+      return;
+    }
     setError(null);
     try {
-      await api.delete(`/admin/settings/exchange-rules/${rule.id}`, {
+      await api.delete(`/admin/settings/exchange-rules/${group.id}`, {
         auth: "admin",
       });
       await load();
       setEditing(null);
-      setStatus("Rule deleted.");
+      setStatus("Group deleted.");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't delete that rule.");
+      setError(e instanceof Error ? e.message : "Couldn't delete that group.");
     }
   };
 
   /** Order is only meaningful across the whole set, so it moves one at a time. */
   const move = async (index: number, delta: number) => {
-    const next = [...rules];
+    const next = [...groups];
     const target = index + delta;
     if (target < 0 || target >= next.length) return;
     [next[index], next[target]] = [next[target], next[index]];
-    setRules(next);
+    setGroups(next);
     await api
       .post(
         "/admin/settings/exchange-rules/reorder",
@@ -157,35 +287,33 @@ export default function ExchangeRulesPage() {
       .catch((e) => setError(e instanceof Error ? e.message : null));
   };
 
-  const setOption = (index: number, patch: Partial<RuleOption>) =>
-    setEditing((prev) =>
-      prev
-        ? {
-            ...prev,
-            options: prev.options.map((o, i) =>
-              i === index ? { ...o, ...patch } : o,
-            ),
-          }
-        : prev,
-    );
+  const toggleIn = (list: string[], id: string) =>
+    list.includes(id) ? list.filter((v) => v !== id) : [...list, id];
 
   if (loading) return <Loading />;
+
+  const canSave =
+    editing !== null &&
+    !saving &&
+    editing.name.trim().length > 0 &&
+    matchValues(editing).length > 0 &&
+    offerValues(editing).length > 0;
 
   return (
     <>
       <div className="admin__header">
         <div>
           <div className="admin__eyebrow">Settings</div>
-          <h1>Advanced exchanges</h1>
+          <h1>{editing ? (editing.id ? "Edit exchange group" : "Create exchange group") : "Advanced exchanges"}</h1>
           <p className="muted" style={{ marginTop: 4 }}>
-            Decide what a returned item can be exchanged for. Without a rule,
-            customers can exchange into anything in your catalogue. Every rule
-            that matches an item contributes its options, in the order below.
+            {editing
+              ? "Pair the items a customer returns with the products they can exchange them for."
+              : "Decide what a returned item can be exchanged for. Without a group, customers can exchange into anything in your catalogue. Every group that matches an item is offered, in the order below."}
           </p>
         </div>
         {!editing && (
-          <button className="btn btn--sm" onClick={() => open(blankRule())}>
-            New rule
+          <button className="btn btn--sm" onClick={() => open(blankGroup())}>
+            Create exchange group
           </button>
         )}
       </div>
@@ -195,38 +323,40 @@ export default function ExchangeRulesPage() {
 
       {!editing && (
         <div className="settings-form">
-          {rules.length === 0 ? (
+          {groups.length === 0 ? (
             <div className="panel">
               <p className="muted">
-                No rules yet. Every exchange offers the whole catalogue.
+                No exchange groups yet. Every exchange offers the whole catalogue.
               </p>
             </div>
           ) : (
-            rules.map((rule, index) => (
-              <div key={rule.id} className="panel rule-row">
+            groups.map((group, index) => (
+              <div key={group.id} className="panel rule-row">
                 <div className="rule-row__body">
                   <div className="settings-row__label">
-                    {rule.name}
-                    {!rule.active && (
+                    {group.name}
+                    {!group.active && (
                       <span className="chip" style={{ marginLeft: 8 }}>
                         Disabled
                       </span>
                     )}
                   </div>
                   <div className="settings-row__hint">
-                    {rule.matchBy === "PRODUCT_TAG"
-                      ? "Tags: "
-                      : "Title contains: "}
-                    {rule.matchValues.join(", ") || "—"} ·{" "}
-                    {rule.options.length} option
-                    {rule.options.length === 1 ? "" : "s"}
-                    {rule.bonusValue !== null &&
-                      ` · ${rule.bonusValue}${rule.bonusType === "PERCENT" ? "%" : ""} bonus`}
+                    {MATCH_LABELS[group.matchBy]}:{" "}
+                    {describeValues(group.matchBy, group.matchValues)} →{" "}
+                    {OFFER_LABELS[group.offerBy]}:{" "}
+                    {describeValues(group.offerBy, group.offerValues)}
+                    {" · "}
+                    {group.pricing === "EVEN"
+                      ? "Even exchange"
+                      : "Price difference charged or refunded"}
+                    {group.bonusValue !== null &&
+                      ` · ${group.bonusValue}${group.bonusType === "PERCENT" ? "%" : ""} bonus`}
                   </div>
                 </div>
                 <div className="rule-row__actions">
-                  {/* Every matching rule applies, so this orders the cards the
-                      customer sees rather than deciding which rule wins. */}
+                  {/* Every matching group applies, so this orders the cards the
+                      customer sees rather than deciding which group wins. */}
                   <button
                     className="btn btn--secondary btn--sm"
                     disabled={index === 0}
@@ -237,7 +367,7 @@ export default function ExchangeRulesPage() {
                   </button>
                   <button
                     className="btn btn--secondary btn--sm"
-                    disabled={index === rules.length - 1}
+                    disabled={index === groups.length - 1}
                     onClick={() => void move(index, 1)}
                     aria-label="Move down"
                   >
@@ -245,7 +375,7 @@ export default function ExchangeRulesPage() {
                   </button>
                   <button
                     className="btn btn--secondary btn--sm"
-                    onClick={() => open(rule)}
+                    onClick={() => open(group)}
                   >
                     Edit
                   </button>
@@ -257,244 +387,319 @@ export default function ExchangeRulesPage() {
       )}
 
       {editing && (
-        <div className="settings-form">
-          <div className="panel">
-            <h2>{editing.id ? "Edit rule" : "New rule"}</h2>
-
-            <div className="settings-row">
-              <div>
-                <div className="settings-row__label">Name</div>
-                <div className="settings-row__hint">
-                  For your own reference; customers never see it.
-                </div>
-              </div>
-              <input
-                type="text"
-                style={{ width: 240 }}
-                value={editing.name}
-                placeholder="e.g. footwear"
-                onChange={(e) =>
-                  setEditing({ ...editing, name: e.target.value })
-                }
-              />
-            </div>
-
-            <div className="settings-row">
-              <div>
-                <div className="settings-row__label">Which items</div>
-                <div className="settings-row__hint">
-                  How this rule recognises the item being returned. Tags are
-                  read from the order as it was placed, so retagging a product
-                  later won't change an existing order's options.
-                </div>
-              </div>
-              <select
-                value={editing.matchBy}
-                onChange={(e) =>
-                  setEditing({ ...editing, matchBy: e.target.value as MatchBy })
-                }
-              >
-                <option value="PRODUCT_TAG">By product tag</option>
-                <option value="PRODUCT_NAME">By product name</option>
-              </select>
-            </div>
-
-            <div className="settings-row settings-row--stacked">
-              <div>
-                <div className="settings-row__label">
-                  {editing.matchBy === "PRODUCT_TAG"
-                    ? "Product tags"
-                    : "Words in the product name"}
-                </div>
-                <div className="settings-row__hint">
-                  Separate with commas. An item matches if it has any one of
-                  them.
-                </div>
-              </div>
-              <input
-                type="text"
-                value={valuesText}
-                placeholder="department:footwear, brand:alohas"
-                onChange={(e) => setValuesText(e.target.value)}
-              />
-            </div>
-
-            <div className="settings-row">
-              <div>
-                <div className="settings-row__label">Credit bonus</div>
-                <div className="settings-row__hint">
-                  Extra credit for exchanging an item this rule matches,
-                  overriding the store-wide exchange bonus. Leave empty to use
-                  that instead. Where several rules match, the first one with a
-                  bonus applies.
-                </div>
-              </div>
-              <div className="bonus-field">
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={bonusText}
-                  placeholder="Store default"
-                  onChange={(e) => setBonusText(e.target.value)}
-                />
-                <select
-                  value={editing.bonusType ?? "PERCENT"}
-                  onChange={(e) =>
-                    setEditing({
-                      ...editing,
-                      bonusType: e.target.value as BonusType,
-                    })
-                  }
-                >
-                  <option value="PERCENT">%</option>
-                  <option value="FIXED">flat</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="settings-row">
-              <div>
-                <div className="settings-row__label">Show product titles</div>
-                <div className="settings-row__hint">
-                  Whether names appear under the pictures on the customer's
-                  choice screen.
-                </div>
-              </div>
-              <input
-                type="checkbox"
-                checked={editing.showProductTitles}
-                onChange={(e) =>
-                  setEditing({
-                    ...editing,
-                    showProductTitles: e.target.checked,
-                  })
-                }
-              />
-            </div>
-
-            <div className="settings-row">
-              <div>
-                <div className="settings-row__label">Active</div>
-                <div className="settings-row__hint">
-                  A disabled rule contributes nothing; any other matching rules
-                  still do.
-                </div>
-              </div>
-              <input
-                type="checkbox"
-                checked={editing.active}
-                onChange={(e) =>
-                  setEditing({ ...editing, active: e.target.checked })
-                }
-              />
-            </div>
-          </div>
-
-          <div className="panel">
-            <h2>Exchange options</h2>
-            <p className="settings-row__hint" style={{ marginBottom: 14 }}>
-              What a matching item can be exchanged for. Each option is one
-              collection, shown to the customer as its own card — add several
-              here to offer several. A collection already offered by an earlier
-              rule isn't shown twice.
-            </p>
-
-            {collections.length === 0 && (
-              <div className="alert alert--warn">
-                No collections found in your store, so there's nothing to point
-                an option at yet.
-              </div>
-            )}
-
-            {editing.options.map((option, index) => (
-              <div key={index} className="settings-row settings-row--stacked">
+        <div className="portal-settings">
+          <div className="settings-form">
+            <div className="panel">
+              <h2>Group name</h2>
+              <div className="counted">
                 <input
                   type="text"
-                  value={option.label}
+                  className="settings-input"
+                  maxLength={200}
+                  value={editing.name}
                   placeholder="Exchange for a new style"
-                  onChange={(e) => setOption(index, { label: e.target.value })}
+                  onChange={(e) => setEditing({ ...editing, name: e.target.value })}
                 />
-                <div className="rule-option__row">
+                <span className="counted__count">{editing.name.length}/200</span>
+              </div>
+              <p className="settings-row__hint" style={{ marginTop: 8 }}>
+                Customers will see this name as an exchange option.
+              </p>
+            </div>
+
+            <div className="panel">
+              <h2>Product pairing</h2>
+              <p className="settings-row__hint" style={{ marginBottom: 16 }}>
+                Define which return items are eligible for an exchange, and
+                which new products they can be exchanged for.
+              </p>
+
+              <Condition
+                label="Return item condition"
+                kinds={MATCH_LABELS}
+                kind={editing.matchBy}
+                onKind={(matchBy) => {
+                  setEditing({ ...editing, matchBy, matchValues: [] });
+                  setMatchText("");
+                }}
+                text={matchText}
+                onText={setMatchText}
+                picked={editing.matchValues}
+                onToggle={(id) =>
+                  setEditing({
+                    ...editing,
+                    matchValues: toggleIn(editing.matchValues, id),
+                  })
+                }
+                collections={collections}
+                hint={
+                  editing.matchBy === "PRODUCT_NAME"
+                    ? "Separate with commas. An item matches if its name contains any of them."
+                    : editing.matchBy === "COLLECTION"
+                      ? "An item matches if its product is in any of these collections, checked when the customer starts a return."
+                      : "Separate with commas. Tags and types are read from the order as it was placed, so retagging a product later won't change an existing order's options."
+                }
+              />
+
+              <div className="pairing__divider" />
+
+              <Condition
+                label="Exchange item condition"
+                kinds={OFFER_LABELS}
+                kind={editing.offerBy}
+                onKind={(offerBy) => {
+                  setEditing({ ...editing, offerBy, offerValues: [] });
+                  setOfferText("");
+                }}
+                text={offerText}
+                onText={setOfferText}
+                picked={editing.offerValues}
+                onToggle={(id) =>
+                  setEditing({
+                    ...editing,
+                    offerValues: toggleIn(editing.offerValues, id),
+                  })
+                }
+                collections={collections}
+                hint={
+                  editing.offerBy === "COLLECTION"
+                    ? "Customers can pick anything in these collections."
+                    : "Separate with commas. Customers can pick any product carrying one of them, as your catalogue is now."
+                }
+              />
+            </div>
+
+            <div className="panel">
+              <h2>Additional settings</h2>
+
+              <div className="radio-list">
+                <label className="radio-list__item">
+                  <input
+                    type="radio"
+                    name="pricing"
+                    checked={editing.pricing === "EVEN"}
+                    onChange={() => setEditing({ ...editing, pricing: "EVEN" })}
+                  />
+                  <span>
+                    <span className="radio-list__label">Treat as an even exchange</span>
+                    <span className="radio-list__hint">
+                      The customer pays nothing more and is credited nothing back,
+                      whatever the price of what they pick.
+                    </span>
+                  </span>
+                </label>
+                <label className="radio-list__item">
+                  <input
+                    type="radio"
+                    name="pricing"
+                    checked={editing.pricing === "DIFFERENCE"}
+                    onChange={() =>
+                      setEditing({ ...editing, pricing: "DIFFERENCE" })
+                    }
+                  />
+                  <span>
+                    <span className="radio-list__label">
+                      Charge or refund the price difference
+                    </span>
+                    <span className="radio-list__hint">
+                      A dearer pick is paid for at checkout; a cheaper one leaves
+                      credit, settled the way the customer chooses.
+                    </span>
+                  </span>
+                </label>
+                {editing.pricing === "DIFFERENCE" && (
+                  <div className="checkout-method">
+                    Checkout method: <strong>Shopify checkout</strong>
+                  </div>
+                )}
+              </div>
+
+              <div className="pairing__divider" />
+
+              <label className="check-list__item">
+                <input
+                  type="checkbox"
+                  checked={editing.inStockOnly}
+                  onChange={(e) =>
+                    setEditing({ ...editing, inStockOnly: e.target.checked })
+                  }
+                />
+                <span>
+                  <span className="radio-list__label">
+                    Only show in-stock products
+                  </span>
+                  <span className="radio-list__hint">
+                    Off shows sold-out products too, greyed out, so customers
+                    know they exist.
+                  </span>
+                </span>
+              </label>
+              <label className="check-list__item">
+                <input
+                  type="checkbox"
+                  checked={editing.allowNote}
+                  onChange={(e) =>
+                    setEditing({ ...editing, allowNote: e.target.checked })
+                  }
+                />
+                <span>
+                  <span className="radio-list__label">
+                    Allow customers to leave a note for their exchange
+                  </span>
+                  <span className="radio-list__hint">
+                    Shown to you beside the item they picked.
+                  </span>
+                </span>
+              </label>
+              <label className="check-list__item">
+                <input
+                  type="checkbox"
+                  checked={editing.showProductTitles}
+                  onChange={(e) =>
+                    setEditing({ ...editing, showProductTitles: e.target.checked })
+                  }
+                />
+                <span>
+                  <span className="radio-list__label">
+                    Show product names under the pictures
+                  </span>
+                </span>
+              </label>
+
+              <div className="pairing__divider" />
+
+              <div className="settings-row">
+                <div>
+                  <div className="settings-row__label">Credit bonus</div>
+                  <div className="settings-row__hint">
+                    Extra credit for exchanging an item this group matches,
+                    overriding the store-wide exchange bonus. Leave empty to
+                    use that instead.
+                  </div>
+                </div>
+                <div className="bonus-field">
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={bonusText}
+                    placeholder="Store default"
+                    onChange={(e) => setBonusText(e.target.value)}
+                  />
                   <select
-                    value={option.collectionId}
-                    onChange={(e) => {
-                      const chosen = collections.find(
-                        (c) => c.id === e.target.value,
-                      );
-                      setOption(index, {
-                        collectionId: e.target.value,
-                        collectionTitle: chosen?.title ?? "",
-                      });
-                    }}
-                  >
-                    <option value="">Choose a collection…</option>
-                    {collections.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.title}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    className="btn btn--secondary btn--sm"
-                    onClick={() =>
+                    value={editing.bonusType ?? "PERCENT"}
+                    onChange={(e) =>
                       setEditing({
                         ...editing,
-                        options: editing.options.filter((_, i) => i !== index),
+                        bonusType: e.target.value as BonusType,
                       })
                     }
                   >
-                    Remove
-                  </button>
+                    <option value="PERCENT">%</option>
+                    <option value="FIXED">flat</option>
+                  </select>
                 </div>
               </div>
-            ))}
 
-            <button
-              className="btn btn--secondary btn--sm"
-              style={{ marginTop: 12 }}
-              disabled={collections.length === 0}
-              onClick={() =>
-                setEditing({
-                  ...editing,
-                  options: [
-                    ...editing.options,
-                    { label: "", collectionId: "", collectionTitle: "" },
-                  ],
-                })
-              }
-            >
-              Add exchange option
-            </button>
+              <div className="settings-row">
+                <div>
+                  <div className="settings-row__label">Active</div>
+                  <div className="settings-row__hint">
+                    A disabled group is offered to nobody; any other matching
+                    groups still are.
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={editing.active}
+                  onChange={(e) =>
+                    setEditing({ ...editing, active: e.target.checked })
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="rule-actions">
+              {editing.id && (
+                <button
+                  className="btn btn--danger btn--sm"
+                  onClick={() => void remove(editing)}
+                >
+                  Delete
+                </button>
+              )}
+              <div className="rule-actions__right">
+                <button
+                  className="btn btn--secondary btn--sm"
+                  onClick={() => setEditing(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="btn btn--sm"
+                  disabled={!canSave}
+                  onClick={() => void save()}
+                >
+                  {saving ? "Saving…" : editing.id ? "Save" : "Create"}
+                </button>
+              </div>
+            </div>
           </div>
 
-          <div className="rule-actions">
-            {editing.id && (
-              <button
-                className="btn btn--danger btn--sm"
-                onClick={() => void remove(editing)}
-              >
-                Delete
-              </button>
-            )}
-            <div className="rule-actions__right">
-              <button
-                className="btn btn--secondary btn--sm"
-                onClick={() => setEditing(null)}
-              >
-                Cancel
-              </button>
-              <button
-                className="btn btn--sm"
-                disabled={
-                  saving ||
-                  !editing.name.trim() ||
-                  editing.options.some((o) => !o.label.trim() || !o.collectionId)
-                }
-                onClick={() => void save()}
-              >
-                {saving ? "Saving…" : "Save rule"}
-              </button>
+          {/* What the settings add up to, and what the customer will see. */}
+          <div className="portal-settings__preview">
+            <div className="panel group-summary">
+              <h2>Summary</h2>
+              <div className="group-summary__head">Group name</div>
+              <ul>
+                <li>{editing.name.trim() || "—"}</li>
+              </ul>
+              <div className="group-summary__head">Product pairing</div>
+              <ul>
+                <li>
+                  Return item: {MATCH_LABELS[editing.matchBy]} (
+                  {describeValues(editing.matchBy, matchValues(editing))})
+                </li>
+                <li>
+                  Exchange item: {OFFER_LABELS[editing.offerBy]} (
+                  {describeValues(editing.offerBy, offerValues(editing))})
+                </li>
+              </ul>
+              <div className="group-summary__head">Additional settings</div>
+              <ul>
+                <li>
+                  {editing.pricing === "EVEN"
+                    ? "Treat as an even exchange"
+                    : "Charge or refund the price difference"}
+                </li>
+                {editing.inStockOnly && <li>Only in-stock products</li>}
+                {editing.allowNote && <li>Customers can leave a note</li>}
+                {bonusText.trim() !== "" && (
+                  <li>
+                    {bonusText}
+                    {(editing.bonusType ?? "PERCENT") === "PERCENT" ? "%" : ""}{" "}
+                    credit bonus
+                  </li>
+                )}
+              </ul>
+            </div>
+
+            <div className="panel">
+              <h2>Preview</h2>
+              <div className="gp">
+                <div className="gp__title">How would you like to proceed?</div>
+                <div className="gp__card gp__card--group">
+                  <div className="gp__card-label">
+                    {editing.name.trim() || "Exchange for a new style"}
+                  </div>
+                  <div className="gp__strip">
+                    <span />
+                    <span />
+                    <span />
+                  </div>
+                </div>
+                <div className="gp__card">Return item</div>
+              </div>
             </div>
           </div>
         </div>

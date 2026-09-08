@@ -830,7 +830,16 @@ export default function ReturnDetailPage() {
                     <div className="line-item__meta">
                       {item.variantTitle && <>{item.variantTitle} · </>}
                       {item.sku && <>{item.sku} · </>}Qty {item.quantity}
+                      {item.evenExchange && (
+                        <span className="chip" style={{ marginLeft: 8 }}>
+                          Even exchange
+                        </span>
+                      )}
                     </div>
+                    {/* What the shopper wrote with the pick, where the group allowed it. */}
+                    {item.note && (
+                      <div className="line-item__meta">“{item.note}”</div>
+                    )}
                   </div>
                   <span className="line-item__price">
                     {money(item.unitPrice * item.quantity, detail.currency)}

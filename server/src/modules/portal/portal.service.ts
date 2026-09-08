@@ -20,6 +20,8 @@ import {
 } from "../settings/merchant-settings.js";
 import {
   exchangeBonusFor,
+  offerQuery,
+  productMatchesOffer,
   rulesForLine,
 } from "../settings/exchange-rules.service.js";
 import { signShopToken } from "../../lib/tokens.js";
@@ -413,7 +415,7 @@ const resolveSelections = async (
     );
   }
 
-  const resolved = input.items.map((selection) => {
+  const checked = input.items.map((selection) => {
     const line = linesById.get(selection.orderLineItemId);
     const evaluated = eligibleById.get(selection.orderLineItemId);
     if (!line || !evaluated) {
@@ -461,6 +463,49 @@ const resolveSelections = async (
     if (item.exchange && !variants.has(item.exchange.variantId)) {
       throw badRequest("One of the exchange options is no longer available.");
     }
+  }
+
+  /**
+   * A pick that came through an exchange group is verified against it: the
+   * returned item has to match the group's return condition and the chosen
+   * product its offer condition. The group decides how the price gap is
+   * settled, so this is the trust boundary for "even exchange" — a client
+   * can't name a group to get its pricing on a product it doesn't cover.
+   */
+  const rulesByLine = new Map<string, Awaited<ReturnType<typeof rulesForLine>>>();
+  const resolved: Array<
+    (typeof checked)[number] & { evenExchange: boolean; allowNote: boolean }
+  > = [];
+  for (const entry of checked) {
+    const ruleId = entry.selection.exchange?.ruleId;
+    if (!ruleId) {
+      resolved.push({ ...entry, evenExchange: false, allowNote: false });
+      continue;
+    }
+    let rules = rulesByLine.get(entry.line.id);
+    if (!rules) {
+      rules = await rulesForLine(merchantId, entry.line);
+      rulesByLine.set(entry.line.id, rules);
+    }
+    const rule = rules.find((r) => r.id === ruleId);
+    const variant = variants.get(entry.selection.exchange!.variantId)!;
+    if (
+      !rule ||
+      !productMatchesOffer(rule, {
+        tags: variant.productTags,
+        productType: variant.productType,
+        collectionIds: variant.collectionIds,
+      })
+    ) {
+      throw unprocessable(
+        `The exchange option for "${entry.line.title}" is no longer available. Please choose again.`,
+      );
+    }
+    resolved.push({
+      ...entry,
+      evenExchange: rule.pricing === "EVEN",
+      allowNote: rule.allowNote,
+    });
   }
 
   /**
@@ -716,40 +761,27 @@ export const getAdvancedExchange = async (
 ) => {
   const line = await prisma.orderLineItem.findFirst({
     where: { id: orderLineItemId, order: { id: orderId, merchantId } },
-    select: { productTags: true, title: true },
+    select: { productTags: true, title: true, productType: true, productId: true },
   });
   if (!line) throw notFound("That item isn't part of this order.");
 
   const rules = await rulesForLine(merchantId, line);
   if (rules.length === 0) return null;
 
-  /**
-   * Every matching rule's options, in rule order, with duplicates dropped.
-   * Two rules pointing at the same collection is a merchant mistake, not an
-   * instruction to show the same list twice.
-   */
-  const seen = new Set<string>();
-  const ruleOptions = rules
-    .flatMap((rule) => rule.options)
-    .filter((option) => {
-      if (seen.has(option.collectionId)) return false;
-      seen.add(option.collectionId);
-      return true;
-    });
-
   const fx = await catalogueConverter(merchantId, orderId);
 
   /**
-   * Previews are fetched per option and failures are swallowed per option: one
-   * collection a merchant has since deleted shouldn't take the whole menu down
-   * with it.
+   * One option per matching group, in the merchant's order. Previews are
+   * fetched per group and failures swallowed per group: one condition that
+   * matches nothing any more shouldn't take the whole menu down with it.
    */
   const options = await Promise.all(
-    ruleOptions.map(async (option) => {
+    rules.map(async (rule) => {
       let preview: Array<{ id: string; title: string; imageUrl: string | null }> = [];
       try {
         const { products } = await browseProducts(merchantId, {
-          collectionId: option.collectionId,
+          filter: offerQuery(rule),
+          includeSoldOut: !rule.inStockOnly,
           limit: 5,
         });
         preview = products.map((p) => ({
@@ -759,14 +791,15 @@ export const getAdvancedExchange = async (
         }));
       } catch (error) {
         logger.warn(
-          { merchantId, collectionId: option.collectionId, error },
-          "Could not preview an advanced exchange collection",
+          { merchantId, ruleId: rule.id, error },
+          "Could not preview an exchange group",
         );
       }
       return {
-        id: option.id,
-        label: option.label,
-        collectionId: option.collectionId,
+        id: rule.id,
+        label: rule.name,
+        pricing: rule.pricing,
+        allowNote: rule.allowNote,
         preview,
       };
     }),
@@ -774,12 +807,34 @@ export const getAdvancedExchange = async (
 
   return {
     ruleIds: rules.map((r) => r.id),
-    // A display nicety, so the most permissive matching rule decides.
+    // A display nicety, so the most permissive matching group decides.
     showProductTitles: rules.some((r) => r.showProductTitles),
     currency: fx.currency,
-    // An option whose collection is gone or empty is not worth offering.
+    // A group whose condition matches nothing is not worth offering.
     options: options.filter((o) => o.preview.length > 0),
   };
+};
+
+/**
+ * One exchange group, checked against the item it's being used for.
+ *
+ * The portal only offers groups that apply, so a request naming one that
+ * doesn't means the group changed under the shopper — said plainly rather
+ * than quietly priced another way, since the group decides the price.
+ */
+const ruleForLine = async (
+  merchantId: string,
+  line: { productTags: string[]; title: string; productType: string | null; productId: string | null },
+  ruleId: string,
+) => {
+  const rules = await rulesForLine(merchantId, line);
+  const rule = rules.find((r) => r.id === ruleId);
+  if (!rule) {
+    throw unprocessable(
+      `That exchange option no longer applies to "${line.title}". Please choose again.`,
+    );
+  }
+  return rule;
 };
 
 /**
@@ -819,10 +874,46 @@ export const browseExchangeProducts = async (
     search,
     cursor,
     collectionId,
-  }: { search?: string; cursor?: string; collectionId?: string },
+    ruleId,
+    orderLineItemId,
+  }: {
+    search?: string;
+    cursor?: string;
+    collectionId?: string;
+    /** Browse within an exchange group's offer, for the item it applies to. */
+    ruleId?: string;
+    orderLineItemId?: string;
+  },
 ) => {
+  /**
+   * A group narrows the catalogue to its offer condition, and only for an
+   * item it governs: the group is looked up against the line rather than
+   * trusted, so a request can't browse a list its item was never offered.
+   */
+  let filter: string | undefined;
+  let includeSoldOut = false;
+  if (ruleId) {
+    const line = orderLineItemId
+      ? await prisma.orderLineItem.findFirst({
+          where: { id: orderLineItemId, order: { id: orderId, merchantId } },
+          select: { productTags: true, title: true, productType: true, productId: true },
+        })
+      : null;
+    if (!line) throw notFound("That item isn't part of this order.");
+    const rule = await ruleForLine(merchantId, line, ruleId);
+    filter = offerQuery(rule);
+    includeSoldOut = !rule.inStockOnly;
+  }
+
   const [result, collections, fx] = await Promise.all([
-    browseProducts(merchantId, { search, cursor, collectionId }),
+    browseProducts(merchantId, {
+      search,
+      cursor,
+      // A group defines its own list; the free browse's rail doesn't apply.
+      collectionId: ruleId ? undefined : collectionId,
+      filter,
+      includeSoldOut,
+    }),
     // Sent alongside the products so the rail and the grid can't disagree
     // about which collections exist.
     browseCollections(merchantId),
@@ -851,10 +942,12 @@ const toQuoteLines = (
   resolved: Array<{
     line: { unitPrice: Prisma.Decimal; productId: string | null };
     selection: QuoteInput["items"][number];
+    /** The exchange group it came through said to settle the gap flat. */
+    evenExchange?: boolean;
   }>,
   variants: Map<string, { price: number; productId?: string | null }>,
 ) =>
-  resolved.map(({ line, selection }) => {
+  resolved.map(({ line, selection, evenExchange }) => {
     /**
      * A line either has a replacement of its own or it funds the basket —
      * never both, which is what stops the same goods being charged twice.
@@ -878,6 +971,7 @@ const toQuoteLines = (
       sameProduct: Boolean(
         chosen && line.productId && chosen.productId === line.productId,
       ),
+      evenExchange: evenExchange === true,
     };
   });
 
@@ -1093,7 +1187,7 @@ export const submitReturn = async (
       });
     }
 
-    for (const { selection } of resolved) {
+    for (const { selection, evenExchange, allowNote } of resolved) {
       /**
        * Written alongside the basket, not instead of it. A line that kept its
        * own swap was priced with that swap in the quote, so leaving it out
@@ -1115,6 +1209,15 @@ export const submitReturn = async (
           imageUrl: variant.imageUrl,
           quantity: selection.exchange.quantity,
           unitPrice: toDecimal(variant.price),
+          /**
+           * The group it came through and what that meant for the price,
+           * copied here so the admin's later recomputations settle the gap
+           * the way the shopper was quoted — even if the group is edited or
+           * deleted in the meantime. The note only when the group asked.
+           */
+          ruleId: selection.exchange.ruleId ?? null,
+          evenExchange,
+          note: allowNote && selection.exchange.note ? selection.exchange.note : null,
           /**
            * What swapping this line costs, per unit: positive means the shopper
            * upgraded and owes the difference, negative means they traded down.

@@ -625,24 +625,24 @@ settingsRouter.patch(
 // ---------------------------------------------------------------------------
 
 const ruleSchema = z.object({
-  name: z.string().trim().min(1).max(120),
+  /** Shown to the shopper as the exchange option. */
+  name: z.string().trim().min(1).max(200),
   active: z.boolean().optional(),
-  matchBy: z.enum(["PRODUCT_TAG", "PRODUCT_NAME"]).optional(),
-  matchValues: z.array(z.string().trim().min(1).max(120)).max(50).optional(),
+  // Return item condition — "is any of".
+  matchBy: z
+    .enum(["PRODUCT_TAG", "PRODUCT_NAME", "PRODUCT_TYPE", "COLLECTION"])
+    .optional(),
+  matchValues: z.array(z.string().trim().min(1).max(200)).max(50).optional(),
+  // Exchange item condition — "is any of".
+  offerBy: z.enum(["PRODUCT_TAG", "PRODUCT_TYPE", "COLLECTION"]).optional(),
+  offerValues: z.array(z.string().trim().min(1).max(200)).max(50).optional(),
+  pricing: z.enum(["EVEN", "DIFFERENCE"]).optional(),
+  inStockOnly: z.boolean().optional(),
+  allowNote: z.boolean().optional(),
   showProductTitles: z.boolean().optional(),
   bonusType: z.enum(["PERCENT", "FIXED"]).optional(),
   /** Null clears the override, falling back to the store-wide bonus. */
   bonusValue: z.number().min(0).max(100000).nullable().optional(),
-  options: z
-    .array(
-      z.object({
-        label: z.string().trim().min(1).max(80),
-        collectionId: z.string().trim().min(1).max(200),
-        collectionTitle: z.string().trim().min(1).max(200),
-      }),
-    )
-    .max(10)
-    .optional(),
 });
 
 settingsRouter.get(

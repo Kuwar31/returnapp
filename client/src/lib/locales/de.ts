@@ -20,6 +20,8 @@ export const de: Dict = {
   "drawer.noOtherOptions": "Für diesen Artikel gibt es keine weiteren Optionen. Tauschen Sie ihn stattdessen gegen ein anderes Produkt um.",
   "drawer.optionsFailed": "Die weiteren Optionen konnten gerade nicht geladen werden.",
   "drawer.tryAgain": "Erneut versuchen",
+  "drawer.exchangeNote": "Möchten Sie uns etwas zu diesem Umtausch mitteilen?",
+  "drawer.exchangeNotePlaceholder": "Optional",
   "review.itemCount_one": "{count} Artikel",
   "review.itemCount_other": "{count} Artikel",
   "review.shipInstructions": "Sobald Ihre Rücksendung genehmigt ist, erhalten Sie die Anweisungen per E-Mail. Verpacken Sie die Artikel sicher und schicken Sie sie an uns zurück.",

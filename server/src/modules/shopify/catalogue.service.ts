@@ -5,6 +5,7 @@ import { queryShop } from "./shopify.client.js";
 import {
   BROWSE_COLLECTIONS,
   BROWSE_PRODUCTS,
+  PRODUCT_COLLECTIONS,
   PRODUCT_VARIANTS,
   VARIANT_IMAGES,
   VARIANTS_BY_ID,
@@ -164,14 +165,47 @@ export const browseCollections = async (
   }
 };
 
+/**
+ * The collections a product sits in, for exchange groups that match on one.
+ * Empty when Shopify can't be read; the caller treats that as "no match".
+ */
+export const productCollections = async (
+  merchantId: string,
+  productId: string,
+): Promise<string[]> => {
+  try {
+    const data = await queryShop<{
+      product: { collections: { nodes: Array<{ id: string }> } } | null;
+    }>(merchantId, PRODUCT_COLLECTIONS, { id: productId });
+    return data.product?.collections.nodes.map((c) => c.id) ?? [];
+  } catch (error) {
+    logger.warn(
+      { merchantId, productId, error },
+      "Could not read a product's collections",
+    );
+    return [];
+  }
+};
+
 export const browseProducts = async (
   merchantId: string,
   {
     search,
     cursor,
     collectionId,
+    filter,
+    includeSoldOut = false,
     limit = 24,
-  }: { search?: string; cursor?: string; collectionId?: string; limit?: number },
+  }: {
+    search?: string;
+    cursor?: string;
+    collectionId?: string;
+    /** A ready-made search clause — an exchange group's offer condition. */
+    filter?: string;
+    /** Keep sold-out products, their variants marked unavailable. */
+    includeSoldOut?: boolean;
+    limit?: number;
+  },
 ): Promise<{ products: ExchangeProduct[]; nextCursor: string | null }> => {
   /**
    * Only what a shopper could actually buy right now.
@@ -192,6 +226,7 @@ export const browseProducts = async (
         ? [`collection_id:${collectionId.split("/").pop()}`]
         : [],
     )
+    .concat(filter ? [filter] : [])
     .join(" AND ");
 
   const data = await queryShop<{
@@ -233,7 +268,9 @@ export const browseProducts = async (
       maxPrice: parseFloat(p.priceRangeV2.maxVariantPrice.amount),
       currency: p.priceRangeV2.minVariantPrice.currencyCode,
       variants: p.variants.nodes
-        .filter((v) => v.availableForSale)
+        // Sold-out options are dropped, unless the group asked to show them
+        // greyed so the shopper knows they exist.
+        .filter((v) => includeSoldOut || v.availableForSale)
         .map((v) => ({
           id: v.id,
           title: v.title,
@@ -307,6 +344,10 @@ export interface ResolvedVariant {
   imageUrl: string | null;
   productId: string | null;
   available: boolean;
+  /** What an exchange group's offer condition is verified against. */
+  productTags: string[];
+  productType: string | null;
+  collectionIds: string[];
 }
 
 /**
@@ -334,6 +375,9 @@ export const resolveVariants = async (
         id: string;
         title: string;
         featuredMedia?: { preview?: { image?: { url: string } | null } | null } | null;
+        tags?: string[] | null;
+        productType?: string | null;
+        collections?: { nodes: Array<{ id: string }> } | null;
       } | null;
     } | null>;
   }>(merchantId, VARIANTS_BY_ID, { ids: [...new Set(variantIds)] });
@@ -359,6 +403,9 @@ export const resolveVariants = async (
         null,
       productId: node.product?.id ?? null,
       available: node.availableForSale,
+      productTags: node.product?.tags ?? [],
+      productType: node.product?.productType || null,
+      collectionIds: node.product?.collections?.nodes.map((c) => c.id) ?? [],
     });
   }
   return map;
