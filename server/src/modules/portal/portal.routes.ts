@@ -8,6 +8,7 @@ import { requirePortalSession } from "../../middleware/auth.js";
 import { rateLimit } from "../../middleware/rateLimit.js";
 import { validate } from "../../middleware/validate.js";
 import { serializeAddress, serializeReturn } from "../returns/serializers.js";
+import { recommendExchanges } from "./recommendations.service.js";
 import {
   feedbackSchema,
   lookupSchema,
@@ -40,6 +41,8 @@ portalRouter.get(
         slug: merchant.slug,
         name: merchant.name,
         currency: merchant.currency,
+        // Whether the recommendation screen runs after a reason is given.
+        aiExchange: merchant.aiExchangeEnabled,
       },
       branding: portalService.resolvePortalBranding(
         merchant.branding,
@@ -185,6 +188,34 @@ portalRouter.get(
         merchantId,
         orderId,
         String(req.query.orderLineItemId),
+      ),
+    );
+  }),
+);
+
+/**
+ * "AI exchange": one recommended replacement, ranked from the reason the
+ * shopper gave, the exchange groups that apply and what the catalogue has.
+ * Null when the store hasn't turned it on, or nothing fits.
+ */
+portalRouter.get(
+  "/session/exchange/recommendations",
+  rateLimit({ windowMs: 60_000, max: 60 }),
+  validate(
+    z.object({
+      orderLineItemId: z.string().min(1),
+      reasonId: z.string().max(60).optional(),
+    }),
+    "query",
+  ),
+  asyncHandler(async (req, res) => {
+    const { merchantId, orderId } = req.portal!;
+    res.json(
+      await recommendExchanges(
+        merchantId,
+        orderId,
+        String(req.query.orderLineItemId),
+        req.query.reasonId ? String(req.query.reasonId) : undefined,
       ),
     );
   }),

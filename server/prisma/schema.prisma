@@ -92,6 +92,14 @@ model Merchant {
    * was fulfilled from, which is right for most stores and needs no setup.
    */
   restockLocationId         String?
+  /**
+   * "AI exchange": once a shopper has said why they're returning something,
+   * the portal offers one recommended replacement — ranked from their reason,
+   * the exchange groups that apply and the catalogue — before the ordinary
+   * choice of exchange or return. Off by default; it changes what every
+   * shopper sees.
+   */
+  aiExchangeEnabled         Boolean                   @default(false)
 
   timezone  String         @default("UTC")
   status    MerchantStatus @default(ACTIVE)
@@ -410,6 +418,19 @@ model PortalBranding {
    * being handed "Need help? <address>" and nothing else.
    */
   footerText       String?
+
+  // --- AI exchange copy --------------------------------------------------
+  /**
+   * The words on the recommendation screen, where the merchant wants their
+   * own. Null falls back to the app's translation in the portal's language,
+   * which is why these are nullable where the older labels above are not.
+   */
+  aiSwitchLabel    String?
+  aiDetailsTitle   String?
+  aiSimilarTitle   String?
+  aiPriceCaption   String?
+  aiPrimaryLabel   String?
+  aiSecondaryLabel String?
 
   // --- language ----------------------------------------------------------
   /**

@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
-import { useT } from "./PortalLayout";
+import { usePortal, useT } from "./PortalLayout";
 import { money } from "../lib/format";
+import type { Key } from "../lib/i18n";
 import { describeVariant } from "./draft";
 import type {
   AdvancedExchange,
   EligibleLineItem,
   ExchangeOptions,
   ExchangeProduct,
+  ExchangeRecommendation,
+  ExchangeRecommendations,
   ExchangeVariant,
   ResolutionType,
   ReturnReasonOption,
@@ -63,7 +66,12 @@ export interface ItemDecision {
  * options and what the swap costs. They differ only in where the product came
  * from: the item's own siblings, or the catalogue.
  */
-type Step = "reason" | "resolution" | "size" | "browse" | "product";
+/**
+ * "ai" sits between the reason and the resolution when the store has turned
+ * recommendations on: one suggested replacement, taken or declined, before
+ * the ordinary choice.
+ */
+type Step = "reason" | "ai" | "resolution" | "size" | "browse" | "product";
 
 /**
  * The per-item decision flow: why it's coming back, then how to make it right.
@@ -117,6 +125,18 @@ export function ItemDrawer({
   );
   /** The exchange group the browse step is scoped to, if any. */
   const [ruleId, setRuleId] = useState<string | null>(null);
+  /**
+   * The recommendation screen's state. `recs` is undefined until asked, null
+   * when the store has it off or nothing fits; `recsFor` is the reason it was
+   * asked about, since a changed reason deserves a fresh answer.
+   */
+  const { merchant: portalMerchant, branding } = usePortal();
+  const [recs, setRecs] = useState<ExchangeRecommendations | null | undefined>(
+    undefined,
+  );
+  const [recsFor, setRecsFor] = useState<string | null>(null);
+  const [recIndex, setRecIndex] = useState(0);
+  const [recVariantId, setRecVariantId] = useState<string | null>(null);
   /** What the shopper wrote with a pick, where the group allows a note. */
   const [exchangeNote, setExchangeNote] = useState("");
   /** Preview lookups that failed. Distinct from "loaded, and empty". */
@@ -253,6 +273,91 @@ export function ItemDrawer({
   const canExchange = allowedResolutions.some((r) =>
     ["EXCHANGE", "INSTANT_EXCHANGE"].includes(r),
   );
+
+  /**
+   * Where a reason leads. The recommendation screen only when the store has
+   * it on and the item can be exchanged at all; it steps aside on its own if
+   * nothing fits (see the effect below), so the shopper never lands on an
+   * empty page.
+   */
+  const afterReason = () =>
+    setStep(portalMerchant.aiExchange && canExchange ? "ai" : "resolution");
+
+  useEffect(() => {
+    if (step !== "ai") return;
+    if (recs !== undefined && recsFor === reasonId) return;
+    setRecs(undefined);
+    setRecsFor(reasonId);
+    setRecIndex(0);
+    setRecVariantId(null);
+    api
+      .get<ExchangeRecommendations | null>(
+        "/portal/session/exchange/recommendations",
+        { auth: "portal", query: { orderLineItemId: item.id, reasonId } },
+      )
+      .then((data) => setRecs(data && data.candidates.length > 0 ? data : null))
+      .catch(() => setRecs(null));
+  }, [step, recs, recsFor, reasonId, item.id]);
+
+  // Nothing to recommend: straight on to the ordinary choice, no dead end.
+  useEffect(() => {
+    if (step === "ai" && recs === null) setStep("resolution");
+  }, [step, recs]);
+
+  /** The candidate on show, and the option of it the shopper has picked. */
+  const rec: ExchangeRecommendation | null = recs?.candidates[recIndex] ?? null;
+  const recVariants = rec
+    ? rec.variants.filter((v) => !(rec.sameProduct && v.id === recs?.currentVariantId))
+    : [];
+  useEffect(() => {
+    if (!rec) return;
+    if (recVariantId && recVariants.some((v) => v.id === recVariantId)) return;
+    setRecVariantId(recVariants.find((v) => v.available)?.id ?? null);
+    // recVariants is derived from rec; listing rec is what matters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rec?.id]);
+  const recChosen = recVariants.find((v) => v.id === recVariantId) ?? null;
+  /**
+   * What the swap costs, as the summary will price it: a group priced as an
+   * even exchange, or the item's own sizes under an absorbing store, settle
+   * flat; otherwise the difference either way.
+   */
+  const recPrice = recChosen?.price ?? rec?.minPrice ?? 0;
+  const recEven =
+    rec !== null && (rec.pricing === "EVEN" || (rec.sameProduct && absorbing));
+  const recDue = recEven ? 0 : Math.max(0, recPrice - item.unitPrice);
+  const recBack = recEven ? 0 : Math.max(0, item.unitPrice - recPrice);
+  /** The merchant's own words for the screen, else the app's. */
+  const copy = (override: string | null | undefined, key: Key) =>
+    override?.trim() || t(key);
+  /** The option axes of the candidate — "Color", "Size" — with their values. */
+  const recAxes = (() => {
+    const axes = new Map<string, string[]>();
+    for (const v of recVariants) {
+      for (const o of v.options ?? []) {
+        if (o.name.toLowerCase() === "title") continue;
+        const values = axes.get(o.name) ?? [];
+        if (!values.includes(o.value)) values.push(o.value);
+        axes.set(o.name, values);
+      }
+    }
+    return [...axes.entries()];
+  })();
+  /** Pick a value on one axis, keeping the others where they are if possible. */
+  const pickAxis = (axis: string, value: string) => {
+    const current = recChosen?.options ?? [];
+    const wanted = (v: ExchangeVariant) =>
+      v.options.some((o) => o.name === axis && o.value === value);
+    const keepsOthers = (v: ExchangeVariant) =>
+      current.every(
+        (o) => o.name === axis || v.options.some((p) => p.name === o.name && p.value === o.value),
+      );
+    const next =
+      recVariants.find((v) => v.available && wanted(v) && keepsOthers(v)) ??
+      recVariants.find((v) => v.available && wanted(v)) ??
+      recVariants.find(wanted);
+    if (next) setRecVariantId(next.id);
+  };
   /**
    * Placeholder for a plain return. The review step overwrites every non-
    * exchange line with whatever the shopper picks there, so this only has to
@@ -486,7 +591,11 @@ export function ItemDrawer({
                    catalogue product belongs to the grid it was opened from. */
                 step === "product"
                   ? (setPicked(null), setChosenId(null), setStep("browse"))
-                  : setStep(step === "resolution" ? "reason" : "resolution")
+                  : setStep(
+                      step === "resolution" || step === "ai"
+                        ? "reason"
+                        : "resolution",
+                    )
               }
               aria-label={t("common.back")}
             >
@@ -540,7 +649,7 @@ export function ItemDrawer({
                         );
                         // Reasons needing a note keep the shopper here; the rest
                         // move straight on, which is the common path.
-                        if (!r.requiresNote) setStep("resolution");
+                        if (!r.requiresNote) afterReason();
                       }}
                     >
                       <span>{r.label}</span>
@@ -566,7 +675,7 @@ export function ItemDrawer({
                     disabled={!reasonNote.trim()}
                     onClick={() => {
                       setError(null);
-                      setStep("resolution");
+                      afterReason();
                     }}
                   >
                     {t("common.continue")}
@@ -574,6 +683,179 @@ export function ItemDrawer({
                 </div>
               )}
             </>
+          )}
+
+          {step === "ai" && (
+            <div className="ai">
+              {recs === undefined && (
+                <p className="muted">{t("drawer.loadingOptions")}</p>
+              )}
+              {rec && recs && (
+                <>
+                  <h2 className="ai__title">
+                    <span className="ai__spark" aria-hidden="true">✦</span>{" "}
+                    {t("ai.title")}
+                  </h2>
+                  <p className="muted" style={{ margin: "6px 0 14px" }}>
+                    {t("ai.intro")}
+                  </p>
+                  {recs.candidates.length > 1 && (
+                    <button
+                      type="button"
+                      className="linkish ai__switch"
+                      onClick={() =>
+                        setRecIndex((recIndex + 1) % recs.candidates.length)
+                      }
+                    >
+                      {copy(branding.aiSwitchLabel, "ai.switch")}
+                    </button>
+                  )}
+
+                  <div className="ai-card">
+                    <div className="ai-card__media">
+                      {recIndex === 0 && (
+                        <span className="ai-card__flag">✦ {t("ai.bestMatch")}</span>
+                      )}
+                      {(recChosen?.imageUrl ?? rec.imageUrl) ? (
+                        <img src={recChosen?.imageUrl ?? rec.imageUrl ?? ""} alt="" />
+                      ) : (
+                        <div className="ai-card__blank" />
+                      )}
+                    </div>
+                    <div className="ai-card__body">
+                      <div className="ai-card__name">{rec.title}</div>
+                      <div className="ai-card__price">
+                        {recDue < recPrice - 0.005 && (
+                          <s>{money(recPrice, rec.currency || currency)}</s>
+                        )}
+                        <strong>{money(recDue, rec.currency || currency)}</strong>
+                        <span className="muted">
+                          {copy(branding.aiPriceCaption, "ai.priceCaption")}
+                        </span>
+                      </div>
+                      {recDue < 0.005 && (
+                        <span className="chip ai-card__chip">{t("ai.free")}</span>
+                      )}
+
+                      {recAxes.map(([axis, values]) => (
+                        <div key={axis} className="ai-card__axis">
+                          <h3 className="swapper__label">
+                            {axis[0].toUpperCase() + axis.slice(1)}
+                          </h3>
+                          <div className="swapper__sizes">
+                            {values.map((value) => {
+                              const selected = recChosen?.options.some(
+                                (o) => o.name === axis && o.value === value,
+                              );
+                              const possible = recVariants.some(
+                                (v) =>
+                                  v.available &&
+                                  v.options.some((o) => o.name === axis && o.value === value),
+                              );
+                              return (
+                                <button
+                                  key={value}
+                                  type="button"
+                                  className={`size${selected ? " is-selected" : ""}${
+                                    possible ? "" : " is-out"
+                                  }`}
+                                  disabled={!possible}
+                                  aria-pressed={selected}
+                                  onClick={() => pickAxis(axis, value)}
+                                >
+                                  {value}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+
+                      {rec.description && (
+                        <details className="ai-card__details">
+                          <summary>{copy(branding.aiDetailsTitle, "ai.details")}</summary>
+                          <p>{rec.description}</p>
+                        </details>
+                      )}
+                    </div>
+                  </div>
+
+                  {recs.candidates.length > 1 && (
+                    <>
+                      <h3 className="ai__similar-title">
+                        {copy(branding.aiSimilarTitle, "ai.similar")}
+                      </h3>
+                      <div className="ai-similar">
+                        {recs.candidates.map((c, i) =>
+                          i === recIndex ? null : (
+                            <button
+                              key={c.id}
+                              type="button"
+                              className="ai-similar__item"
+                              onClick={() => setRecIndex(i)}
+                            >
+                              {c.imageUrl ? (
+                                <img src={c.imageUrl} alt="" />
+                              ) : (
+                                <span className="ai-card__blank" />
+                              )}
+                              <span className="ai-similar__price">
+                                {money(
+                                  c.pricing === "EVEN" || (c.sameProduct && absorbing)
+                                    ? 0
+                                    : Math.max(0, c.minPrice - item.unitPrice),
+                                  c.currency || currency,
+                                )}
+                              </span>
+                              <span className="muted">
+                                {copy(branding.aiPriceCaption, "ai.priceCaption")}
+                              </span>
+                            </button>
+                          ),
+                        )}
+                      </div>
+                    </>
+                  )}
+
+                  <div className="ai__footer">
+                    <p className="ai__outcome">
+                      {recDue > 0.005
+                        ? t("ai.pay", { amount: money(recDue, rec.currency || currency) })
+                        : recBack > 0.005
+                          ? t("ai.refund", { amount: money(recBack, rec.currency || currency) })
+                          : t("ai.even")}
+                    </p>
+                    <div className="ai__actions">
+                      <button
+                        type="button"
+                        className="btn btn--secondary"
+                        onClick={() => setStep("resolution")}
+                      >
+                        {copy(branding.aiSecondaryLabel, "ai.secondary")}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn"
+                        disabled={!recChosen}
+                        onClick={() =>
+                          recChosen &&
+                          finish(
+                            "EXCHANGE",
+                            recChosen,
+                            rec.title,
+                            rec.ruleId
+                              ? { id: rec.ruleId, label: rec.title, pricing: rec.pricing, allowNote: false, preview: [] }
+                              : null,
+                          )
+                        }
+                      >
+                        {copy(branding.aiPrimaryLabel, "ai.primary")}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           )}
 
           {step === "resolution" && (

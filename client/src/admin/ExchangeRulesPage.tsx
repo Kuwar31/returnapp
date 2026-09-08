@@ -1,7 +1,257 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
-import type { BonusType, ExchangeCollection } from "../lib/types";
+import type {
+  BonusType,
+  ExchangeCollection,
+  PortalBranding,
+  StoreSettings,
+} from "../lib/types";
 import { ErrorAlert, Loading } from "../components/Feedback";
+
+/**
+ * The recommendation screen's words, and what they say when the merchant
+ * hasn't written their own. The defaults are the English of the app's own
+ * translation; a store in another language gets that language until it
+ * types something here.
+ */
+const AI_COPY: Array<{
+  key: keyof Pick<
+    PortalBranding,
+    | "aiSwitchLabel"
+    | "aiDetailsTitle"
+    | "aiSimilarTitle"
+    | "aiPriceCaption"
+    | "aiPrimaryLabel"
+    | "aiSecondaryLabel"
+  >;
+  label: string;
+  fallback: string;
+}> = [
+  { key: "aiSwitchLabel", label: "Switch option link", fallback: "Show another option" },
+  { key: "aiDetailsTitle", label: "Product details title", fallback: "Product details" },
+  { key: "aiSimilarTitle", label: "Similar choices title", fallback: "Similar choices" },
+  { key: "aiPriceCaption", label: "Price caption", fallback: "your price" },
+  { key: "aiPrimaryLabel", label: "Primary button", fallback: "Get it now" },
+  { key: "aiSecondaryLabel", label: "Secondary button", fallback: "No, thanks" },
+];
+
+/**
+ * "AI exchange": the switch, and the words on the screen it turns on.
+ *
+ * Lives under the groups because it draws on them — a matching group's
+ * products lead the recommendation — and because the two are the same
+ * decision from the merchant's side: what a return is allowed to become.
+ */
+function AiExchangePanel() {
+  const [store, setStore] = useState<StoreSettings | null>(null);
+  const [branding, setBranding] = useState<PortalBranding | null>(null);
+  const [customizing, setCustomizing] = useState(false);
+  const [edits, setEdits] = useState<Partial<PortalBranding>>({});
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    api
+      .get<StoreSettings>("/admin/settings/store", { auth: "admin" })
+      .then((s) => active && setStore(s))
+      .catch(() => undefined);
+    api
+      .get<PortalBranding>("/admin/settings/branding", { auth: "admin" })
+      .then((b) => active && setBranding(b))
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const toggle = async () => {
+    if (!store || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const next = !store.aiExchangeEnabled;
+      await api.patch("/admin/settings/store", { aiExchangeEnabled: next }, { auth: "admin" });
+      setStore({ ...store, aiExchangeEnabled: next });
+      setStatus(next ? "AI exchange is on." : "AI exchange is off.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't change that.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const shown = (key: (typeof AI_COPY)[number]["key"]) =>
+    (edits[key] !== undefined ? edits[key] : branding?.[key]) ?? "";
+
+  const saveCopy = async () => {
+    if (!branding || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const body: Record<string, string | null> = {};
+      for (const { key } of AI_COPY) {
+        if (edits[key] !== undefined) body[key] = (edits[key] ?? "").trim() || null;
+      }
+      const next = await api.put<PortalBranding>("/admin/settings/branding", body, {
+        auth: "admin",
+      });
+      setBranding(next);
+      setEdits({});
+      setCustomizing(false);
+      setStatus("Saved. Your portal is updated.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't save the content.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!store) return null;
+  const preview = (key: (typeof AI_COPY)[number]["key"]) =>
+    shown(key).trim() || AI_COPY.find((c) => c.key === key)!.fallback;
+
+  return (
+    <div className="panel ai-panel">
+      <div className="panel__head">
+        <h2>
+          AI exchange <span className="ai-spark" aria-hidden="true">✦</span>
+        </h2>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={store.aiExchangeEnabled}
+          aria-label="AI exchange"
+          className={`switch${store.aiExchangeEnabled ? " is-on" : ""}`}
+          disabled={busy}
+          onClick={() => void toggle()}
+        >
+          <span className="switch__knob" />
+        </button>
+      </div>
+      <p className="settings-row__hint" style={{ marginTop: 6 }}>
+        Recommends one replacement the moment a customer has given their
+        return reason — from the reason itself, the exchange groups above, and
+        what's alike in your catalogue — before the usual choice of exchange
+        or return. "No, thanks" takes them to that choice as normal.
+      </p>
+      <div className="alert alert--info" style={{ marginTop: 12 }}>
+        If a recommended product is the same item being returned, your Variant
+        exchange settings apply to the price difference.
+      </div>
+
+      <ErrorAlert message={error} />
+      {status && <div className="alert alert--info">{status}</div>}
+
+      <div className="ai-panel__rows">
+        <div className="ai-panel__row">
+          <span>
+            Checkout method: <strong>Shopify checkout</strong>
+          </span>
+        </div>
+        <div className="ai-panel__row">
+          <span>Returns page customization</span>
+          <button
+            type="button"
+            className="btn btn--secondary btn--sm"
+            onClick={() => setCustomizing(!customizing)}
+          >
+            {customizing ? "Close" : "Customize content"}
+          </button>
+        </div>
+      </div>
+
+      {customizing && branding && (
+        <div className="portal-settings" style={{ marginTop: 18 }}>
+          <div className="settings-form">
+            {AI_COPY.map(({ key, label, fallback }) => (
+              <div key={key} className="settings-row settings-row--stacked">
+                <div className="settings-row__label">{label}</div>
+                <div className="counted">
+                  <input
+                    type="text"
+                    className="settings-input"
+                    maxLength={50}
+                    value={shown(key)}
+                    placeholder={fallback}
+                    onChange={(e) => setEdits({ ...edits, [key]: e.target.value })}
+                  />
+                  <span className="counted__count">{shown(key).length}/50</span>
+                </div>
+              </div>
+            ))}
+            <div className="rule-actions">
+              <div className="rule-actions__right">
+                <button
+                  type="button"
+                  className="btn btn--secondary btn--sm"
+                  onClick={() => {
+                    setEdits({});
+                    setCustomizing(false);
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn--sm"
+                  disabled={busy || Object.keys(edits).length === 0}
+                  onClick={() => void saveCopy()}
+                >
+                  {busy ? "Saving…" : "Save"}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* The screen as the customer sees it, with these words in place. */}
+          <div className="portal-settings__preview">
+            <div className="panel">
+              <h2>Preview</h2>
+              <div className="gp aip">
+                <div className="aip__title">
+                  <span className="ai-spark">✦</span> A better match for you
+                </div>
+                <div className="aip__intro">
+                  Based on your return, we found an exchange option you may prefer.
+                </div>
+                <div className="aip__link">{preview("aiSwitchLabel")}</div>
+                <div className="aip__card">
+                  <div className="aip__media">
+                    <span className="aip__flag">✦ Best match</span>
+                  </div>
+                  <div>
+                    <div className="aip__name">Recommended exchange</div>
+                    <div className="aip__price">
+                      <s>$29.00</s> <strong>$0.00</strong>{" "}
+                      <span className="muted">{preview("aiPriceCaption")}</span>
+                    </div>
+                    <span className="chip">Free exchange</span>
+                    <div className="aip__axis">Size</div>
+                    <div className="aip__sizes">
+                      <span>S</span>
+                      <span className="is-selected">✦ M</span>
+                      <span>L</span>
+                    </div>
+                    <div className="aip__details">{preview("aiDetailsTitle")} ⌄</div>
+                  </div>
+                </div>
+                <div className="aip__similar">{preview("aiSimilarTitle")}</div>
+                <div className="aip__actions">
+                  <span className="aip__btn aip__btn--secondary">
+                    {preview("aiSecondaryLabel")}
+                  </span>
+                  <span className="aip__btn">{preview("aiPrimaryLabel")}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * Exchange groups — "advanced exchanges".
@@ -383,6 +633,7 @@ export default function ExchangeRulesPage() {
               </div>
             ))
           )}
+          <AiExchangePanel />
         </div>
       )}
 

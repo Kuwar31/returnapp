@@ -52,6 +52,8 @@ export const BROWSE_PRODUCTS = `#graphql
         id
         title
         handle
+        # Plain text, capped: the recommendation card's "Product details".
+        description(truncateAt: 600)
         featuredMedia { preview { image { url } } }
         priceRangeV2 {
           minVariantPrice { amount currencyCode }

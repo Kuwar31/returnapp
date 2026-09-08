@@ -1819,6 +1819,150 @@ table.data tbody tr:hover {
   border: 1px solid var(--border);
 }
 
+/* ---------- AI exchange ---------- */
+
+.ai-spark {
+  color: #a24bd6;
+  font-size: 0.9em;
+}
+
+.ai-panel__rows {
+  margin-top: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.ai-panel__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  font-size: 14px;
+}
+
+.ai-panel__row + .ai-panel__row {
+  border-top: 1px solid var(--border);
+}
+
+/* The recommendation screen, in miniature, with the merchant's words. */
+.aip {
+  font-size: 12px;
+}
+
+.aip__title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.aip__intro {
+  margin: 4px 0 8px;
+  color: var(--text-muted);
+}
+
+.aip__link {
+  text-decoration: underline;
+  margin-bottom: 8px;
+}
+
+.aip__card {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px;
+  border: 2px solid #e8743b;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.aip__media {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 6px;
+  background: var(--surface-muted);
+}
+
+.aip__flag {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #fbf3df;
+  color: #7a5a0f;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.aip__name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.aip__price {
+  margin: 2px 0 6px;
+}
+
+.aip__price s {
+  color: var(--text-muted);
+}
+
+.aip__axis {
+  margin-top: 10px;
+  font-weight: 600;
+}
+
+.aip__sizes {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.aip__sizes span {
+  padding: 5px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+}
+
+.aip__sizes .is-selected {
+  border-color: var(--text);
+  border-width: 2px;
+}
+
+.aip__details {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  font-weight: 600;
+}
+
+.aip__similar {
+  margin: 12px 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.aip__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.aip__btn {
+  padding: 9px;
+  border-radius: 6px;
+  background: #111;
+  color: #fff;
+  text-align: center;
+  font-weight: 600;
+}
+
+.aip__btn--secondary {
+  background: #fff;
+  color: var(--text);
+  border: 1px solid var(--text);
+}
+
 .ritem__actions {
   border-top: 1px solid var(--border);
   margin-top: 16px;

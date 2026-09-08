@@ -25,6 +25,8 @@ export interface ExchangeVariant {
 export interface ExchangeProduct {
   id: string;
   title: string;
+  /** Plain-text description, capped, for the recommendation card. */
+  description?: string | null;
   imageUrl: string | null;
   /** Every shot of the product, for the swap screen's gallery. */
   images?: string[];
@@ -235,6 +237,7 @@ export const browseProducts = async (
       nodes: Array<{
         id: string;
         title: string;
+        description?: string | null;
         featuredMedia: { preview?: { image?: { url: string } | null } | null } | null;
         priceRangeV2: {
           minVariantPrice: { amount: string; currencyCode: string };
@@ -263,6 +266,7 @@ export const browseProducts = async (
     .map((p) => ({
       id: p.id,
       title: p.title,
+      description: p.description?.trim() || null,
       imageUrl: p.featuredMedia?.preview?.image?.url ?? null,
       minPrice: parseFloat(p.priceRangeV2.minVariantPrice.amount),
       maxPrice: parseFloat(p.priceRangeV2.maxVariantPrice.amount),

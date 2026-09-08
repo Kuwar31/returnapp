@@ -155,6 +155,7 @@ settingsRouter.get(
         exchangeBonusType: true,
         exchangeBonusValue: true,
         restockLocationId: true,
+        aiExchangeEnabled: true,
       },
     });
 
@@ -225,6 +226,7 @@ settingsRouter.patch(
           .regex(/^gid:\/\/shopify\/Location\/\d+$/)
           .nullable()
           .optional(),
+        aiExchangeEnabled: z.boolean().optional(),
       })
       .refine((v) => Object.keys(v).length > 0, {
         message: "Nothing to update.",
@@ -264,6 +266,9 @@ settingsRouter.patch(
         ...(req.body.restockLocationId === undefined
           ? {}
           : { restockLocationId: req.body.restockLocationId }),
+        ...(req.body.aiExchangeEnabled === undefined
+          ? {}
+          : { aiExchangeEnabled: req.body.aiExchangeEnabled }),
       },
       select: {
         currency: true,
@@ -454,6 +459,14 @@ const brandingSchema = z.object({
   startButtonLabel: z.string().trim().min(1).max(40),
   footerHeading: optionalText(60),
   footerText: optionalText(300),
+
+  // AI exchange copy — null means the app's translation.
+  aiSwitchLabel: optionalText(50),
+  aiDetailsTitle: optionalText(50),
+  aiSimilarTitle: optionalText(50),
+  aiPriceCaption: optionalText(50),
+  aiPrimaryLabel: optionalText(50),
+  aiSecondaryLabel: optionalText(50),
 
   searchEngineVisible: z.boolean(),
   locale: z.enum(LOCALE_CODES),

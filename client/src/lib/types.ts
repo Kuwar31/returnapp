@@ -18,8 +18,31 @@ export type ResolutionType =
   | "WARRANTY";
 
 export interface PortalConfig {
-  merchant: { slug: string; name: string; currency: string };
+  merchant: {
+    slug: string;
+    name: string;
+    currency: string;
+    /** Whether the recommendation screen runs before the resolution choice. */
+    aiExchange: boolean;
+  };
   branding: PortalBranding;
+}
+
+/** One recommended replacement, and where it came from. */
+export interface ExchangeRecommendation extends ExchangeProduct {
+  /** The exchange group it was drawn from, when one applies. */
+  ruleId: string | null;
+  /** How the group settles the price gap; DIFFERENCE when no group. */
+  pricing: "EVEN" | "DIFFERENCE";
+  /** The item being returned itself, offered in its other options. */
+  sameProduct: boolean;
+}
+
+export interface ExchangeRecommendations {
+  /** Best first; the shopper can step through the rest. */
+  candidates: ExchangeRecommendation[];
+  /** The variant they already own, never offered back to them. */
+  currentVariantId: string | null;
 }
 
 /** A detail from the order a shopper can prove it's theirs with. */
@@ -63,6 +86,13 @@ export interface PortalBranding {
   footerText: string | null;
   supportEmail: string | null;
   policyUrl: string | null;
+  /** Recommendation-screen copy; null falls back to the app's translation. */
+  aiSwitchLabel: string | null;
+  aiDetailsTitle: string | null;
+  aiSimilarTitle: string | null;
+  aiPriceCaption: string | null;
+  aiPrimaryLabel: string | null;
+  aiSecondaryLabel: string | null;
   searchEngineVisible: boolean;
   /** BCP-47 code for the language the app's own strings render in. */
   locale: string;
@@ -240,6 +270,8 @@ export interface ExchangeCollection {
 export interface ExchangeProduct {
   id: string;
   title: string;
+  /** Plain-text description, capped, for the recommendation card. */
+  description?: string | null;
   imageUrl: string | null;
   minPrice: number;
   maxPrice: number;
@@ -554,6 +586,8 @@ export interface StoreSettings {
    * Location id; null means wherever each order was fulfilled from.
    */
   restockLocationId: string | null;
+  /** The recommendation screen after a shopper gives their reason. */
+  aiExchangeEnabled: boolean;
 }
 
 /** A place the store keeps stock, as Shopify lists it. */

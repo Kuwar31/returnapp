@@ -228,6 +228,12 @@ const BRANDING_DEFAULTS = {
   startButtonLabel: "Find my order",
   footerHeading: null as string | null,
   footerText: null as string | null,
+  aiSwitchLabel: null as string | null,
+  aiDetailsTitle: null as string | null,
+  aiSimilarTitle: null as string | null,
+  aiPriceCaption: null as string | null,
+  aiPrimaryLabel: null as string | null,
+  aiSecondaryLabel: null as string | null,
   supportEmail: null as string | null,
   policyUrl: null as string | null,
   searchEngineVisible: true,
@@ -605,7 +611,7 @@ const resolveSelections = async (
  * The rate is the order's own, so a replacement is priced by the rate the
  * shopper already paid at rather than today's.
  */
-const catalogueConverter = async (merchantId: string, orderId: string) => {
+export const catalogueConverter = async (merchantId: string, orderId: string) => {
   const order = await prisma.order.findFirstOrThrow({
     where: { id: orderId, merchantId },
   });
