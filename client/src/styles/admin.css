@@ -2815,3 +2815,479 @@ table.data tbody tr:hover {
   color: var(--text-muted);
   margin-top: 1px;
 }
+
+/* ---------- return policies (by region) ----------
+   Cards on the list, like Loop's: one per policy, the store policy first as
+   "Default". The editor is a left rail of sections and a form, with the save
+   bar pinned to the foot of the window for as long as the form is open. */
+
+.pgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.pcard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.pcard__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.pcard__title {
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.pcard__badge {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--surface-muted);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.pcard__row {
+  display: grid;
+  grid-template-columns: 128px minmax(0, 1fr);
+  gap: 12px;
+  padding: 13px 0;
+  border-top: 1px solid var(--border);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.pcard__label {
+  color: var(--text-muted);
+}
+
+.pcard__flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.pcard__outcomes {
+  display: grid;
+  gap: 3px;
+}
+
+/* The editor: a rail of sections beside the form. */
+.peditor {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+
+.peditor .settings-form {
+  max-width: 820px;
+}
+
+.peditor__back {
+  display: inline-block;
+  margin-bottom: 6px;
+  font-size: 13.5px;
+}
+
+.pnav {
+  position: sticky;
+  top: 28px;
+  display: grid;
+  gap: 2px;
+}
+
+.pnav__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: none;
+  border-left: 2px solid transparent;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  color: var(--text-muted);
+  text-align: left;
+  cursor: pointer;
+}
+
+.pnav__item:hover {
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.pnav__item.is-active {
+  background: var(--accent-soft);
+  border-left-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.pnav__icon {
+  width: 20px;
+  text-align: center;
+  font-size: 15px;
+}
+
+/* Full-width text fields in the editor; the settings rows' 232px is for a
+   value beside a label, and these are the whole row. */
+.peditor .settings-input,
+.steps .settings-input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font: inherit;
+  font-size: 14px;
+}
+
+.peditor .settings-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.field-label {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.peditor .panel__head .settings-row__hint {
+  margin-top: 4px;
+}
+
+/* Country picker: search, a menu of matches, chips of what's chosen. */
+.cpick__search {
+  position: relative;
+}
+
+.cpick__menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: 0 12px 28px rgb(0 0 0 / 14%);
+}
+
+.cpick__option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cpick__option:hover {
+  background: var(--surface-muted);
+}
+
+.cpick__code {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+.cpick__empty {
+  padding: 10px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.cchip {
+  gap: 6px;
+  padding: 5px 6px 5px 11px;
+}
+
+.cchip__x {
+  padding: 0 4px;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.cchip__x:hover {
+  color: var(--text);
+}
+
+/* The chosen destination, and each candidate in the picker. */
+.dest {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+}
+
+.dest__name {
+  font-weight: 600;
+}
+
+.dest-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.dest-row:last-child {
+  border-bottom: none;
+}
+
+.dest-row input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 13px;
+  accent-color: var(--accent);
+}
+
+.dest-row__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  background: var(--surface-muted);
+  font-size: 20px;
+  color: var(--text-muted);
+}
+
+.dest-row__name {
+  display: block;
+  font-weight: 600;
+}
+
+.dest-row__addr {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-muted);
+}
+
+/* A dialog, centred and dimmed behind. */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgb(0 0 0 / 40%);
+}
+
+.modal {
+  width: 100%;
+  max-width: 580px;
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: 0 20px 60px rgb(0 0 0 / 25%);
+}
+
+.modal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal__head h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.modal__close {
+  border: none;
+  background: none;
+  font-size: 24px;
+  line-height: 1;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.modal__close:hover {
+  color: var(--text);
+}
+
+.modal__body {
+  padding: 6px 22px;
+}
+
+.modal__foot {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 22px 18px;
+}
+
+/* Window and fee controls under each outcome. */
+.window-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.window-fields select {
+  width: 232px;
+  padding: 9px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font: inherit;
+  font-size: 14px;
+}
+
+.unit-field {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.unit-field input {
+  width: 120px;
+  padding: 9px 10px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+}
+
+.unit-field input:focus {
+  outline: none;
+}
+
+.unit-field:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.unit-field__unit {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-left: 1px solid var(--border);
+  background: var(--surface-muted);
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.unit-field__unit--lead {
+  border-left: none;
+  border-right: 1px solid var(--border);
+}
+
+/* Indented under its checkbox, like Loop's fee options. */
+.fee {
+  margin: 14px 0 0 27px;
+}
+
+/* Numbered instruction steps. */
+.steps {
+  display: grid;
+  gap: 10px;
+}
+
+.steps__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.steps__n {
+  flex: none;
+  width: 22px;
+  font-size: 14px;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.steps__del {
+  flex: none;
+  border: none;
+  background: none;
+  font-size: 16px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.steps__del:hover {
+  color: var(--danger-fg);
+}
+
+@media (max-width: 900px) {
+  .peditor {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .pnav {
+    position: static;
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .pnav__item {
+    border-left: none;
+    border-bottom: 2px solid transparent;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    white-space: nowrap;
+  }
+
+  .pnav__item.is-active {
+    border-bottom-color: var(--accent);
+  }
+
+  .pcard__row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .pgrid {
+    grid-template-columns: 1fr;
+  }
+}

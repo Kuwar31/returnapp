@@ -8,6 +8,7 @@ import { requirePortalSession } from "../../middleware/auth.js";
 import { rateLimit } from "../../middleware/rateLimit.js";
 import { validate } from "../../middleware/validate.js";
 import { serializeAddress, serializeReturn } from "../returns/serializers.js";
+import { returnDestination } from "../shopify/locations.service.js";
 import { recommendExchanges } from "./recommendations.service.js";
 import {
   feedbackSchema,
@@ -373,10 +374,20 @@ portalRouter.get(
     // Repairs pictures stored before the product-image fallback existed. Fire
     // and forget: it must never delay or fail the page it decorates.
     void backfillExchangeItemImages(merchant.id, request.id);
+    const region = request.regionalPolicy;
     res.json({
       ...serializeReturn(request, await resolveDisplayMode(merchant.id)),
       // Only present when a native exchange actually leaves a balance owed.
       exchangePayment: await getExchangePaymentUrl(merchant.id, request.id),
+      /**
+       * The region's own words and address, when the return has a regional
+       * policy that set them. Empty and null otherwise, and the page keeps
+       * the portal's own wording.
+       */
+      instructions: region?.instructions ?? [],
+      returnTo: region?.destinationLocationId
+        ? await returnDestination(merchant.id, region.destinationLocationId)
+        : null,
     });
   }),
 );

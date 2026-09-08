@@ -16,6 +16,7 @@ import { validate } from "../../middleware/validate.js";
 import { SHOPIFY_RETURN_REASONS } from "../shopify/returns.graphql.js";
 import * as reasonsService from "./reasons.service.js";
 import * as exchangeRules from "./exchange-rules.service.js";
+import * as regionalPolicies from "./regional-policies.service.js";
 import { browseCollections } from "../shopify/catalogue.service.js";
 import { listLocationsIfConnected } from "../shopify/locations.service.js";
 import { phoneAccessProblem } from "../shopify/order.sync.js";
@@ -708,5 +709,139 @@ settingsRouter.post(
   asyncHandler(async (req, res) => {
     await exchangeRules.reorderRules(req.admin!.merchantId, req.body.ids);
     res.json({ rules: await exchangeRules.listRules(req.admin!.merchantId) });
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// Return policies — per-region overlays on the store policy
+// ---------------------------------------------------------------------------
+
+const REGION_LOCATION_GID = /^gid:\/\/shopify\/Location\/\d+$/;
+
+const outcomeSchema = z
+  .object({
+    enabled: z.boolean(),
+    /** Null is an unlimited window. */
+    windowDays: z.number().int().min(1).max(3650).nullable(),
+    /** Null charges nothing for this outcome. */
+    fee: z
+      .object({
+        type: z.enum(["FLAT", "PERCENT"]),
+        value: z.number().min(0).max(1_000_000),
+      })
+      .nullable(),
+  })
+  .refine((o) => !o.fee || o.fee.type !== "PERCENT" || o.fee.value <= 100, {
+    message: "A percentage fee can't be more than 100%.",
+  });
+
+const regionalPolicySchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  countries: z
+    .array(
+      z
+        .string()
+        .trim()
+        .toUpperCase()
+        .regex(/^[A-Z]{2}$/, "Countries must be two-letter ISO codes."),
+    )
+    .min(1, "Choose at least one country.")
+    .max(250)
+    .transform((codes) => [...new Set(codes)]),
+  destinationLocationId: z.string().regex(REGION_LOCATION_GID).nullable(),
+  windowStartsFrom: z.enum(["ORDER_DATE", "FULFILLMENT", "DELIVERY"]),
+  bypassReview: z.boolean(),
+  /** Blank steps are dropped rather than refused: an empty row is a row the
+      merchant hasn't filled in yet, not a mistake to send back. */
+  instructions: z
+    .array(z.string().trim().max(300))
+    .max(20)
+    .transform((steps) => steps.filter(Boolean)),
+  outcomes: z.object({
+    REFUND: outcomeSchema,
+    EXCHANGE: outcomeSchema,
+    STORE_CREDIT: outcomeSchema,
+    GIFT_CARD: outcomeSchema,
+  }),
+});
+
+/**
+ * Everything the policies page needs in one read: the policies, the store
+ * policy they overlay (for the "Default" card and to prefill a new one), and
+ * the locations a policy can send returns to.
+ */
+settingsRouter.get(
+  "/regional-policies",
+  asyncHandler(async (req, res) => {
+    const merchantId = req.admin!.merchantId;
+    const [policies, base, merchant, locations] = await Promise.all([
+      regionalPolicies.listRegionalPolicies(merchantId),
+      prisma.returnPolicy.findFirst({
+        where: { merchantId, isDefault: true, active: true },
+      }),
+      prisma.merchant.findUniqueOrThrow({
+        where: { id: merchantId },
+        select: { restockLocationId: true, currency: true },
+      }),
+      listLocationsIfConnected(merchantId),
+    ]);
+    res.json({
+      policies: policies.map(regionalPolicies.serializeRegionalPolicy),
+      base: base ? serializePolicy(base) : null,
+      locations,
+      defaultLocationId: merchant.restockLocationId,
+      currency: merchant.currency,
+    });
+  }),
+);
+
+settingsRouter.post(
+  "/regional-policies",
+  validate(regionalPolicySchema),
+  asyncHandler(async (req, res) => {
+    const created = await regionalPolicies.createRegionalPolicy(
+      req.admin!.merchantId,
+      req.body,
+    );
+    res.status(201).json(regionalPolicies.serializeRegionalPolicy(created));
+  }),
+);
+
+settingsRouter.patch(
+  "/regional-policies/:id",
+  validate(regionalPolicySchema),
+  asyncHandler(async (req, res) => {
+    const updated = await regionalPolicies.updateRegionalPolicy(
+      req.admin!.merchantId,
+      req.params.id,
+      req.body,
+    );
+    res.json(regionalPolicies.serializeRegionalPolicy(updated));
+  }),
+);
+
+settingsRouter.delete(
+  "/regional-policies/:id",
+  asyncHandler(async (req, res) => {
+    await regionalPolicies.deleteRegionalPolicy(
+      req.admin!.merchantId,
+      req.params.id,
+    );
+    res.status(204).end();
+  }),
+);
+
+settingsRouter.post(
+  "/regional-policies/reorder",
+  validate(z.object({ ids: z.array(z.string().min(1)).max(100) })),
+  asyncHandler(async (req, res) => {
+    await regionalPolicies.reorderRegionalPolicies(
+      req.admin!.merchantId,
+      req.body.ids,
+    );
+    const policies = await regionalPolicies.listRegionalPolicies(
+      req.admin!.merchantId,
+    );
+    res.json({ policies: policies.map(regionalPolicies.serializeRegionalPolicy) });
   }),
 );

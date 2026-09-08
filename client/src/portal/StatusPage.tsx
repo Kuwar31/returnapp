@@ -267,6 +267,35 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
           </Section>
           )}
 
+          {/*
+            The region's own steps and address, where its policy set them.
+            Only while the return is live, for the same reason as the packing
+            list above: nothing to send once the request is off the table.
+          */}
+          {showPacking &&
+            ((detail.instructions?.length ?? 0) > 0 || detail.returnTo) && (
+              <Section title={t("status.instructions")}>
+                {(detail.instructions?.length ?? 0) > 0 && (
+                  <ol className="confirm__steps">
+                    {detail.instructions!.map((step, i) => (
+                      <li key={i}>{step}</li>
+                    ))}
+                  </ol>
+                )}
+                {detail.returnTo && (
+                  <div className="confirm__dest">
+                    <div className="confirm__dest-label">
+                      {t("status.returnTo")}
+                    </div>
+                    <div className="confirm__dest-name">{detail.returnTo.name}</div>
+                    {detail.returnTo.address && (
+                      <div className="muted">{detail.returnTo.address}</div>
+                    )}
+                  </div>
+                )}
+              </Section>
+            )}
+
           <div className="card confirm__card">
             <h2 className="confirm__card-title">{t("status.edit")}</h2>
 

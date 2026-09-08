@@ -1,5 +1,11 @@
-import { Prisma, type ResolutionType, type ReturnPolicy } from "@prisma/client";
+import { Prisma, type ResolutionType } from "@prisma/client";
 import { percentOf, round2, toDecimal, ZERO } from "../../lib/money.js";
+import {
+  outcomeKey,
+  termsFor,
+  type EffectivePolicy,
+  type OutcomeMap,
+} from "./effective.js";
 
 export interface QuoteLine {
   unitPrice: Prisma.Decimal;
@@ -124,6 +130,50 @@ export const keepsMoneyInStore = (resolution: ResolutionType): boolean =>
   CREDIT_RESOLUTIONS.includes(resolution);
 
 /**
+ * Each line's share of the flat handling fees a regional policy charges.
+ *
+ * A flat fee is per return, not per item — "5 to send anything back" — but
+ * the engine accounts per line, because that is what tells resolution how
+ * much to refund, credit or gift-card. So each outcome's flat fee is spread
+ * across the lines taking that outcome in proportion to their value, with the
+ * rounding remainder landing on the last of them so the total charged is
+ * exactly the fee. Lines worth nothing are skipped: there is nothing to
+ * deduct from, and a fee floored to zero would simply vanish.
+ */
+const flatFeeShares = (
+  lines: QuoteLine[],
+  subtotals: Prisma.Decimal[],
+  outcomes: OutcomeMap | undefined,
+): Prisma.Decimal[] => {
+  const shares = lines.map(() => ZERO);
+  if (!outcomes) return shares;
+
+  const groups = new Map<string, number[]>();
+  lines.forEach((line, i) => {
+    const key = outcomeKey(line.resolution);
+    const fee = key ? outcomes[key]?.fee : undefined;
+    if (!fee || fee.type !== "FLAT" || toDecimal(fee.value).lessThanOrEqualTo(0)) return;
+    if (subtotals[i].lessThanOrEqualTo(0)) return;
+    groups.set(key!, [...(groups.get(key!) ?? []), i]);
+  });
+
+  for (const [key, indexes] of groups) {
+    const fee = round2(toDecimal(outcomes[key as keyof OutcomeMap]!.fee!.value));
+    const total = indexes.reduce((sum, i) => sum.add(subtotals[i]), ZERO);
+    let allocated = ZERO;
+    indexes.forEach((i, n) => {
+      const share =
+        n === indexes.length - 1
+          ? round2(fee.sub(allocated))
+          : round2(fee.mul(subtotals[i]).div(total));
+      shares[i] = share;
+      allocated = allocated.add(share);
+    });
+  }
+  return shares;
+};
+
+/**
  * Computes the money breakdown for a return.
  *
  * Each line is priced by its own resolution — bonus credit and restocking apply
@@ -140,7 +190,12 @@ export const quoteReturn = ({
   variantDifference = "CHARGE",
 }: {
   lines: QuoteLine[];
-  policy: ReturnPolicy;
+  /**
+   * The store policy, or a region's terms laid over it. With `outcomes`
+   * present the handling fees come from there, per outcome; otherwise the
+   * store's restocking percentage applies to every line as it always has.
+   */
+  policy: EffectivePolicy;
   /**
    * How a per-line swap's price gap is settled. Applies only to those: a "shop
    * now" basket is a deliberate purchase, and absorbing its cost would hand the
@@ -164,8 +219,13 @@ export const quoteReturn = ({
    */
   shopNow?: { cartTotal: Prisma.Decimal; bonus: BonusRule };
 }): Quote => {
-  const results: QuoteLineResult[] = lines.map((line) => {
-    const subtotal = round2(toDecimal(line.unitPrice).mul(line.quantity));
+  const subtotals = lines.map((line) =>
+    round2(toDecimal(line.unitPrice).mul(line.quantity)),
+  );
+  const flatShares = flatFeeShares(lines, subtotals, policy.outcomes);
+
+  const results: QuoteLineResult[] = lines.map((line, index) => {
+    const subtotal = subtotals[index];
     const takesCredit = keepsMoneyInStore(line.resolution);
 
     const isExchange = EXCHANGE_RESOLUTIONS.includes(line.resolution);
@@ -180,7 +240,18 @@ export const quoteReturn = ({
           ? bonusAmount(exchangeBonus, subtotal)
           : ZERO
         : percentOf(subtotal, policy.bonusCreditPercent);
-    const restockingFee = percentOf(subtotal, policy.restockingFeePercent);
+    /**
+     * The handling fee: the region's for this outcome when one applies — a
+     * percentage here, a flat sum through its share above — else the store's
+     * restocking percentage, exactly as before regions existed.
+     */
+    const terms = termsFor(policy.outcomes, line.resolution);
+    const percentFee = policy.outcomes
+      ? terms?.fee?.type === "PERCENT"
+        ? percentOf(subtotal, terms.fee.value)
+        : ZERO
+      : percentOf(subtotal, policy.restockingFeePercent);
+    const restockingFee = round2(percentFee.add(flatShares[index]));
 
     const gross = subtotal.add(bonusCredit).sub(restockingFee);
     // Fees can exceed a cheap item's value; never hand back a negative.
@@ -381,7 +452,7 @@ export const summaryResolution = (
 
 /** Whether a submitted request can skip manual review. */
 export const qualifiesForAutoApproval = (
-  policy: ReturnPolicy,
+  policy: EffectivePolicy,
   quote: Quote,
 ): boolean => {
   if (!policy.autoApprove) return false;

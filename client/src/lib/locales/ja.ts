@@ -167,6 +167,8 @@ export const ja: Dict = {
   "status.paymentReceived": "お支払いを受領しました",
   "status.payNow": "今すぐ支払う",
   "status.paid": "支払い済み",
+  "status.instructions": "返品の手順",
+  "status.returnTo": "返送先",
   "status.questions": "ご不明な点はありますか？",
   "status.questionsEmail": "ご質問はこちらまで",
   "status.orderNo": "注文番号 {number}",

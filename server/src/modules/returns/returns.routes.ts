@@ -181,7 +181,8 @@ returnsRouter.get(
       shopper,
       payout,
       exchangePayment,
-      policyName: request.policy?.name ?? null,
+      // The region's name where one applied; the store policy's otherwise.
+      policyName: request.regionalPolicy?.name ?? request.policy?.name ?? null,
       portalSlug: merchant?.slug ?? null,
     });
   }),

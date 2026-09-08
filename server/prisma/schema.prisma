@@ -109,6 +109,7 @@ model Merchant {
   branding             PortalBranding?
   memberships          Membership[]
   policies             ReturnPolicy[]
+  regionalPolicies     RegionalPolicy[]
   reasons              ReturnReason[]
   exchangeRules        ExchangeRule[]
   notificationSettings NotificationSetting[]
@@ -571,6 +572,86 @@ enum WindowStart {
   DELIVERY
 }
 
+/**
+ * A return policy for a region — what Loop calls "Return policies".
+ *
+ * An overlay on the store's own ReturnPolicy rather than a second copy of it.
+ * The store policy stays the source of every mechanic (tag rules, bonus
+ * credit, exchange chains, store availability, the auto-approval threshold);
+ * a regional policy only says, for orders shipped to its countries, which
+ * outcomes are on, how long each stays open, what each costs, when the clock
+ * starts, whether review is skipped, and where the parcel goes. An order
+ * whose country no policy claims follows the store policy untouched.
+ *
+ * Matched on the order's shipping country, read at the moment the shopper
+ * looks the order up, so a policy edited today applies to a return started
+ * tomorrow — and a return already submitted keeps the policy it was quoted
+ * under by id.
+ */
+model RegionalPolicy {
+  id         String   @id @default(cuid())
+  merchantId String
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  /// Internal; shoppers never see it.
+  name       String
+  /// ISO 3166-1 alpha-2 codes. Each country belongs to at most one policy.
+  countries  String[]
+  /**
+   * The Shopify Location returned goods are sent back to and restocked at.
+   * Null means the store's default restocking location applies.
+   */
+  destinationLocationId String?
+  windowStartsFrom      WindowStart @default(DELIVERY)
+  /**
+   * Skip review: returns under this policy are approved on submission,
+   * without the store-wide "auto-approve under" threshold.
+   */
+  bypassReview          Boolean     @default(false)
+  /// Numbered steps shown on the confirmation page. Empty keeps the portal's own wording.
+  instructions          String[]    @default([])
+  /// Which policy wins when a country is somehow listed twice; also the list order.
+  sortOrder             Int         @default(0)
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  outcomes       RegionalPolicyOutcome[]
+  returnRequests ReturnRequest[]
+
+  @@index([merchantId, sortOrder])
+  @@map("regional_policies")
+}
+
+/**
+ * One return outcome under a regional policy: whether the shopper is offered
+ * it, how long after the start event it stays open, and what it costs them.
+ * One row each for REFUND, EXCHANGE, STORE_CREDIT and GIFT_CARD; an instant
+ * exchange follows the EXCHANGE row.
+ */
+model RegionalPolicyOutcome {
+  id         String         @id @default(cuid())
+  policyId   String
+  policy     RegionalPolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  resolution ResolutionType
+  enabled    Boolean        @default(true)
+  /// Days from the start event. Null is an unlimited window.
+  windowDays Int?
+  /// Null charges nothing for this outcome in this region.
+  feeType    FeeType?
+  feeValue   Decimal?       @db.Decimal(12, 2)
+
+  @@unique([policyId, resolution])
+  @@map("regional_policy_outcomes")
+}
+
+/**
+ * How a handling fee is expressed: a flat sum per return in shop currency, or
+ * a share of the value of the items coming back.
+ */
+enum FeeType {
+  FLAT
+  PERCENT
+}
+
 /// A set of reasons offered for a particular kind of product.
 ///
 /// Merchants word returns differently for footwear than for homeware, so the
@@ -742,6 +823,13 @@ model ReturnRequest {
   order      Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
   policyId   String?
   policy     ReturnPolicy? @relation(fields: [policyId], references: [id], onDelete: SetNull)
+  /**
+   * The regional policy the shopper was quoted under, when their country had
+   * one. Recomputations of the money read it back so a return keeps its
+   * region's fees and windows even after the store policy changes.
+   */
+  regionalPolicyId String?
+  regionalPolicy   RegionalPolicy? @relation(fields: [regionalPolicyId], references: [id], onDelete: SetNull)
 
   /// Short human-readable reference shown to the shopper, e.g. "R-7F3K2Q"
   /**

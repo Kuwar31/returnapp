@@ -176,6 +176,8 @@ export const pl: Dict = {
   "status.paymentReceived": "Płatność otrzymana",
   "status.payNow": "Zapłać teraz",
   "status.paid": "Opłacone",
+  "status.instructions": "Instrukcja zwrotu",
+  "status.returnTo": "Wyślij swoje produkty na adres",
   "status.questions": "Masz pytania?",
   "status.questionsEmail": "Masz pytania? Napisz na",
   "status.orderNo": "Zamówienie nr {number}",

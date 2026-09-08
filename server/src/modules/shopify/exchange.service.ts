@@ -12,6 +12,10 @@ import {
 } from "../../lib/money.js";
 import { quoteReturn } from "../policy/quote.service.js";
 import {
+  effectivePolicyForRequest,
+  policyInclude,
+} from "../policy/regional.service.js";
+import {
   resolveExchangeMethod,
   resolveVariantDifference,
 } from "../settings/merchant-settings.js";
@@ -92,10 +96,12 @@ export const priceExchange = async (
        * same set as before for a per-item swap.
        */
       exchangeItems: true,
-      policy: true,
+      ...policyInclude,
     },
   });
-  if (!request.policy) return null;
+  // The region's terms over the store policy — what the shopper was quoted.
+  const policy = effectivePolicyForRequest(request);
+  if (!policy) return null;
 
   const cartTotal = round2(
     request.exchangeItems.reduce(
@@ -105,7 +111,7 @@ export const priceExchange = async (
   );
 
   const quote = quoteReturn({
-    policy: request.policy,
+    policy,
     /**
      * The same rule the shopper was quoted under. Without it an absorbed swap
      * would show as free on the portal and still arrive as an invoice.

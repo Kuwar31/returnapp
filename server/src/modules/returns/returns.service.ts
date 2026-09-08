@@ -31,6 +31,10 @@ import {
 } from "../settings/merchant-settings.js";
 import { generateCreditCode } from "./reference.js";
 import { quoteReturn } from "../policy/quote.service.js";
+import {
+  effectivePolicyForRequest,
+  policyInclude,
+} from "../policy/regional.service.js";
 import { assertTransition, STATUS_LABELS } from "./status.js";
 
 const detailInclude = {
@@ -42,6 +46,7 @@ const detailInclude = {
   events: { orderBy: { createdAt: "asc" as const } },
   exchangeDraft: true,
   policy: true,
+  regionalPolicy: { select: { name: true } },
 } satisfies Prisma.ReturnRequestInclude;
 
 export interface ListFilters {
@@ -514,13 +519,16 @@ const recalculateTotals = async (merchantId: string, id: string) => {
       // rather than from a line, and quoting without it prices the goods at
       // nothing. See priceExchange for the same reasoning.
       exchangeItems: true,
-      policy: true,
+      ...policyInclude,
     },
   });
-  if (!request.policy) return;
+  // The region's fees and windows, laid over the store policy — the terms
+  // the shopper was quoted under, so the rewrite can't change them.
+  const policy = effectivePolicyForRequest(request);
+  if (!policy) return;
 
   const quote = quoteReturn({
-    policy: request.policy,
+    policy,
     // Same rule the shopper was quoted under; see priceExchange.
     variantDifference: await resolveVariantDifference(merchantId),
     // A rule that matched the returned items overrides the store setting; see
@@ -632,13 +640,14 @@ const payoutSplit = async (merchantId: string, id: string) => {
       // rather than from a line, and quoting without it prices the goods at
       // nothing. See priceExchange for the same reasoning.
       exchangeItems: true,
-      policy: true,
+      ...policyInclude,
     },
   });
-  if (!request.policy) return new Map<ResolutionType, Prisma.Decimal>();
+  const policy = effectivePolicyForRequest(request);
+  if (!policy) return new Map<ResolutionType, Prisma.Decimal>();
 
   const quote = quoteReturn({
-    policy: request.policy,
+    policy,
     // Same rule the shopper was quoted under; see priceExchange.
     variantDifference: await resolveVariantDifference(merchantId),
     // A rule that matched the returned items overrides the store setting; see

@@ -321,6 +321,12 @@ export interface ReturnDetail {
   reviewedAt: string | null;
   receivedAt: string | null;
   resolvedAt: string | null;
+  /**
+   * The region's own return steps and destination, on the shopper's status
+   * page. Empty and null when no regional policy set them.
+   */
+  instructions?: string[];
+  returnTo?: { name: string; address: string | null } | null;
   order: {
     orderNumber: string;
     placedAt: string;
@@ -602,12 +608,75 @@ export interface ShopLocation {
   id: string;
   name: string;
   fulfillsOnlineOrders: boolean;
+  /** The postal address on one line; null when Shopify holds none. */
+  address?: string | null;
 }
 
 export interface ShopLocations {
   locations: ShopLocation[];
   /** The store's default restock location; null means "where it shipped from". */
   defaultLocationId: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Return policies — per-region overlays on the store policy
+// ---------------------------------------------------------------------------
+
+export type WindowStart = "ORDER_DATE" | "FULFILLMENT" | "DELIVERY";
+
+/** The outcomes a regional policy decides; an instant exchange follows EXCHANGE. */
+export type OutcomeKey = "REFUND" | "EXCHANGE" | "STORE_CREDIT" | "GIFT_CARD";
+
+export interface RegionalOutcome {
+  enabled: boolean;
+  /** Days from the start event; null is an unlimited window. */
+  windowDays: number | null;
+  /** Null charges nothing for this outcome. */
+  fee: { type: "FLAT" | "PERCENT"; value: number } | null;
+}
+
+export interface RegionalPolicy {
+  id: string;
+  /** Internal; shoppers never see it. */
+  name: string;
+  /** ISO 3166-1 alpha-2 codes of the countries this policy covers. */
+  countries: string[];
+  /** Where returns go back to; null means the store's default location. */
+  destinationLocationId: string | null;
+  windowStartsFrom: WindowStart;
+  /** Approve on submission, without the store-wide threshold. */
+  bypassReview: boolean;
+  /** Numbered steps on the confirmation page; empty keeps the portal's wording. */
+  instructions: string[];
+  sortOrder: number;
+  outcomes: Record<OutcomeKey, RegionalOutcome>;
+}
+
+/** The store policy the regions overlay, as much of it as the page shows. */
+export interface StorePolicySummary {
+  id: string;
+  name: string;
+  returnWindowDays: number;
+  windowStartsFrom: WindowStart;
+  allowRefund: boolean;
+  allowStoreCredit: boolean;
+  allowGiftCard: boolean;
+  allowExchange: boolean;
+  allowInstantExchange: boolean;
+  restockingFeePercent: number;
+  autoApprove: boolean;
+  autoApproveUnder: number | null;
+}
+
+export interface RegionalPoliciesResponse {
+  policies: RegionalPolicy[];
+  /** Null only for a store that has no policy yet. */
+  base: StorePolicySummary | null;
+  locations: ShopLocation[];
+  /** The store's default restock location; null means "where it shipped from". */
+  defaultLocationId: string | null;
+  /** The shop currency, for labelling a flat fee. */
+  currency: string;
 }
 
 /** Whether Shopify settled a native exchange correctly, and what can be done. */

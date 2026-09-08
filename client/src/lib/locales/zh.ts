@@ -167,6 +167,8 @@ export const zh: Dict = {
   "status.paymentReceived": "已收到付款",
   "status.payNow": "立即付款",
   "status.paid": "已付款",
+  "status.instructions": "退货说明",
+  "status.returnTo": "请将商品寄至",
   "status.questions": "有疑问？",
   "status.questionsEmail": "有疑问？请发邮件至",
   "status.orderNo": "订单号 {number}",

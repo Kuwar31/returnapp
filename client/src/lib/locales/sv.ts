@@ -170,6 +170,8 @@ export const sv: Dict = {
   "status.paymentReceived": "Betalning mottagen",
   "status.payNow": "Betala nu",
   "status.paid": "Betald",
+  "status.instructions": "Returinstruktioner",
+  "status.returnTo": "Skicka dina varor till",
   "status.questions": "Frågor?",
   "status.questionsEmail": "Frågor? Mejla",
   "status.orderNo": "Order nr {number}",

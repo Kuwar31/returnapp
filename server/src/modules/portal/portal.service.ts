@@ -9,6 +9,7 @@ import { logger } from "../../lib/logger.js";
 import { prisma } from "../../lib/prisma.js";
 import { displayConverter, round2, toDecimal, ZERO } from "../../lib/money.js";
 import { evaluateOrder } from "../policy/eligibility.service.js";
+import { effectivePolicyFor } from "../policy/regional.service.js";
 import {
   getReasonTree,
   resolveGroupForProductType,
@@ -271,7 +272,17 @@ export const getOrderEligibility = async (
   });
   if (!order) throw notFound("Order not found.");
 
-  const policy = await resolvePolicy(merchantId, order.policyId);
+  /**
+   * The store policy, with the region's terms over it when the order shipped
+   * to a country that has its own. Everything downstream — eligibility, the
+   * quote, auto-approval — reads this one object, so no step can consult the
+   * store policy where the region has spoken.
+   */
+  const policy = await effectivePolicyFor(
+    merchantId,
+    await resolvePolicy(merchantId, order.policyId),
+    order,
+  );
 
   /**
    * Reasons are resolved per line, not per order.
@@ -1098,6 +1109,8 @@ export const submitReturn = async (
         merchantId,
         orderId: order.id,
         policyId: policy.id,
+        // Pinned, so a later edit to the region doesn't restate this quote.
+        regionalPolicyId: policy.regional?.id ?? null,
         reference: generateReference(),
         status: autoApproved ? "APPROVED" : "SUBMITTED",
         // A single label for lists and reporting; the per-line resolutions
@@ -1318,6 +1331,10 @@ const confirmationInclude = {
   feedback: true,
   // Carries the checkout link for an exchange the shopper still owes on.
   exchangeDraft: true,
+  // The region's own instructions and destination, when it has them.
+  regionalPolicy: {
+    select: { name: true, instructions: true, destinationLocationId: true },
+  },
 } satisfies Prisma.ReturnRequestInclude;
 
 export const getReturnByReference = async (

@@ -46,6 +46,7 @@ export default [
       */
       route("settings", "admin/SettingsPage.tsx", { id: "settings-general" }),
       route("settings/policy", "admin/SettingsPage.tsx", { id: "settings-policy" }),
+      route("settings/policies", "admin/PoliciesPage.tsx"),
       route("settings/exchanges", "admin/SettingsPage.tsx", {
         id: "settings-exchanges",
       }),

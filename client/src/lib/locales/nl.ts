@@ -170,6 +170,8 @@ export const nl: Dict = {
   "status.paymentReceived": "Betaling ontvangen",
   "status.payNow": "Nu betalen",
   "status.paid": "Betaald",
+  "status.instructions": "Retourinstructies",
+  "status.returnTo": "Stuur je artikelen naar",
   "status.questions": "Vragen?",
   "status.questionsEmail": "Vragen? Mail naar",
   "status.orderNo": "Bestelling #{number}",

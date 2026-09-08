@@ -170,6 +170,8 @@ export const fr: Dict = {
   "status.paymentReceived": "Paiement reçu",
   "status.payNow": "Payer maintenant",
   "status.paid": "Payé",
+  "status.instructions": "Instructions de retour",
+  "status.returnTo": "Envoyez vos articles à",
   "status.questions": "Des questions ?",
   "status.questionsEmail": "Des questions ? Écrivez à",
   "status.orderNo": "Commande n° {number}",

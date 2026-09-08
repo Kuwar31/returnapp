@@ -13,26 +13,71 @@ export interface ShopLocation {
   name: string;
   /** Whether online orders ship from here; the primary location when unset. */
   fulfillsOnlineOrders: boolean;
+  /**
+   * The postal address on one line, for choosing a return destination and
+   * for telling a shopper where to send the parcel. Null when Shopify holds
+   * no street address for the location.
+   */
+  address: string | null;
 }
 
 const LOCATIONS = `#graphql
   query RestockLocations {
     locations(first: 50, includeInactive: false) {
-      nodes { id name isActive fulfillsOnlineOrders }
+      nodes {
+        id name isActive fulfillsOnlineOrders
+        address { address1 address2 city provinceCode zip country }
+      }
     }
   }
 `;
+
+interface LocationNode {
+  id: string;
+  name: string;
+  isActive: boolean;
+  fulfillsOnlineOrders: boolean;
+  address: {
+    address1: string | null;
+    address2: string | null;
+    city: string | null;
+    provinceCode: string | null;
+    zip: string | null;
+    country: string | null;
+  } | null;
+}
+
+/** "1 Oxford Street, Dublin, D02 XA32, Ireland" — or null with no street. */
+const oneLine = (address: LocationNode["address"]): string | null => {
+  if (!address?.address1) return null;
+  return [
+    address.address1,
+    address.address2,
+    [address.city, address.provinceCode].filter(Boolean).join(" "),
+    address.zip,
+    address.country,
+  ]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(", ");
+};
 
 /** Active locations, the ones that fulfil online orders first. */
 export const listLocations = async (
   merchantId: string,
 ): Promise<ShopLocation[]> => {
-  const data = await queryShop<{
-    locations: { nodes: Array<ShopLocation & { isActive: boolean }> };
-  }>(merchantId, LOCATIONS);
+  const data = await queryShop<{ locations: { nodes: LocationNode[] } }>(
+    merchantId,
+    LOCATIONS,
+  );
   return data.locations.nodes
     .filter((l) => l.isActive)
-    .map(({ id, name, fulfillsOnlineOrders }) => ({ id, name, fulfillsOnlineOrders }))
+    .map(({ id, name, fulfillsOnlineOrders, address }) => ({
+      id,
+      name,
+      fulfillsOnlineOrders,
+      address: oneLine(address),
+    }))
     .sort(
       (a, b) =>
         Number(b.fulfillsOnlineOrders) - Number(a.fulfillsOnlineOrders) ||
@@ -60,6 +105,26 @@ export const listLocationsIfConnected = async (
       return [];
     }
     throw error;
+  }
+};
+
+/**
+ * Where a shopper should send a parcel, by location id, for the confirmation
+ * page. Best-effort: a store that can't be read, or a location since deleted,
+ * gives null and the page says nothing rather than failing.
+ */
+export const returnDestination = async (
+  merchantId: string,
+  locationId: string,
+): Promise<{ name: string; address: string | null } | null> => {
+  try {
+    const found = (await listLocationsIfConnected(merchantId)).find(
+      (l) => l.id === locationId,
+    );
+    return found ? { name: found.name, address: found.address } : null;
+  } catch (error) {
+    logger.warn({ merchantId, locationId, error }, "Could not read the return destination");
+    return null;
   }
 };
 

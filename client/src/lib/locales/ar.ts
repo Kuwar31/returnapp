@@ -180,6 +180,8 @@ export const ar: Dict = {
   "status.paymentReceived": "تم استلام الدفعة",
   "status.payNow": "ادفع الآن",
   "status.paid": "مدفوع",
+  "status.instructions": "تعليمات الإرجاع",
+  "status.returnTo": "أرسل منتجاتك إلى",
   "status.questions": "هل لديك أسئلة؟",
   "status.questionsEmail": "هل لديك أسئلة؟ راسلنا على",
   "status.orderNo": "الطلب رقم {number}",

@@ -6,6 +6,7 @@ import type {
 } from "@prisma/client";
 import { toDecimal } from "../../lib/money.js";
 import { canExchangeAgain } from "../returns/exchange-chain.js";
+import { termsFor, type EffectivePolicy } from "./effective.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -162,9 +163,30 @@ export const allowedResolutions = (
  * Pure function — no database access — so it can be unit tested and reused
  * by both the portal and the admin "create return on behalf" flow.
  */
+/**
+ * When each outcome stops being offered, under a regional policy.
+ *
+ * A region can keep exchanges open for sixty days and refunds for thirty, so
+ * the window is per outcome rather than per order. Without a regional policy
+ * every outcome shares the store's single window, which is what this app has
+ * always done. Undefined means "never closes"; null, no anchor yet.
+ */
+const outcomeCloses = (
+  policy: EffectivePolicy,
+  resolution: ResolutionType,
+  anchor: Date | null,
+  storeCloses: Date | null,
+): Date | null | undefined => {
+  const terms = termsFor(policy.outcomes, resolution);
+  if (!terms) return storeCloses;
+  if (!anchor) return null;
+  if (terms.windowDays === null) return undefined;
+  return new Date(anchor.getTime() + terms.windowDays * DAY_MS);
+};
+
 export const evaluateOrder = (
   order: Order & { lineItems: OrderLineItem[] },
-  policy: ReturnPolicy,
+  policy: EffectivePolicy,
   now: Date = new Date(),
   /**
    * How many exchanges this order is from an original purchase, walked from
@@ -204,18 +226,49 @@ export const evaluateOrder = (
   exchangeReplacements?: Set<string>,
 ): OrderEligibility => {
   const anchor = windowAnchor(order, policy);
-  const windowClosesAt = anchor
+  const storeCloses = anchor
     ? new Date(anchor.getTime() + policy.returnWindowDays * DAY_MS)
     : null;
 
-  // No anchor means the order hasn't shipped yet — nothing to return, but the
-  // window hasn't lapsed either.
-  const withinWindow = windowClosesAt ? now <= windowClosesAt : false;
+  const policyResolutions = allowedResolutions(policy);
+
+  /**
+   * Whether a given outcome can still be started today.
+   *
+   * Under a regional policy each outcome has its own answer; otherwise they
+   * all share the store window. No anchor means the order hasn't shipped yet
+   * — nothing to return, but the window hasn't lapsed either.
+   */
+  const stillOpen = (resolution: ResolutionType): boolean => {
+    const closes = outcomeCloses(policy, resolution, anchor, storeCloses);
+    if (closes === undefined) return Boolean(anchor);
+    return closes ? now <= closes : false;
+  };
+
+  /**
+   * The order's window as a whole: the last day *anything* can be started.
+   * Null when nothing has shipped, or when an open outcome has no limit —
+   * there is then no date to print, and nothing to count down to.
+   */
+  const closingDates = policyResolutions.map((r) =>
+    outcomeCloses(policy, r, anchor, storeCloses),
+  );
+  const unlimited = anchor !== null && closingDates.some((d) => d === undefined);
+  const windowClosesAt = unlimited
+    ? null
+    : closingDates.reduce<Date | null>(
+        (latest, d) => (d && (!latest || d > latest) ? d : latest),
+        null,
+      );
+
+  const withinWindow = unlimited
+    ? true
+    : windowClosesAt
+      ? now <= windowClosesAt
+      : false;
   const daysRemaining = windowClosesAt
     ? Math.max(0, Math.ceil((windowClosesAt.getTime() - now.getTime()) / DAY_MS))
     : null;
-
-  const policyResolutions = allowedResolutions(policy);
 
   const items: EligibleLineItem[] = order.lineItems.map((line) => {
     const ours = Math.max(0, line.quantity - line.returnedQuantity);
@@ -330,6 +383,20 @@ export const evaluateOrder = (
       : policyResolutions;
 
     /**
+     * Outcomes whose own window has passed drop out here, one by one.
+     *
+     * Only a regional policy makes them differ: a refund may have closed at
+     * thirty days while an exchange stays open to sixty, and the item should
+     * then be offered the exchange rather than nothing. Under the store window
+     * alone this filters everything or nothing, and the order-level check
+     * above has already said which.
+     */
+    const beforeWindows = lineResolutions;
+    lineResolutions = lineResolutions.filter(stillOpen);
+    const closedByWindow =
+      beforeWindows.length > 0 && lineResolutions.length === 0;
+
+    /**
      * Out of exchanges, but not out of options.
      *
      * Once the chain reaches its limit the swap is what stops being offered —
@@ -348,7 +415,11 @@ export const evaluateOrder = (
      * more honest than offering a choice of nothing.
      */
     if (ineligibleReason === null && lineResolutions.length === 0) {
-      if (!exchangeable) {
+      if (closedByWindow) {
+        ineligibleReason = `The ${policy.returnWindowDays}-day return window has closed.`;
+        ineligibleCode = "ineligible.windowClosed";
+        ineligibleVars = { days: policy.returnWindowDays };
+      } else if (!exchangeable) {
         ineligibleReason =
           "This item has already been exchanged as many times as this store allows.";
         ineligibleCode = "ineligible.exchangeLimit";

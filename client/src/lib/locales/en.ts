@@ -216,6 +216,8 @@ export const en = {
   "status.paymentReceived": "Payment received",
   "status.payNow": "Pay now",
   "status.paid": "Paid",
+  "status.instructions": "Return instructions",
+  "status.returnTo": "Send your items to",
   "status.questions": "Questions?",
   "status.questionsEmail": "Questions? Email",
   "status.orderNo": "Order #{number}",

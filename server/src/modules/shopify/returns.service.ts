@@ -443,6 +443,8 @@ export const restockLocationsFor = async (
   merchantId: string,
   request: {
     order: { externalId: string | null };
+    /** The region's return destination, when the return has one. */
+    regionalPolicy?: { destinationLocationId: string | null } | null;
     lineItems: Array<{
       id: string;
       fulfillmentLineItemId: string | null;
@@ -465,7 +467,14 @@ export const restockLocationsFor = async (
   // say if it's wrong, and refusing here would restock nothing.
   const valid = (id: string | null | undefined): string | undefined =>
     id && (names.size === 0 || names.has(id)) ? id : undefined;
-  const storeDefault = valid(merchant.restockLocationId);
+  /**
+   * The region's destination outranks the store default: a policy that says
+   * UK returns go back to the UK warehouse means exactly that, and the store
+   * default is for returns no region speaks for.
+   */
+  const storeDefault =
+    valid(request.regionalPolicy?.destinationLocationId) ??
+    valid(merchant.restockLocationId);
 
   const needsOrigin =
     !storeDefault && request.lineItems.some((l) => !valid(l.restockLocationId));
@@ -537,7 +546,11 @@ export const receiveShopifyReturn = async (
 ): Promise<void> => {
   const request = await prisma.returnRequest.findFirstOrThrow({
     where: { id: returnRequestId, merchantId },
-    include: { lineItems: true, order: { select: { externalId: true } } },
+    include: {
+      lineItems: true,
+      order: { select: { externalId: true } },
+      regionalPolicy: { select: { destinationLocationId: true } },
+    },
   });
   if (!request.externalReturnId) return;
 

@@ -1583,6 +1583,42 @@
   line-height: 1.5;
 }
 
+/* The merchant's own return steps, numbered, and where the parcel goes. */
+.confirm__steps {
+  margin: 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.confirm__dest {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.confirm__steps + .confirm__dest {
+  margin-top: 18px;
+}
+
+.confirm__dest-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.confirm__dest-name {
+  font-weight: 600;
+}
+
 .confirm__restart {
   display: inline-block;
   margin-top: 4px;
