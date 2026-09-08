@@ -9,10 +9,28 @@
  */
 
 /**
+ * Stock per location, for stores that count exchange availability at chosen
+ * locations only. Asked for separately rather than always, because it needs
+ * the read_inventory scope, which a store connected before this existed was
+ * never asked for — and a query naming a field the token can't read fails
+ * outright, taking the whole catalogue with it.
+ */
+const INVENTORY_LEVELS = `
+          inventoryPolicy
+          inventoryItem {
+            inventoryLevels(first: 50) {
+              nodes {
+                location { id }
+                quantities(names: ["available"]) { name quantity }
+              }
+            }
+          }`;
+
+/**
  * Every variant of the product being returned — the "exchange for a new size"
  * case, which is the overwhelmingly common one.
  */
-export const PRODUCT_VARIANTS = `#graphql
+export const productVariantsQuery = (withInventory: boolean) => `#graphql
   query ProductVariants($productId: ID!) {
     product(id: $productId) {
       id
@@ -31,12 +49,14 @@ export const PRODUCT_VARIANTS = `#graphql
           inventoryQuantity
           price
           media(first: 1) { nodes { preview { image { url } } } }
-          selectedOptions { name value }
+          selectedOptions { name value }${withInventory ? INVENTORY_LEVELS : ""}
         }
       }
     }
   }
 `;
+
+export const PRODUCT_VARIANTS = productVariantsQuery(false);
 
 /**
  * A browsable slice of the catalogue for "exchange for another product".
@@ -44,7 +64,7 @@ export const PRODUCT_VARIANTS = `#graphql
  * Only published, in-stock variants are offered downstream: letting a shopper
  * pick something unavailable produces an exchange that can never ship.
  */
-export const BROWSE_PRODUCTS = `#graphql
+export const browseProductsQuery = (withInventory: boolean) => `#graphql
   query BrowseProducts($first: Int!, $after: String, $query: String) {
     products(first: $first, after: $after, query: $query, sortKey: TITLE) {
       pageInfo { hasNextPage endCursor }
@@ -67,7 +87,7 @@ export const BROWSE_PRODUCTS = `#graphql
             availableForSale
             price
             media(first: 1) { nodes { preview { image { url } } } }
-            selectedOptions { name value }
+            selectedOptions { name value }${withInventory ? INVENTORY_LEVELS : ""}
           }
         }
       }
@@ -75,12 +95,14 @@ export const BROWSE_PRODUCTS = `#graphql
   }
 `;
 
+export const BROWSE_PRODUCTS = browseProductsQuery(false);
+
 /**
  * Authoritative price and availability for the variants a shopper actually
  * chose, re-read at quote and submit time so a price change between browsing
  * and submitting can't be exploited.
  */
-export const VARIANTS_BY_ID = `#graphql
+export const variantsByIdQuery = (withInventory: boolean) => `#graphql
   query VariantsById($ids: [ID!]!) {
     nodes(ids: $ids) {
       ... on ProductVariant {
@@ -103,11 +125,13 @@ export const VARIANTS_BY_ID = `#graphql
           tags
           productType
           collections(first: 50) { nodes { id } }
-        }
+        }${withInventory ? INVENTORY_LEVELS : ""}
       }
     }
   }
 `;
+
+export const VARIANTS_BY_ID = variantsByIdQuery(false);
 
 /** The collections a product sits in, for groups that match on collection. */
 export const PRODUCT_COLLECTIONS = `#graphql

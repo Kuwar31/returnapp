@@ -46,7 +46,17 @@ export default [
       */
       route("settings", "admin/SettingsPage.tsx", { id: "settings-general" }),
       route("settings/policy", "admin/SettingsPage.tsx", { id: "settings-policy" }),
-      route("settings/policies", "admin/PoliciesPage.tsx"),
+      /*
+        Return policies has three sub-tabs, each its own address so the
+        Destinations and Locations screens can be linked to directly.
+      */
+      route("settings/policies", "admin/PoliciesPage.tsx", { id: "policies-list" }),
+      route("settings/policies/destinations", "admin/PoliciesPage.tsx", {
+        id: "policies-destinations",
+      }),
+      route("settings/policies/locations", "admin/PoliciesPage.tsx", {
+        id: "policies-locations",
+      }),
       route("settings/exchanges", "admin/SettingsPage.tsx", {
         id: "settings-exchanges",
       }),

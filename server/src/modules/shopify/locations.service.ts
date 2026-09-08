@@ -109,22 +109,45 @@ export const listLocationsIfConnected = async (
 };
 
 /**
- * Where a shopper should send a parcel, by location id, for the confirmation
- * page. Best-effort: a store that can't be read, or a location since deleted,
- * gives null and the page says nothing rather than failing.
+ * Whether this store's token can read stock per location, which counting
+ * exchange availability at chosen locations needs.
+ *
+ * Asked before the merchant chooses locations rather than discovered when a
+ * shopper browses: a store connected before read_inventory was requested has
+ * a token without it, and the only fix is reconnecting, which is the
+ * merchant's to do. Null means access is fine.
  */
-export const returnDestination = async (
+export const inventoryAccessProblem = async (
   merchantId: string,
-  locationId: string,
-): Promise<{ name: string; address: string | null } | null> => {
+): Promise<string | null> => {
   try {
-    const found = (await listLocationsIfConnected(merchantId)).find(
-      (l) => l.id === locationId,
+    await queryShop(
+      merchantId,
+      `#graphql
+        query InventoryAccessProbe {
+          locations(first: 1) { nodes { id inventoryLevels(first: 1) { nodes { id } } } }
+        }
+      `,
     );
-    return found ? { name: found.name, address: found.address } : null;
-  } catch (error) {
-    logger.warn({ merchantId, locationId, error }, "Could not read the return destination");
     return null;
+  } catch (error) {
+    const code = error instanceof AppError ? error.code : null;
+    if (
+      code === "NOT_CONNECTED" ||
+      code === "TOKEN_UNREADABLE" ||
+      code === "SHOPIFY_UNAUTHORIZED"
+    ) {
+      return "Connect your Shopify store to choose inventory locations.";
+    }
+    if (code === "SHOPIFY_GRAPHQL_ERROR") {
+      return (
+        "Your Shopify connection doesn't include inventory access yet. " +
+        "Reconnect the store from Settings → General to grant it; until then " +
+        "stock is counted across every location."
+      );
+    }
+    logger.warn({ merchantId, error }, "Could not check inventory access");
+    return "Shopify couldn't be reached to check inventory access. Try again in a moment.";
   }
 };
 

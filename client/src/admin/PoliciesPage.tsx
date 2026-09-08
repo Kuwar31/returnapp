@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useBlocker } from "react-router";
+import { Link, useBlocker, useLocation } from "react-router";
 import { api } from "../lib/api";
-import { countryName, flagOf, searchCountries } from "../lib/countries";
+import { COUNTRIES, countryName, flagOf, searchCountries } from "../lib/countries";
 import type {
+  FeeType,
   OutcomeKey,
   RegionalOutcome,
   RegionalPoliciesResponse,
   RegionalPolicy,
+  ReturnDestination,
   ShopLocation,
   StorePolicySummary,
   WindowStart,
@@ -16,19 +18,28 @@ import { useAuth } from "./AuthContext";
 import { storePath } from "./store-path";
 
 /**
- * Return policies by region, the way Loop lays them out.
+ * Return policies by region, the way Loop lays them out, in three tabs.
  *
- * The store policy (Settings → Return policy) stays the source of every
- * mechanic. A policy here claims a set of countries and decides, for orders
- * shipped to them, only what a region is allowed to: which outcomes are on,
- * how long each stays open, what each costs, when the clock starts, whether
- * review is skipped, and where the parcel goes back to. The "Default" card is
- * the store policy itself, shown so the merchant can see the whole picture
- * in one place.
+ * Policies: the store policy (Settings → Return policy) stays the source of
+ * every mechanic. A policy here claims a set of countries and decides, for
+ * orders shipped to them, only what a region is allowed to: which outcomes
+ * are on, how long each stays open, what each costs, when the clock starts,
+ * whether review is skipped, where the parcel goes back to, and how
+ * exchanges behave. The "Default" card is the store policy itself.
+ *
+ * Destinations: the addresses returned goods are sent to, one of them the
+ * default. Locations: which Shopify locations' stock counts for exchanges.
  */
 
 type Draft = Omit<RegionalPolicy, "id" | "sortOrder"> & { id: string | null };
 type Tab = "zone" | "outcomes" | "advanced";
+type Page = "policies" | "destinations" | "locations";
+
+const PAGES: Array<{ id: Page; label: string; path: string }> = [
+  { id: "policies", label: "Policies", path: "" },
+  { id: "destinations", label: "Destinations", path: "/destinations" },
+  { id: "locations", label: "Locations", path: "/locations" },
+];
 
 const TABS: Array<{ id: Tab; label: string; icon: string }> = [
   { id: "zone", label: "Policy name & zone", icon: "◎" },
@@ -36,26 +47,30 @@ const TABS: Array<{ id: Tab; label: string; icon: string }> = [
   { id: "advanced", label: "Advanced settings", icon: "⚙" },
 ];
 
-const OUTCOMES: Array<{ key: OutcomeKey; title: string; blurb: string }> = [
+const OUTCOMES: Array<{ key: OutcomeKey; title: string; blurb: string; noun: string }> = [
   {
     key: "REFUND",
     title: "Refund",
     blurb: "Allow customers to receive a refund on the original order.",
+    noun: "a refund",
   },
   {
     key: "EXCHANGE",
     title: "Exchange",
     blurb: "Allow customers to exchange an item for a new variant.",
+    noun: "an exchange",
   },
   {
     key: "STORE_CREDIT",
     title: "Store credit",
     blurb: "Allow customers to receive store credit to spend with you.",
+    noun: "a store credit",
   },
   {
     key: "GIFT_CARD",
     title: "Gift card",
     blurb: "Allow customers to receive a Shopify gift card.",
+    noun: "a gift card",
   },
 ];
 
@@ -94,12 +109,44 @@ const blankPolicy = (base: StorePolicySummary | null): Draft => ({
   id: null,
   name: "",
   countries: [],
-  destinationLocationId: null,
+  destinationId: null,
+  inventoryLocationIds: [],
+  allowInstantExchange: base?.allowInstantExchange ?? false,
+  allowAdvancedExchange: true,
+  exchangeShippingMethod: null,
   windowStartsFrom: base?.windowStartsFrom ?? "DELIVERY",
   bypassReview: base?.autoApprove ?? false,
   instructions: [],
   outcomes: outcomesFrom(base),
 });
+
+const blankDestination = (): DestinationDraft => ({
+  id: null,
+  name: "",
+  address1: "",
+  address2: "",
+  city: "",
+  province: "",
+  zip: "",
+  countryCode: "",
+  phone: "",
+  isDefault: false,
+  locationId: null,
+});
+
+type DestinationDraft = {
+  id: string | null;
+  name: string;
+  address1: string;
+  address2: string;
+  city: string;
+  province: string;
+  zip: string;
+  countryCode: string;
+  phone: string;
+  isDefault: boolean;
+  locationId: string | null;
+};
 
 const formatMoney = (value: number, currency: string): string => {
   try {
@@ -109,11 +156,26 @@ const formatMoney = (value: number, currency: string): string => {
   }
 };
 
+/** The currency's symbol on its own, for the fee field's prefix. */
+const currencySymbol = (currency: string): string => {
+  try {
+    return (
+      new Intl.NumberFormat("en", { style: "currency", currency })
+        .formatToParts(0)
+        .find((p) => p.type === "currency")?.value ?? currency
+    );
+  } catch {
+    return currency;
+  }
+};
+
 /** "30 days, 5% handling fee" — one line per outcome on a card. */
 const describeOutcome = (o: RegionalOutcome, currency: string): string => {
   if (!o.enabled) return "Disabled";
   const window = o.windowDays === null ? "Unlimited" : `${o.windowDays} days`;
-  if (!o.fee || o.fee.value <= 0) return window;
+  if (!o.fee) return window;
+  if (o.fee.type === "PRODUCT_TAG") return `${window}, handling fee by product tag`;
+  if (o.fee.value <= 0) return window;
   const fee =
     o.fee.type === "PERCENT"
       ? `${o.fee.value}%`
@@ -159,6 +221,7 @@ function NumberField({
   step,
   unit,
   unitFirst = false,
+  wide = false,
   onChange,
 }: {
   value: number;
@@ -167,6 +230,7 @@ function NumberField({
   step?: string;
   unit: string;
   unitFirst?: boolean;
+  wide?: boolean;
   onChange: (value: number) => void;
 }) {
   const [text, setText] = useState(String(value));
@@ -182,7 +246,7 @@ function NumberField({
     </span>
   );
   return (
-    <span className="unit-field">
+    <span className={`unit-field${wide ? " unit-field--wide" : ""}`}>
       {unitFirst && unitEl}
       <input
         type="number"
@@ -303,17 +367,17 @@ function CountryPicker({
   );
 }
 
-/** The store's locations, one of which the region's returns go back to. */
-function DestinationsModal({
-  locations,
-  selected,
-  onSelect,
+/** A dialog, dimmed behind, closed by its button, the backdrop or Escape. */
+function Modal({
+  title,
   onClose,
+  children,
+  footer,
 }: {
-  locations: ShopLocation[];
-  selected: string | null;
-  onSelect: (id: string | null) => void;
+  title: string;
   onClose: () => void;
+  children: React.ReactNode;
+  footer: React.ReactNode;
 }) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -329,73 +393,298 @@ function DestinationsModal({
         className="modal"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="dest-title"
+        aria-label={title}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal__head">
-          <h2 id="dest-title">Manage destinations</h2>
-          <button
-            type="button"
-            className="modal__close"
-            aria-label="Close"
-            onClick={onClose}
-          >
+          <h2>{title}</h2>
+          <button type="button" className="modal__close" aria-label="Close" onClick={onClose}>
             ×
           </button>
         </div>
-        <div className="modal__body">
-          {locations.length === 0 ? (
-            <p className="muted" style={{ padding: "12px 0" }}>
-              Connect your Shopify store to choose a destination. Its locations
-              will appear here.
-            </p>
-          ) : (
-            locations.map((l) => (
-              <label key={l.id} className="dest-row">
-                <input
-                  type="checkbox"
-                  checked={selected === l.id}
-                  onChange={() => onSelect(selected === l.id ? null : l.id)}
-                />
-                <span className="dest-row__icon" aria-hidden="true">
-                  ⌂
-                </span>
-                <span>
-                  <span className="dest-row__name">{l.name}</span>
-                  <span className="dest-row__addr">
-                    {l.address ?? "No address on file in Shopify"}
-                  </span>
-                </span>
-              </label>
-            ))
-          )}
-        </div>
-        <div className="modal__foot">
-          <button type="button" className="btn btn--secondary btn--sm" onClick={onClose}>
-            Close
-          </button>
-        </div>
+        <div className="modal__body">{children}</div>
+        <div className="modal__foot">{footer}</div>
       </div>
     </div>
   );
 }
 
-/** One outcome: the switch, then its window and fee once it's on. */
-function OutcomePanel({
-  title,
-  blurb,
+/** The store's destinations, one of which the region's returns go to. */
+function DestinationsModal({
+  destinations,
+  selected,
+  destinationsPath,
+  onSelect,
+  onClose,
+}: {
+  destinations: ReturnDestination[];
+  selected: string | null;
+  destinationsPath: string;
+  onSelect: (id: string | null) => void;
+  onClose: () => void;
+}) {
+  return (
+    <Modal
+      title="Manage destinations"
+      onClose={onClose}
+      footer={
+        <button type="button" className="btn btn--secondary btn--sm" onClick={onClose}>
+          Close
+        </button>
+      }
+    >
+      {destinations.length === 0 ? (
+        <p className="muted" style={{ padding: "12px 0" }}>
+          No destinations yet.{" "}
+          <Link to={destinationsPath}>Add one on the Destinations tab</Link> and it
+          will appear here.
+        </p>
+      ) : (
+        destinations.map((d) => (
+          <label key={d.id} className="dest-row">
+            <input
+              type="checkbox"
+              checked={selected === d.id}
+              onChange={() => onSelect(selected === d.id ? null : d.id)}
+            />
+            <span className="dest-row__icon" aria-hidden="true">
+              {flagOf(d.countryCode)}
+            </span>
+            <span>
+              <span className="dest-row__name">
+                {d.name}
+                {d.isDefault && <span className="pcard__badge dest-row__badge">Default</span>}
+              </span>
+              <span className="dest-row__addr">{d.address}</span>
+            </span>
+          </label>
+        ))
+      )}
+    </Modal>
+  );
+}
+
+/** Tick the Shopify locations whose stock should count. Saved on "Done". */
+function LocationsModal({
+  locations,
+  selected,
+  onSave,
+  onClose,
+}: {
+  locations: ShopLocation[];
+  selected: string[];
+  onSave: (ids: string[]) => void;
+  onClose: () => void;
+}) {
+  const [picked, setPicked] = useState<string[]>(selected);
+  const toggle = (id: string) =>
+    setPicked((prev) => (prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]));
+
+  return (
+    <Modal
+      title="Manage locations"
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className="btn btn--secondary btn--sm" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn btn--sm"
+            style={{ marginLeft: 8 }}
+            onClick={() => onSave(picked)}
+          >
+            Done
+          </button>
+        </>
+      }
+    >
+      {locations.length === 0 ? (
+        <p className="muted" style={{ padding: "12px 0" }}>
+          Connect your Shopify store to choose locations. Its locations will
+          appear here.
+        </p>
+      ) : (
+        locations.map((l) => (
+          <label key={l.id} className="dest-row">
+            <input
+              type="checkbox"
+              checked={picked.includes(l.id)}
+              onChange={() => toggle(l.id)}
+            />
+            <span className="dest-row__icon" aria-hidden="true">
+              ⌂
+            </span>
+            <span>
+              <span className="dest-row__name">{l.name}</span>
+              <span className="dest-row__addr">
+                {l.address ?? "No address on file in Shopify"}
+              </span>
+            </span>
+          </label>
+        ))
+      )}
+    </Modal>
+  );
+}
+
+/**
+ * The handling fee for one outcome: the switch, the four ways of charging
+ * it, and the amount. Laid out as Loop's is, including the label-cost option
+ * this app can't yet compute, which is shown but not offered.
+ */
+function HandlingFees({
+  noun,
   value,
   currency,
   onChange,
 }: {
+  noun: string;
+  value: RegionalOutcome;
+  currency: string;
+  onChange: (fee: RegionalOutcome["fee"]) => void;
+}) {
+  const fee = value.fee;
+  const setType = (type: FeeType) => onChange({ type, value: fee?.value ?? 0 });
+
+  return (
+    <>
+      <label className="check-list__item">
+        <input
+          type="checkbox"
+          checked={fee !== null}
+          onChange={(e) => onChange(e.target.checked ? { type: "FLAT", value: 0 } : null)}
+        />
+        <span>
+          <span className="radio-list__label">Handling fees</span>
+          <span className="radio-list__hint">
+            Charge a handling fee for returns with {noun} outcome. It's deducted
+            from what the customer gets back.
+          </span>
+        </span>
+      </label>
+
+      {fee && (
+        <div className="fee">
+          <div className="radio-list">
+            <label className="radio-list__item">
+              <input
+                type="radio"
+                checked={fee.type === "FLAT"}
+                onChange={() => setType("FLAT")}
+              />
+              <span>
+                <span className="radio-list__label">Flat rate</span>
+                <span className="radio-list__hint">
+                  Charge a handling fee as a fixed amount, once per return.
+                </span>
+              </span>
+            </label>
+            <label className="radio-list__item is-disabled">
+              <input type="radio" checked={false} disabled onChange={() => undefined} />
+              <span>
+                <span className="radio-list__label">Percentage of estimated label cost</span>
+                <span className="radio-list__hint">
+                  Charge a dynamic handling fee that is based on the estimated
+                  label cost. Needs return labels, which aren't set up yet.
+                </span>
+              </span>
+            </label>
+            <label className="radio-list__item">
+              <input
+                type="radio"
+                checked={fee.type === "PERCENT"}
+                onChange={() => onChange({ type: "PERCENT", value: Math.min(fee.value, 100) })}
+              />
+              <span>
+                <span className="radio-list__label">Percentage of return value</span>
+                <span className="radio-list__hint">
+                  Charge a dynamic handling fee based on the value of the items
+                  being returned.
+                </span>
+              </span>
+            </label>
+            <label className="radio-list__item">
+              <input
+                type="radio"
+                checked={fee.type === "PRODUCT_TAG"}
+                onChange={() => setType("PRODUCT_TAG")}
+              />
+              <span>
+                <span className="radio-list__label">Product tag</span>
+                <span className="radio-list__hint">
+                  Charge a fee based on the products being returned.
+                </span>
+              </span>
+            </label>
+          </div>
+
+          {fee.type === "PRODUCT_TAG" && (
+            <div className="infobox" style={{ marginTop: 14 }}>
+              <span className="infobox__icon" aria-hidden="true">
+                i
+              </span>
+              <div>
+                <strong>Tag products in Shopify with the fee.</strong> Add{" "}
+                <code>handling-fee:10</code> to charge 10 {currency}, or{" "}
+                <code>handling-fee:free</code> to exempt a product. Use{" "}
+                <code>refund-fee</code>, <code>exchange-fee</code>, <code>credit-fee</code> or{" "}
+                <code>gift-card-fee</code> for an amount that applies to one outcome
+                only. The highest tag on a return is charged once; a product tagged
+                free exempts the whole return; untagged products use the fallback
+                below.
+              </div>
+            </div>
+          )}
+
+          <div className="pairing__divider" />
+          <div className="field-label">
+            {fee.type === "PRODUCT_TAG" ? "Fallback handling fee" : "Handling Fee"}
+          </div>
+          <NumberField
+            value={fee.value}
+            min={0}
+            max={fee.type === "PERCENT" ? 100 : undefined}
+            step="0.01"
+            unit={fee.type === "PERCENT" ? "%" : currencySymbol(currency)}
+            unitFirst={fee.type !== "PERCENT"}
+            wide
+            onChange={(amount) => onChange({ ...fee, value: amount })}
+          />
+          {fee.type === "PRODUCT_TAG" && (
+            <p className="settings-row__hint" style={{ marginTop: 8 }}>
+              Charged, once per return, when a returned product carries no fee
+              tag. Leave at 0 to charge untagged products nothing.
+            </p>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
+/** One outcome: the switch, then its window, fee and any extras once it's on. */
+function OutcomePanel({
+  title,
+  blurb,
+  noun,
+  value,
+  currency,
+  onChange,
+  afterWindow,
+  afterFees,
+}: {
   title: string;
   blurb: string;
+  noun: string;
   value: RegionalOutcome;
   currency: string;
   onChange: (value: RegionalOutcome) => void;
+  afterWindow?: React.ReactNode;
+  afterFees?: React.ReactNode;
 }) {
   const set = (patch: Partial<RegionalOutcome>) => onChange({ ...value, ...patch });
-  const fee = value.fee;
 
   return (
     <div className="panel">
@@ -436,73 +725,17 @@ function OutcomePanel({
             )}
           </div>
 
+          {afterWindow}
+
           <div className="pairing__divider" />
-          <label className="check-list__item">
-            <input
-              type="checkbox"
-              checked={fee !== null}
-              onChange={(e) =>
-                set({ fee: e.target.checked ? { type: "PERCENT", value: 0 } : null })
-              }
-            />
-            <span>
-              <span className="radio-list__label">Handling fees</span>
-              <span className="radio-list__hint">
-                Charge a handling fee for returns with this outcome. It's
-                deducted from what the customer gets back.
-              </span>
-            </span>
-          </label>
+          <HandlingFees
+            noun={noun}
+            value={value}
+            currency={currency}
+            onChange={(fee) => set({ fee })}
+          />
 
-          {fee && (
-            <div className="fee">
-              <div className="radio-list">
-                <label className="radio-list__item">
-                  <input
-                    type="radio"
-                    name={`fee-${title}`}
-                    checked={fee.type === "FLAT"}
-                    onChange={() => set({ fee: { ...fee, type: "FLAT" } })}
-                  />
-                  <span>
-                    <span className="radio-list__label">Flat rate</span>
-                    <span className="radio-list__hint">
-                      Charge a handling fee as a fixed amount, once per return.
-                    </span>
-                  </span>
-                </label>
-                <label className="radio-list__item">
-                  <input
-                    type="radio"
-                    name={`fee-${title}`}
-                    checked={fee.type === "PERCENT"}
-                    onChange={() =>
-                      set({ fee: { type: "PERCENT", value: Math.min(fee.value, 100) } })
-                    }
-                  />
-                  <span>
-                    <span className="radio-list__label">Percentage of return value</span>
-                    <span className="radio-list__hint">
-                      Charge a dynamic handling fee based on the value of the
-                      items being returned.
-                    </span>
-                  </span>
-                </label>
-              </div>
-
-              <div className="pairing__divider" />
-              <div className="field-label">Handling fee</div>
-              <NumberField
-                value={fee.value}
-                min={0}
-                max={fee.type === "PERCENT" ? 100 : undefined}
-                step="0.01"
-                unit={fee.type === "PERCENT" ? "%" : currency}
-                unitFirst={fee.type === "FLAT"}
-                onChange={(amount) => set({ fee: { ...fee, value: amount } })}
-              />
-            </div>
-          )}
+          {afterFees}
         </>
       )}
     </div>
@@ -555,8 +788,43 @@ function PolicyCard({
   );
 }
 
+/** A labelled text field in the destination form. */
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+  span = false,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  span?: boolean;
+}) {
+  return (
+    <label className={`dform__field${span ? " dform__field--span" : ""}`}>
+      <span className="field-label">{label}</span>
+      <input
+        type="text"
+        className="settings-input"
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </label>
+  );
+}
+
 export default function PoliciesPage() {
   const { session } = useAuth();
+  const { pathname } = useLocation();
+  const page: Page = pathname.endsWith("/destinations")
+    ? "destinations"
+    : pathname.endsWith("/locations")
+      ? "locations"
+      : "policies";
+
   const [data, setData] = useState<RegionalPoliciesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -567,6 +835,14 @@ export default function PoliciesPage() {
   const [original, setOriginal] = useState<string>("");
   const [tab, setTab] = useState<Tab>("zone");
   const [choosingDestination, setChoosingDestination] = useState(false);
+  const [choosingPolicyLocations, setChoosingPolicyLocations] = useState(false);
+  /** The destination being added or edited, on the Destinations tab. */
+  const [destination, setDestination] = useState<DestinationDraft | null>(null);
+  /** The Locations tab's dialog, and whether the store's token can read stock. */
+  const [choosingStoreLocations, setChoosingStoreLocations] = useState(false);
+  const [inventoryProblem, setInventoryProblem] = useState<string | null | undefined>(
+    undefined,
+  );
 
   const load = () =>
     api
@@ -580,6 +856,23 @@ export default function PoliciesPage() {
   useEffect(() => {
     void load();
   }, []);
+
+  // Asked once, when the Locations tab is first opened: it's a Shopify call.
+  useEffect(() => {
+    if (page !== "locations" || inventoryProblem !== undefined) return;
+    api
+      .get<{ problem: string | null }>("/admin/settings/inventory-access", { auth: "admin" })
+      .then((r) => setInventoryProblem(r.problem))
+      .catch(() => setInventoryProblem(null));
+  }, [page, inventoryProblem]);
+
+  // Leaving the tab closes whatever was being edited on it.
+  useEffect(() => {
+    setStatus(null);
+    setError(null);
+    if (page !== "policies") setEditing(null);
+    if (page !== "destinations") setDestination(null);
+  }, [page]);
 
   const dirty = editing !== null && JSON.stringify(editing) !== original;
   const blocker = useBlocker(dirty);
@@ -597,6 +890,7 @@ export default function PoliciesPage() {
     if (dirty && !window.confirm("Leave without saving your changes?")) return;
     setEditing(null);
     setChoosingDestination(false);
+    setChoosingPolicyLocations(false);
   };
 
   const patch = (changes: Partial<Draft>) =>
@@ -633,7 +927,11 @@ export default function PoliciesPage() {
       const body = {
         name: editing.name.trim(),
         countries: editing.countries,
-        destinationLocationId: editing.destinationLocationId,
+        destinationId: editing.destinationId,
+        inventoryLocationIds: editing.inventoryLocationIds,
+        allowInstantExchange: editing.allowInstantExchange,
+        allowAdvancedExchange: editing.allowAdvancedExchange,
+        exchangeShippingMethod: editing.exchangeShippingMethod?.trim() || null,
         windowStartsFrom: editing.windowStartsFrom,
         bypassReview: editing.bypassReview,
         instructions: editing.instructions.map((s) => s.trim()).filter(Boolean),
@@ -679,6 +977,98 @@ export default function PoliciesPage() {
     }
   };
 
+  // --- destinations -------------------------------------------------------
+
+  const openDestination = (d: ReturnDestination | null) => {
+    setDestination(
+      d
+        ? {
+            id: d.id,
+            name: d.name,
+            address1: d.address1,
+            address2: d.address2 ?? "",
+            city: d.city,
+            province: d.province ?? "",
+            zip: d.zip ?? "",
+            countryCode: d.countryCode,
+            phone: d.phone ?? "",
+            isDefault: d.isDefault,
+            locationId: d.locationId,
+          }
+        : blankDestination(),
+    );
+    setStatus(null);
+    setError(null);
+  };
+
+  const saveDestination = async () => {
+    if (!destination || saving) return;
+    if (!destination.name.trim()) return setError("Give the destination a name.");
+    if (!destination.countryCode) return setError("Choose a country.");
+    if (!destination.address1.trim()) return setError("Enter the street address.");
+    if (!destination.city.trim()) return setError("Enter the city.");
+    setSaving(true);
+    setError(null);
+    try {
+      const body = {
+        name: destination.name.trim(),
+        address1: destination.address1.trim(),
+        address2: destination.address2.trim() || null,
+        city: destination.city.trim(),
+        province: destination.province.trim() || null,
+        zip: destination.zip.trim() || null,
+        countryCode: destination.countryCode,
+        phone: destination.phone.trim() || null,
+        isDefault: destination.isDefault,
+        locationId: destination.locationId,
+      };
+      if (destination.id) {
+        await api.patch(`/admin/settings/destinations/${destination.id}`, body, {
+          auth: "admin",
+        });
+      } else {
+        await api.post("/admin/settings/destinations", body, { auth: "admin" });
+      }
+      await load();
+      setDestination(null);
+      setStatus(`Saved "${body.name}".`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't save that destination.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeDestination = async () => {
+    if (!destination?.id) return;
+    if (!window.confirm(`Delete "${destination.name}"?`)) return;
+    setError(null);
+    try {
+      await api.delete(`/admin/settings/destinations/${destination.id}`, { auth: "admin" });
+      await load();
+      setDestination(null);
+      setStatus("Destination deleted.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't delete that destination.");
+    }
+  };
+
+  const saveStoreLocations = async (ids: string[]) => {
+    setChoosingStoreLocations(false);
+    setError(null);
+    try {
+      await api.patch("/admin/settings/store", { inventoryLocationIds: ids }, { auth: "admin" });
+      await load();
+      setStatus(
+        ids.length === 0
+          ? "Inventory is counted across every location."
+          : `Inventory is counted at ${ids.length} location${ids.length === 1 ? "" : "s"}.`,
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't save the locations.");
+    }
+  };
+
   if (loading) return <Loading />;
   if (!data) {
     return (
@@ -689,10 +1079,14 @@ export default function PoliciesPage() {
     );
   }
 
-  const { policies, base, locations, defaultLocationId, currency } = data;
+  const { policies, base, locations, destinations, inventoryLocationIds, currency } = data;
   const basePath = storePath(session!.merchant.slug);
-  const locationName = (id: string | null) =>
-    id ? (locations.find((l) => l.id === id)?.name ?? "A location no longer in your store") : null;
+  const pagePath = (p: Page) => `${basePath}/settings/policies${PAGES.find((x) => x.id === p)!.path}`;
+  const locationName = (id: string) =>
+    locations.find((l) => l.id === id)?.name ?? "A location no longer in your store";
+  const defaultDestination = destinations.find((d) => d.isDefault) ?? null;
+  const destinationById = (id: string | null) =>
+    id ? (destinations.find((d) => d.id === id) ?? null) : null;
 
   const cardRows = (
     outcomes: Record<OutcomeKey, RegionalOutcome>,
@@ -704,11 +1098,308 @@ export default function PoliciesPage() {
     ...(bypassReview ? [["Review", "Skipped — approved on submission"] as [string, string]] : []),
   ];
 
-  const destination = editing ? locationName(editing.destinationLocationId) : null;
-  const destinationAddress = editing?.destinationLocationId
-    ? locations.find((l) => l.id === editing.destinationLocationId)?.address ?? null
+  const destinationLabel = (d: ReturnDestination | null) =>
+    d ? (
+      <span>
+        <span aria-hidden="true">{flagOf(d.countryCode)}</span> {d.name}
+      </span>
+    ) : (
+      <span className="muted">No destination set</span>
+    );
+
+  const chosenDestination = editing
+    ? (destinationById(editing.destinationId) ?? null)
     : null;
 
+  const subtabs = (
+    <nav className="tabs subtabs" aria-label="Return policy settings">
+      {PAGES.map((p) => (
+        <Link
+          key={p.id}
+          to={pagePath(p.id)}
+          className={`tab${page === p.id ? " is-active" : ""}`}
+        >
+          {p.label}
+        </Link>
+      ))}
+    </nav>
+  );
+
+  // -------------------------------------------------------------------------
+  // Destinations tab
+  // -------------------------------------------------------------------------
+  if (page === "destinations") {
+    return (
+      <>
+        <div className="admin__header">
+          <div>
+            <div className="admin__eyebrow">Settings</div>
+            <h1>Destinations</h1>
+          </div>
+          {!destination && (
+            <button className="btn btn--sm" onClick={() => openDestination(null)}>
+              Add destination
+            </button>
+          )}
+        </div>
+        {subtabs}
+        <ErrorAlert message={error} />
+        {status && <div className="alert alert--info">{status}</div>}
+
+        <div className="split">
+          <div>
+            <h3 className="split__title">Destinations</h3>
+            <p className="split__blurb">
+              Manage the places your returned items are received. Customers are
+              shown the address on their confirmation page, and a return policy
+              can send its region's returns to a destination of its own.
+            </p>
+          </div>
+
+          {destination ? (
+            <div className="panel">
+              <h2>{destination.id ? "Edit destination" : "New destination"}</h2>
+              <div className="dform">
+                <Field
+                  label="Name"
+                  value={destination.name}
+                  placeholder="Main warehouse"
+                  onChange={(name) => setDestination({ ...destination, name })}
+                  span
+                />
+                <label className="dform__field dform__field--span">
+                  <span className="field-label">Country</span>
+                  <select
+                    className="settings-input"
+                    value={destination.countryCode}
+                    onChange={(e) =>
+                      setDestination({ ...destination, countryCode: e.target.value })
+                    }
+                  >
+                    <option value="">Choose a country</option>
+                    {COUNTRIES.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <Field
+                  label="Address"
+                  value={destination.address1}
+                  placeholder="1 Oxford Street"
+                  onChange={(address1) => setDestination({ ...destination, address1 })}
+                  span
+                />
+                <Field
+                  label="Apartment, suite, etc."
+                  value={destination.address2}
+                  onChange={(address2) => setDestination({ ...destination, address2 })}
+                  span
+                />
+                <Field
+                  label="City"
+                  value={destination.city}
+                  onChange={(city) => setDestination({ ...destination, city })}
+                />
+                <Field
+                  label="State / province"
+                  value={destination.province}
+                  onChange={(province) => setDestination({ ...destination, province })}
+                />
+                <Field
+                  label="Postal code"
+                  value={destination.zip}
+                  onChange={(zip) => setDestination({ ...destination, zip })}
+                />
+                <Field
+                  label="Phone"
+                  value={destination.phone}
+                  onChange={(phone) => setDestination({ ...destination, phone })}
+                />
+                <label className="dform__field dform__field--span">
+                  <span className="field-label">Restock returned items at</span>
+                  <select
+                    className="settings-input"
+                    value={destination.locationId ?? ""}
+                    onChange={(e) =>
+                      setDestination({ ...destination, locationId: e.target.value || null })
+                    }
+                  >
+                    <option value="">Don't restock here — use the store default</option>
+                    {locations.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {l.name}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="settings-row__hint">
+                    The Shopify location this address is, if it's one. Returns
+                    sent here are restocked there.
+                    {locations.length === 0 && " Connect your Shopify store to choose one."}
+                  </span>
+                </label>
+                <label className="check-list__item dform__field--span">
+                  <input
+                    type="checkbox"
+                    checked={destination.isDefault}
+                    disabled={destinations.length === 0 || (destination.id !== null && destinations.find((d) => d.id === destination.id)?.isDefault === true)}
+                    onChange={(e) =>
+                      setDestination({ ...destination, isDefault: e.target.checked })
+                    }
+                  />
+                  <span>
+                    <span className="radio-list__label">Make this the default destination</span>
+                    <span className="radio-list__hint">
+                      Where returns go unless a policy says otherwise.
+                      {destinations.length === 0 && " Your first destination is the default."}
+                    </span>
+                  </span>
+                </label>
+              </div>
+
+              <div className="rule-actions">
+                {destination.id && (
+                  <button className="btn btn--danger btn--sm" onClick={() => void removeDestination()}>
+                    Delete
+                  </button>
+                )}
+                <div className="rule-actions__right">
+                  <button className="btn btn--secondary btn--sm" onClick={() => setDestination(null)}>
+                    Cancel
+                  </button>
+                  <button className="btn btn--sm" disabled={saving} onClick={() => void saveDestination()}>
+                    {saving ? "Saving…" : "Save"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="panel">
+              {destinations.length === 0 ? (
+                <p className="muted">
+                  No destinations yet. Add one and customers will be told where
+                  to send their returns.
+                </p>
+              ) : (
+                destinations.map((d) => (
+                  <div key={d.id} className="dest-row dest-row--static">
+                    <span className="dest-row__icon" aria-hidden="true">
+                      {flagOf(d.countryCode)}
+                    </span>
+                    <span className="dest-row__body">
+                      <span className="dest-row__name">
+                        {d.name}
+                        {d.isDefault && <span className="pcard__badge dest-row__badge">Default</span>}
+                      </span>
+                      <span className="dest-row__addr">{d.address}</span>
+                    </span>
+                    <button
+                      type="button"
+                      className="link-btn"
+                      onClick={() => openDestination(d)}
+                    >
+                      Edit
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+      </>
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Locations tab
+  // -------------------------------------------------------------------------
+  if (page === "locations") {
+    return (
+      <>
+        <div className="admin__header">
+          <div>
+            <div className="admin__eyebrow">Settings</div>
+            <h1>Locations</h1>
+            <p className="muted" style={{ marginTop: 4 }}>
+              Choose your location configuration.
+            </p>
+          </div>
+        </div>
+        {subtabs}
+        <ErrorAlert message={error} />
+        {status && <div className="alert alert--info">{status}</div>}
+        {inventoryProblem && <div className="alert alert--warn">{inventoryProblem}</div>}
+
+        <div className="split">
+          <div>
+            <h3 className="split__title">Exchange inventory locations</h3>
+            <p className="split__blurb">
+              Manage locations from which inventory for exchanges is read. If no
+              locations are selected, inventory from all locations in your
+              Shopify store is used.
+            </p>
+            <p className="split__blurb">
+              Inventory locations can be further configured within each{" "}
+              <Link to={pagePath("policies")}>return policy</Link>.
+            </p>
+          </div>
+
+          <div className="panel">
+            <div className="panel__head">
+              <h2 style={{ marginBottom: 0 }}>Locations</h2>
+              <button
+                className="btn btn--sm"
+                disabled={locations.length === 0}
+                onClick={() => setChoosingStoreLocations(true)}
+              >
+                Manage locations
+              </button>
+            </div>
+            {locations.length === 0 ? (
+              <p className="muted">Connect your Shopify store to choose locations.</p>
+            ) : inventoryLocationIds.length === 0 ? (
+              <p className="muted">
+                All locations — a product is offered as an exchange when any of
+                your locations has it in stock.
+              </p>
+            ) : (
+              <div className="loc-list">
+                {inventoryLocationIds.map((id) => (
+                  <div key={id} className="loc-list__item">
+                    <span className="dest-row__icon" aria-hidden="true">
+                      ⌂
+                    </span>
+                    <span>
+                      <span className="dest-row__name">{locationName(id)}</span>
+                      {locations.find((l) => l.id === id)?.address && (
+                        <span className="dest-row__addr">
+                          {locations.find((l) => l.id === id)!.address}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {choosingStoreLocations && (
+          <LocationsModal
+            locations={locations}
+            selected={inventoryLocationIds}
+            onSave={(ids) => void saveStoreLocations(ids)}
+            onClose={() => setChoosingStoreLocations(false)}
+          />
+        )}
+      </>
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Policies tab — the list, or the editor
+  // -------------------------------------------------------------------------
   return (
     <>
       <div className="admin__header">
@@ -737,6 +1428,8 @@ export default function PoliciesPage() {
         )}
       </div>
 
+      {!editing && subtabs}
+
       <ErrorAlert message={error} />
       {status && <div className="alert alert--info">{status}</div>}
 
@@ -752,7 +1445,7 @@ export default function PoliciesPage() {
                     <span aria-hidden="true">🌐</span> All other countries
                   </span>
                 }
-                to={locationName(defaultLocationId) ?? "Where each order shipped from"}
+                to={destinationLabel(defaultDestination)}
                 rows={cardRows(outcomesFrom(base), base.autoApprove)}
                 edit={
                   <Link className="btn btn--secondary btn--sm" to={`${basePath}/settings/policy`}>
@@ -777,10 +1470,7 @@ export default function PoliciesPage() {
                     )}
                   </>
                 }
-                to={
-                  locationName(policy.destinationLocationId) ??
-                  (locationName(defaultLocationId) ?? "Where each order shipped from")
-                }
+                to={destinationLabel(destinationById(policy.destinationId) ?? defaultDestination)}
                 rows={cardRows(policy.outcomes, policy.bypassReview)}
                 edit={
                   <button
@@ -802,9 +1492,9 @@ export default function PoliciesPage() {
               the policy: the one that lists that country, or the Default if none
               does. A policy only decides which outcomes are offered, their
               windows and handling fees, when the window starts, whether review
-              is skipped, and where returns are sent. Product tag rules, bonus
-              credit, exchange settings and everything else are shared, from
-              your store policy.
+              is skipped, where returns are sent, and how exchanges behave.
+              Product tag rules, bonus credit and everything else are shared,
+              from your store policy.
             </p>
           </div>
         </>
@@ -866,25 +1556,24 @@ export default function PoliciesPage() {
                       Manage destinations
                     </button>
                   </div>
-                  {destination ? (
+                  {chosenDestination ? (
                     <div className="dest" style={{ marginTop: 14 }}>
                       <span className="dest-row__icon" aria-hidden="true">
-                        ⌂
+                        {flagOf(chosenDestination.countryCode)}
                       </span>
                       <div>
-                        <div className="dest__name">{destination}</div>
-                        <div className="muted">
-                          {destinationAddress ?? "No address on file in Shopify"}
-                        </div>
+                        <div className="dest__name">{chosenDestination.name}</div>
+                        <div className="muted">{chosenDestination.address}</div>
                       </div>
                     </div>
                   ) : (
                     <div style={{ marginTop: 14 }}>
                       <div className="settings-row__label">No destination selected</div>
                       <div className="settings-row__hint">
-                        Select a destination for this return policy. Returns are
-                        restocked there and customers are shown its address.
-                        Without one, your store's default location applies.
+                        Select a destination for this return policy.{" "}
+                        {defaultDestination
+                          ? `Without one, returns go to your default destination, ${defaultDestination.name}.`
+                          : "Without one, customers aren't shown an address — add one on the Destinations tab."}
                       </div>
                     </div>
                   )}
@@ -929,19 +1618,139 @@ export default function PoliciesPage() {
                     key={o.key}
                     title={o.title}
                     blurb={o.blurb}
+                    noun={o.noun}
                     value={editing.outcomes[o.key]}
                     currency={currency}
                     onChange={(value) =>
                       patch({ outcomes: { ...editing.outcomes, [o.key]: value } })
                     }
+                    afterWindow={
+                      o.key === "EXCHANGE" ? (
+                        <>
+                          <div className="pairing__divider" />
+                          <label className="check-list__item">
+                            <input
+                              type="checkbox"
+                              checked={editing.allowInstantExchange}
+                              onChange={(e) => patch({ allowInstantExchange: e.target.checked })}
+                            />
+                            <span>
+                              <span className="radio-list__label">Allow instant exchanges</span>
+                              <span className="radio-list__hint">
+                                The replacement ships as soon as the return is
+                                approved, before the original comes back, so
+                                customers get their exchanged items sooner.
+                              </span>
+                            </span>
+                          </label>
+                        </>
+                      ) : undefined
+                    }
+                    afterFees={
+                      o.key === "EXCHANGE" ? (
+                        <>
+                          <div className="pairing__divider" />
+                          <label className="check-list__item">
+                            <input
+                              type="checkbox"
+                              checked={editing.allowAdvancedExchange}
+                              onChange={(e) => patch({ allowAdvancedExchange: e.target.checked })}
+                            />
+                            <span>
+                              <span className="radio-list__label">Allow advanced exchanges</span>
+                              <span className="radio-list__hint">
+                                Offer new product exchange options based on
+                                Shopify collections or tags.{" "}
+                                <Link to={`${basePath}/settings/rules`}>Configure Advanced Exchanges</Link>
+                              </span>
+                            </span>
+                          </label>
+
+                          <div className="pairing__divider" />
+                          <div className="field-label">Exchange Shipping Method</div>
+                          <p className="settings-row__hint" style={{ marginBottom: 8 }}>
+                            Assign a shipping method to your outbound exchange
+                            orders placed in Shopify.
+                          </p>
+                          <input
+                            type="text"
+                            className="settings-input"
+                            maxLength={120}
+                            value={editing.exchangeShippingMethod ?? ""}
+                            aria-label="Exchange shipping method"
+                            onChange={(e) =>
+                              patch({ exchangeShippingMethod: e.target.value })
+                            }
+                          />
+                          <p className="settings-row__hint" style={{ marginTop: 8 }}>
+                            Input one shipping method only. Must match a shipping
+                            method in Shopify exactly. Leave empty to label the
+                            line "Exchange shipping".
+                          </p>
+
+                          <div className="pairing__divider" />
+                          <div className="field-label">Inventory locations</div>
+                          <p className="settings-row__hint">
+                            Manage the locations used for exchange inventory for
+                            this return policy. Inventory from these locations
+                            decides which products are available in the exchange
+                            flow and Shop Now.
+                          </p>
+                          <p className="settings-row__hint" style={{ marginTop: 8 }}>
+                            Changes here will only affect this return policy. To
+                            set locations globally visit the{" "}
+                            <Link to={pagePath("locations")}>locations</Link> page.
+                          </p>
+                          <div className="panel__head" style={{ marginTop: 14 }}>
+                            <div>
+                              <div className="settings-row__label">Locations</div>
+                              <div className="settings-row__hint">
+                                {editing.inventoryLocationIds.length === 0
+                                  ? "Optional for a policy"
+                                  : `${editing.inventoryLocationIds.length} selected`}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              className="btn btn--secondary btn--sm"
+                              disabled={locations.length === 0}
+                              onClick={() => setChoosingPolicyLocations(true)}
+                            >
+                              Manage locations
+                            </button>
+                          </div>
+                          {editing.inventoryLocationIds.length === 0 ? (
+                            <div className="infobox">
+                              <span className="infobox__icon" aria-hidden="true">
+                                i
+                              </span>
+                              <div>
+                                <strong>No locations have been selected</strong>
+                                <div>
+                                  Configuration at the return policy level is
+                                  optional. If no locations are set, inventory from
+                                  all globally configured locations is used. To
+                                  enable, visit the locations page.
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="loc-list">
+                              {editing.inventoryLocationIds.map((id) => (
+                                <div key={id} className="loc-list__item">
+                                  <span className="dest-row__icon" aria-hidden="true">
+                                    ⌂
+                                  </span>
+                                  <span className="dest-row__name">{locationName(id)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      ) : undefined
+                    }
                   />
                 ))}
-
-                {base?.allowInstantExchange && (
-                  <p className="settings-row__hint">
-                    Instant exchanges follow the Exchange outcome above.
-                  </p>
-                )}
               </>
             )}
 
@@ -1044,10 +1853,23 @@ export default function PoliciesPage() {
 
       {editing && choosingDestination && (
         <DestinationsModal
-          locations={locations}
-          selected={editing.destinationLocationId}
-          onSelect={(destinationLocationId) => patch({ destinationLocationId })}
+          destinations={destinations}
+          selected={editing.destinationId}
+          destinationsPath={pagePath("destinations")}
+          onSelect={(destinationId) => patch({ destinationId })}
           onClose={() => setChoosingDestination(false)}
+        />
+      )}
+
+      {editing && choosingPolicyLocations && (
+        <LocationsModal
+          locations={locations}
+          selected={editing.inventoryLocationIds}
+          onSave={(inventoryLocationIds) => {
+            patch({ inventoryLocationIds });
+            setChoosingPolicyLocations(false);
+          }}
+          onClose={() => setChoosingPolicyLocations(false)}
         />
       )}
 

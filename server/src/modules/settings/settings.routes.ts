@@ -17,6 +17,8 @@ import { SHOPIFY_RETURN_REASONS } from "../shopify/returns.graphql.js";
 import * as reasonsService from "./reasons.service.js";
 import * as exchangeRules from "./exchange-rules.service.js";
 import * as regionalPolicies from "./regional-policies.service.js";
+import * as destinationsService from "./destinations.service.js";
+import { inventoryAccessProblem } from "../shopify/locations.service.js";
 import { browseCollections } from "../shopify/catalogue.service.js";
 import { listLocationsIfConnected } from "../shopify/locations.service.js";
 import { phoneAccessProblem } from "../shopify/order.sync.js";
@@ -157,6 +159,7 @@ settingsRouter.get(
         exchangeBonusValue: true,
         restockLocationId: true,
         aiExchangeEnabled: true,
+        inventoryLocationIds: true,
       },
     });
 
@@ -228,6 +231,12 @@ settingsRouter.patch(
           .nullable()
           .optional(),
         aiExchangeEnabled: z.boolean().optional(),
+        /** Empty means every location counts for exchange availability. */
+        inventoryLocationIds: z
+          .array(z.string().regex(/^gid:\/\/shopify\/Location\/\d+$/))
+          .max(50)
+          .transform((ids) => [...new Set(ids)])
+          .optional(),
       })
       .refine((v) => Object.keys(v).length > 0, {
         message: "Nothing to update.",
@@ -270,6 +279,9 @@ settingsRouter.patch(
         ...(req.body.aiExchangeEnabled === undefined
           ? {}
           : { aiExchangeEnabled: req.body.aiExchangeEnabled }),
+        ...(req.body.inventoryLocationIds === undefined
+          ? {}
+          : { inventoryLocationIds: req.body.inventoryLocationIds }),
       },
       select: {
         currency: true,
@@ -726,7 +738,7 @@ const outcomeSchema = z
     /** Null charges nothing for this outcome. */
     fee: z
       .object({
-        type: z.enum(["FLAT", "PERCENT"]),
+        type: z.enum(["FLAT", "PERCENT", "PRODUCT_TAG"]),
         value: z.number().min(0).max(1_000_000),
       })
       .nullable(),
@@ -748,7 +760,22 @@ const regionalPolicySchema = z.object({
     .min(1, "Choose at least one country.")
     .max(250)
     .transform((codes) => [...new Set(codes)]),
-  destinationLocationId: z.string().regex(REGION_LOCATION_GID).nullable(),
+  /** Null means the store's default destination. */
+  destinationId: z.string().min(1).max(60).nullable(),
+  /** Empty defers to the store-wide list. */
+  inventoryLocationIds: z
+    .array(z.string().regex(REGION_LOCATION_GID))
+    .max(50)
+    .transform((ids) => [...new Set(ids)]),
+  allowInstantExchange: z.boolean(),
+  allowAdvancedExchange: z.boolean(),
+  /** Blank clears it, which keeps the app's own "Exchange shipping" line. */
+  exchangeShippingMethod: z
+    .string()
+    .trim()
+    .max(120)
+    .nullable()
+    .transform((v) => v || null),
   windowStartsFrom: z.enum(["ORDER_DATE", "FULFILLMENT", "DELIVERY"]),
   bypassReview: z.boolean(),
   /** Blank steps are dropped rather than refused: an empty row is a row the
@@ -774,24 +801,112 @@ settingsRouter.get(
   "/regional-policies",
   asyncHandler(async (req, res) => {
     const merchantId = req.admin!.merchantId;
-    const [policies, base, merchant, locations] = await Promise.all([
+    const [policies, base, merchant, locations, destinations] = await Promise.all([
       regionalPolicies.listRegionalPolicies(merchantId),
       prisma.returnPolicy.findFirst({
         where: { merchantId, isDefault: true, active: true },
       }),
       prisma.merchant.findUniqueOrThrow({
         where: { id: merchantId },
-        select: { restockLocationId: true, currency: true },
+        select: { restockLocationId: true, currency: true, inventoryLocationIds: true },
       }),
       listLocationsIfConnected(merchantId),
+      destinationsService.listDestinations(merchantId),
     ]);
     res.json({
       policies: policies.map(regionalPolicies.serializeRegionalPolicy),
       base: base ? serializePolicy(base) : null,
       locations,
       defaultLocationId: merchant.restockLocationId,
+      /** The store-wide exchange inventory locations; empty means all. */
+      inventoryLocationIds: merchant.inventoryLocationIds,
+      destinations: destinations.map(destinationsService.serializeDestination),
       currency: merchant.currency,
     });
+  }),
+);
+
+/**
+ * Whether the store's token can read stock per location — the Locations
+ * page asks before letting the merchant choose any. A Shopify call, so it
+ * is its own request rather than part of the list above.
+ */
+settingsRouter.get(
+  "/inventory-access",
+  asyncHandler(async (req, res) => {
+    res.json({ problem: await inventoryAccessProblem(req.admin!.merchantId) });
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// Destinations — where returned goods are sent
+// ---------------------------------------------------------------------------
+
+const optionalLine = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .nullable()
+    .optional()
+    .transform((v) => v || null);
+
+const destinationSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  address1: z.string().trim().min(1).max(200),
+  address2: optionalLine(200),
+  city: z.string().trim().min(1).max(100),
+  province: optionalLine(100),
+  zip: optionalLine(20),
+  countryCode: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]{2}$/, "Choose a country."),
+  phone: optionalLine(40),
+  isDefault: z.boolean().optional(),
+  /** The Shopify Location to restock at; null when the destination isn't one. */
+  locationId: z.string().regex(REGION_LOCATION_GID).nullable().optional().transform((v) => v ?? null),
+});
+
+settingsRouter.get(
+  "/destinations",
+  asyncHandler(async (req, res) => {
+    const destinations = await destinationsService.listDestinations(req.admin!.merchantId);
+    res.json({ destinations: destinations.map(destinationsService.serializeDestination) });
+  }),
+);
+
+settingsRouter.post(
+  "/destinations",
+  validate(destinationSchema),
+  asyncHandler(async (req, res) => {
+    const created = await destinationsService.createDestination(
+      req.admin!.merchantId,
+      req.body,
+    );
+    res.status(201).json(destinationsService.serializeDestination(created));
+  }),
+);
+
+settingsRouter.patch(
+  "/destinations/:id",
+  validate(destinationSchema),
+  asyncHandler(async (req, res) => {
+    const updated = await destinationsService.updateDestination(
+      req.admin!.merchantId,
+      req.params.id,
+      req.body,
+    );
+    res.json(destinationsService.serializeDestination(updated));
+  }),
+);
+
+settingsRouter.delete(
+  "/destinations/:id",
+  asyncHandler(async (req, res) => {
+    await destinationsService.deleteDestination(req.admin!.merchantId, req.params.id);
+    res.status(204).end();
   }),
 );
 

@@ -326,7 +326,7 @@ export interface ReturnDetail {
    * page. Empty and null when no regional policy set them.
    */
   instructions?: string[];
-  returnTo?: { name: string; address: string | null } | null;
+  returnTo?: { name: string; lines: string[] } | null;
   order: {
     orderNumber: string;
     placedAt: string;
@@ -601,6 +601,8 @@ export interface StoreSettings {
   restockLocationId: string | null;
   /** The recommendation screen after a shopper gives their reason. */
   aiExchangeEnabled: boolean;
+  /** Shopify Locations whose stock counts for exchanges; empty means all. */
+  inventoryLocationIds?: string[];
 }
 
 /** A place the store keeps stock, as Shopify lists it. */
@@ -627,12 +629,37 @@ export type WindowStart = "ORDER_DATE" | "FULFILLMENT" | "DELIVERY";
 /** The outcomes a regional policy decides; an instant exchange follows EXCHANGE. */
 export type OutcomeKey = "REFUND" | "EXCHANGE" | "STORE_CREDIT" | "GIFT_CARD";
 
+/**
+ * How a handling fee is worked out. FLAT is once per return; PERCENT a share
+ * of each item; PRODUCT_TAG reads the amount from the returned products' own
+ * tags, once per return, with `value` as the fallback for untagged items.
+ */
+export type FeeType = "FLAT" | "PERCENT" | "PRODUCT_TAG";
+
 export interface RegionalOutcome {
   enabled: boolean;
   /** Days from the start event; null is an unlimited window. */
   windowDays: number | null;
   /** Null charges nothing for this outcome. */
-  fee: { type: "FLAT" | "PERCENT"; value: number } | null;
+  fee: { type: FeeType; value: number } | null;
+}
+
+/** A place returned goods are sent — the merchant's own address. */
+export interface ReturnDestination {
+  id: string;
+  name: string;
+  address1: string;
+  address2: string | null;
+  city: string;
+  province: string | null;
+  zip: string | null;
+  countryCode: string;
+  phone: string | null;
+  isDefault: boolean;
+  /** The Shopify Location to restock at, when the destination is one. */
+  locationId: string | null;
+  /** One line, ready to print. */
+  address: string;
 }
 
 export interface RegionalPolicy {
@@ -641,8 +668,14 @@ export interface RegionalPolicy {
   name: string;
   /** ISO 3166-1 alpha-2 codes of the countries this policy covers. */
   countries: string[];
-  /** Where returns go back to; null means the store's default location. */
-  destinationLocationId: string | null;
+  /** Where returns go; null means the store's default destination. */
+  destinationId: string | null;
+  /** Shopify Locations whose stock counts for exchanges; empty defers to the store's. */
+  inventoryLocationIds: string[];
+  allowInstantExchange: boolean;
+  allowAdvancedExchange: boolean;
+  /** The shipping line put on outbound exchange orders; null keeps the app's own. */
+  exchangeShippingMethod: string | null;
   windowStartsFrom: WindowStart;
   /** Approve on submission, without the store-wide threshold. */
   bypassReview: boolean;
@@ -675,6 +708,9 @@ export interface RegionalPoliciesResponse {
   locations: ShopLocation[];
   /** The store's default restock location; null means "where it shipped from". */
   defaultLocationId: string | null;
+  /** The store-wide exchange inventory locations; empty means all. */
+  inventoryLocationIds: string[];
+  destinations: ReturnDestination[];
   /** The shop currency, for labelling a flat fee. */
   currency: string;
 }

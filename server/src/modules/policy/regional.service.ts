@@ -63,10 +63,14 @@ export const toTerms = (row: RegionalPolicyRow | null | undefined): RegionalTerm
   return {
     id: row.id,
     name: row.name,
-    destinationLocationId: row.destinationLocationId,
+    destinationId: row.destinationId,
     instructions: row.instructions,
     windowStartsFrom: row.windowStartsFrom,
     bypassReview: row.bypassReview,
+    allowInstantExchange: row.allowInstantExchange,
+    allowAdvancedExchange: row.allowAdvancedExchange,
+    inventoryLocationIds: row.inventoryLocationIds,
+    exchangeShippingMethod: row.exchangeShippingMethod,
     outcomes,
   };
 };
@@ -90,6 +94,18 @@ export const regionalPolicyFor = async (
     include: { outcomes: true },
   });
   return toTerms(row);
+};
+
+/** Same, by order id — for the catalogue paths that only hold the id. */
+export const regionalTermsForOrder = async (
+  merchantId: string,
+  orderId: string,
+): Promise<RegionalTerms | null> => {
+  const order = await prisma.order.findFirst({
+    where: { id: orderId, merchantId },
+    select: { shippingAddress: true },
+  });
+  return order ? regionalPolicyFor(merchantId, order) : null;
 };
 
 /** The store policy with the order's region, if it has one, laid over it. */
@@ -119,3 +135,33 @@ export const policyInclude = {
   policy: true,
   regionalPolicy: { include: { outcomes: true } },
 } as const;
+
+/**
+ * Which Shopify locations decide exchange availability for an order.
+ *
+ * The region's own list when it has one, else the store's; undefined when
+ * neither narrows anything, which lets the catalogue use Shopify's aggregate
+ * answer and never ask for stock per location.
+ */
+export const inventoryScope = async (
+  merchantId: string,
+  regional: RegionalTerms | null | undefined,
+): Promise<string[] | undefined> => {
+  if (regional && regional.inventoryLocationIds.length > 0) {
+    return regional.inventoryLocationIds;
+  }
+  const merchant = await prisma.merchant.findUnique({
+    where: { id: merchantId },
+    select: { inventoryLocationIds: true },
+  });
+  return merchant && merchant.inventoryLocationIds.length > 0
+    ? merchant.inventoryLocationIds
+    : undefined;
+};
+
+/** Same, for the paths that only hold the order id. */
+export const inventoryScopeFor = async (
+  merchantId: string,
+  orderId: string,
+): Promise<string[] | undefined> =>
+  inventoryScope(merchantId, await regionalTermsForOrder(merchantId, orderId));

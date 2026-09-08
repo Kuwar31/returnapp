@@ -16,14 +16,20 @@ export interface OutcomeInput {
   enabled: boolean;
   /** Null is an unlimited window. */
   windowDays: number | null;
-  /** Null charges nothing. */
-  fee: { type: "FLAT" | "PERCENT"; value: number } | null;
+  /** Null charges nothing; PRODUCT_TAG's value is the fallback for untagged items. */
+  fee: { type: "FLAT" | "PERCENT" | "PRODUCT_TAG"; value: number } | null;
 }
 
 export interface RegionalPolicyInput {
   name: string;
   countries: string[];
-  destinationLocationId: string | null;
+  /** Null means the store's default destination. */
+  destinationId: string | null;
+  /** Empty defers to the store-wide list. */
+  inventoryLocationIds: string[];
+  allowInstantExchange: boolean;
+  allowAdvancedExchange: boolean;
+  exchangeShippingMethod: string | null;
   windowStartsFrom: WindowStart;
   bypassReview: boolean;
   instructions: string[];
@@ -64,7 +70,11 @@ export const serializeRegionalPolicy = (row: RegionalPolicyRow) => {
     id: row.id,
     name: row.name,
     countries: row.countries,
-    destinationLocationId: row.destinationLocationId,
+    destinationId: row.destinationId,
+    inventoryLocationIds: row.inventoryLocationIds,
+    allowInstantExchange: row.allowInstantExchange,
+    allowAdvancedExchange: row.allowAdvancedExchange,
+    exchangeShippingMethod: row.exchangeShippingMethod,
     windowStartsFrom: row.windowStartsFrom,
     bypassReview: row.bypassReview,
     instructions: row.instructions,
@@ -81,10 +91,11 @@ export const listRegionalPolicies = async (merchantId: string) =>
   });
 
 /**
- * Refuses what the database can't: a policy with nothing to offer, and a
- * country claimed twice. The second would make which policy applies depend
- * on list order, which no merchant intends and none would notice until a
- * shopper was quoted the wrong fee.
+ * Refuses what the database can't: a policy with nothing to offer, a
+ * country claimed twice, and a destination that isn't this store's. The
+ * second would make which policy applies depend on list order, which no
+ * merchant intends and none would notice until a shopper was quoted the
+ * wrong fee.
  */
 const assertValid = async (
   merchantId: string,
@@ -107,6 +118,16 @@ const assertValid = async (
       );
     }
   }
+
+  if (input.destinationId) {
+    const destination = await prisma.returnDestination.findFirst({
+      where: { id: input.destinationId, merchantId },
+      select: { id: true },
+    });
+    if (!destination) {
+      throw unprocessable("That destination no longer exists. Choose another.");
+    }
+  }
 };
 
 const outcomeRows = (outcomes: RegionalPolicyInput["outcomes"]) =>
@@ -124,7 +145,11 @@ const outcomeRows = (outcomes: RegionalPolicyInput["outcomes"]) =>
 const scalars = (input: RegionalPolicyInput) => ({
   name: input.name,
   countries: input.countries,
-  destinationLocationId: input.destinationLocationId,
+  destinationId: input.destinationId,
+  inventoryLocationIds: input.inventoryLocationIds,
+  allowInstantExchange: input.allowInstantExchange,
+  allowAdvancedExchange: input.allowAdvancedExchange,
+  exchangeShippingMethod: input.exchangeShippingMethod,
   windowStartsFrom: input.windowStartsFrom,
   bypassReview: input.bypassReview,
   instructions: input.instructions,

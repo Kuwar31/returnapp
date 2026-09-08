@@ -14,9 +14,13 @@ import { ZERO } from "../../lib/money.js";
  * tested without one. Reading the rows is regional.service's job.
  */
 
-/** A handling fee: flat per return, or a share of the returned value. */
+/**
+ * A handling fee. FLAT is once per return; PERCENT is a share of each line;
+ * PRODUCT_TAG reads the amount from the returned products' own tags, once
+ * per return, with `value` as the fallback for anything untagged.
+ */
 export interface FeeRule {
-  type: "FLAT" | "PERCENT";
+  type: "FLAT" | "PERCENT" | "PRODUCT_TAG";
   value: Prisma.Decimal;
 }
 
@@ -39,10 +43,16 @@ export type OutcomeMap = Partial<Record<OutcomeKey, OutcomeTerms>>;
 export interface RegionalTerms {
   id: string;
   name: string;
-  destinationLocationId: string | null;
+  /** Null sends returns to the store's default destination. */
+  destinationId: string | null;
   instructions: string[];
   windowStartsFrom: WindowStart;
   bypassReview: boolean;
+  allowInstantExchange: boolean;
+  allowAdvancedExchange: boolean;
+  /** Empty defers to the store-wide list. */
+  inventoryLocationIds: string[];
+  exchangeShippingMethod: string | null;
   outcomes: OutcomeMap;
 }
 
@@ -100,6 +110,11 @@ export const longestWindow = (outcomes: OutcomeMap): number | null => {
   return longest;
 };
 
+/** Whether the store's exchange groups apply, under whichever policy governs. */
+export const advancedExchangesAllowed = (
+  regional: RegionalTerms | null | undefined,
+): boolean => regional?.allowAdvancedExchange !== false;
+
 /**
  * Lays a region's terms over the store policy.
  *
@@ -110,8 +125,8 @@ export const longestWindow = (outcomes: OutcomeMap): number | null => {
  *
  * The store's restocking percentage is zeroed because the region's fees
  * replace it; the quote engine reads them from `outcomes` instead. An instant
- * exchange stays on only where the store offers it *and* the region keeps
- * exchanges open, since it is a kind of exchange rather than a fifth outcome.
+ * exchange is the region's own call, but only where it keeps exchanges open,
+ * since it is a kind of exchange rather than a fifth outcome.
  */
 export const applyRegionalPolicy = (
   base: ReturnPolicy,
@@ -128,7 +143,7 @@ export const applyRegionalPolicy = (
     allowStoreCredit: on("STORE_CREDIT"),
     allowGiftCard: on("GIFT_CARD"),
     allowExchange: on("EXCHANGE"),
-    allowInstantExchange: base.allowInstantExchange && on("EXCHANGE"),
+    allowInstantExchange: regional.allowInstantExchange && on("EXCHANGE"),
     windowStartsFrom: regional.windowStartsFrom,
     returnWindowDays: longest ?? base.returnWindowDays,
     autoApprove: regional.bypassReview,

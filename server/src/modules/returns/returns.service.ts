@@ -539,11 +539,13 @@ const recalculateTotals = async (merchantId: string, id: string) => {
       request.lineItems.flatMap((li) =>
         li.orderLineItem ? [li.orderLineItem] : [],
       ),
+      request.regionalPolicy?.allowAdvancedExchange !== false,
     ),
     lines: request.lineItems.map((li) => ({
       unitPrice: toDecimal(li.unitPrice),
       quantity: li.acceptedQuantity ?? li.quantity,
       resolution: li.resolution,
+      productTags: li.orderLineItem?.productTags ?? [],
       exchangeValue: request.shopNow
         ? toDecimal(0)
         : li.exchangeItems.reduce(
@@ -658,6 +660,7 @@ const payoutSplit = async (merchantId: string, id: string) => {
       request.lineItems.flatMap((li) =>
         li.orderLineItem ? [li.orderLineItem] : [],
       ),
+      request.regionalPolicy?.allowAdvancedExchange !== false,
     ),
     lines: request.lineItems.map((li) => ({
       unitPrice: toDecimal(li.unitPrice),
@@ -665,6 +668,7 @@ const payoutSplit = async (merchantId: string, id: string) => {
       // shopper asked for, which is what they were quoted.
       quantity: li.acceptedQuantity ?? li.quantity,
       resolution: li.resolution,
+      productTags: li.orderLineItem?.productTags ?? [],
       exchangeValue: request.shopNow
         ? toDecimal(0)
         : li.exchangeItems.reduce(

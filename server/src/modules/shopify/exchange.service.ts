@@ -125,11 +125,13 @@ export const priceExchange = async (
       request.lineItems.flatMap((li) =>
         li.orderLineItem ? [li.orderLineItem] : [],
       ),
+      request.regionalPolicy?.allowAdvancedExchange !== false,
     ),
     lines: request.lineItems.map((li) => ({
       unitPrice: toDecimal(li.unitPrice),
       quantity: li.quantity,
       resolution: li.resolution,
+      productTags: li.orderLineItem?.productTags ?? [],
       // Under shop-now the basket is priced as a pool below, so leaving this at
       // zero is what keeps it from being counted twice.
       exchangeValue: request.shopNow
@@ -267,6 +269,12 @@ const buildDraftInput = (
     order: OrderRateSource;
     /** Where the original shipped, so the replacement follows it. */
     shippingAddress: Record<string, string> | null;
+    /**
+     * The shipping line's name, from the return's regional policy. Fulfilment
+     * apps route on it, so a merchant can have exchanges ship a particular
+     * way. Null keeps the app's own label.
+     */
+    shippingMethod: string | null;
   },
 ): Record<string, unknown> => {
   const input: Record<string, unknown> = {
@@ -279,7 +287,7 @@ const buildDraftInput = (
     note: `Exchange for return ${opts.reference} on order #${opts.orderNumber}`,
     // The shopper already paid shipping on the original order; charging again
     // for the replacement would make an even swap cost money.
-    shippingLine: { title: "Exchange shipping", price: "0.00" },
+    shippingLine: { title: opts.shippingMethod ?? "Exchange shipping", price: "0.00" },
   };
 
   // An unattached draft can't be paid from the customer's account, and the
@@ -420,7 +428,10 @@ export const ensureExchangeDraftOrder = async (
   try {
     const request = await prisma.returnRequest.findFirstOrThrow({
       where: { id: returnRequestId, merchantId },
-      include: { order: true },
+      include: {
+        order: true,
+        regionalPolicy: { select: { exchangeShippingMethod: true } },
+      },
     });
 
     const totals = await priceExchange(merchantId, returnRequestId);
@@ -459,6 +470,7 @@ export const ensureExchangeDraftOrder = async (
       reserveUntil,
       order: request.order,
       shippingAddress: toShippingAddressInput(request.order.shippingAddress),
+      shippingMethod: request.regionalPolicy?.exchangeShippingMethod ?? null,
     });
 
     const data = await queryShop<{
@@ -555,7 +567,10 @@ export const syncExchangeDraftOrder = async (
 
   const request = await prisma.returnRequest.findFirstOrThrow({
     where: { id: returnRequestId, merchantId },
-    include: { order: true },
+    include: {
+      order: true,
+      regionalPolicy: { select: { exchangeShippingMethod: true } },
+    },
   });
 
   const totals = await priceExchange(merchantId, returnRequestId);
@@ -577,6 +592,7 @@ export const syncExchangeDraftOrder = async (
     reserveUntil: null,
     order: request.order,
     shippingAddress: toShippingAddressInput(request.order.shippingAddress),
+    shippingMethod: request.regionalPolicy?.exchangeShippingMethod ?? null,
   });
 
   const data = await queryShop<{

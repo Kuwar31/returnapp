@@ -34,7 +34,11 @@ const schema = z.object({
   SHOPIFY_API_SECRET: z.string().optional(),
   SHOPIFY_SCOPES: z
     .string()
-    .default("read_orders,read_fulfillments,read_products,read_customers"),
+    // read_inventory is for exchange availability by location; a store
+    // connected before it was asked for keeps working on Shopify's aggregate.
+    .default(
+      "read_orders,read_fulfillments,read_products,read_customers,read_inventory",
+    ),
   SHOPIFY_API_VERSION: z.string().default("2026-04"),
 
   // 32-byte hex key encrypting Shopify access tokens at rest.

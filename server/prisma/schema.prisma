@@ -100,6 +100,13 @@ model Merchant {
    * shopper sees.
    */
   aiExchangeEnabled         Boolean                   @default(false)
+  /**
+   * The Shopify Locations whose stock decides whether a product can be
+   * offered as an exchange. Empty means every location, which is what
+   * Shopify's own `availableForSale` already answers. A regional policy may
+   * narrow this further for its own orders.
+   */
+  inventoryLocationIds      String[]                  @default([])
 
   timezone  String         @default("UTC")
   status    MerchantStatus @default(ACTIVE)
@@ -110,6 +117,7 @@ model Merchant {
   memberships          Membership[]
   policies             ReturnPolicy[]
   regionalPolicies     RegionalPolicy[]
+  destinations         ReturnDestination[]
   reasons              ReturnReason[]
   exchangeRules        ExchangeRule[]
   notificationSettings NotificationSetting[]
@@ -597,10 +605,26 @@ model RegionalPolicy {
   /// ISO 3166-1 alpha-2 codes. Each country belongs to at most one policy.
   countries  String[]
   /**
-   * The Shopify Location returned goods are sent back to and restocked at.
-   * Null means the store's default restocking location applies.
+   * Where returned goods are sent. Null means the store's default
+   * destination, so a policy that only changes fees needs no address of its
+   * own.
    */
-  destinationLocationId String?
+  destinationId String?
+  destination   ReturnDestination? @relation(fields: [destinationId], references: [id], onDelete: SetNull)
+  /**
+   * The Shopify Locations whose stock decides exchange availability for
+   * this region's orders. Empty defers to the store-wide list on Merchant.
+   */
+  inventoryLocationIds  String[]    @default([])
+  /// Ship the replacement before the return is received; a kind of exchange.
+  allowInstantExchange  Boolean     @default(false)
+  /// Whether the store's exchange groups are offered under this policy.
+  allowAdvancedExchange Boolean     @default(true)
+  /**
+   * The shipping line put on outbound exchange orders, by name — what a
+   * fulfilment app routes on. Null keeps the app's own "Exchange shipping".
+   */
+  exchangeShippingMethod String?
   windowStartsFrom      WindowStart @default(DELIVERY)
   /**
    * Skip review: returns under this policy are approved on submission,
@@ -644,12 +668,49 @@ model RegionalPolicyOutcome {
 }
 
 /**
- * How a handling fee is expressed: a flat sum per return in shop currency, or
- * a share of the value of the items coming back.
+ * How a handling fee is expressed: a flat sum per return in shop currency, a
+ * share of the value of the items coming back, or an amount read from the
+ * returned products' own tags (with the stored value as the fallback for
+ * untagged items).
  */
 enum FeeType {
   FLAT
   PERCENT
+  PRODUCT_TAG
+}
+
+/**
+ * A place returned goods are sent — Loop's "destination".
+ *
+ * An address the merchant writes, not a Shopify Location: a store can receive
+ * returns at a 3PL that Shopify has never heard of. When the destination is
+ * also somewhere the store keeps stock, `locationId` names it so returns can
+ * be restocked there. Exactly one destination per store is the default, and
+ * a regional policy without one of its own sends returns there.
+ */
+model ReturnDestination {
+  id          String   @id @default(cuid())
+  merchantId  String
+  merchant    Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  name        String
+  address1    String
+  address2    String?
+  city        String
+  province    String?
+  zip         String?
+  /// ISO 3166-1 alpha-2.
+  countryCode String
+  phone       String?
+  isDefault   Boolean  @default(false)
+  /// The Shopify Location to restock at, when the destination is one.
+  locationId  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  policies RegionalPolicy[]
+
+  @@index([merchantId])
+  @@map("return_destinations")
 }
 
 /// A set of reasons offered for a particular kind of product.

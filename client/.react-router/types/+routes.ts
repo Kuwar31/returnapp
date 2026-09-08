@@ -82,6 +82,16 @@ type Pages = {
       "store": string;
     };
   };
+  "/admin/:store/settings/policies/destinations": {
+    params: {
+      "store": string;
+    };
+  };
+  "/admin/:store/settings/policies/locations": {
+    params: {
+      "store": string;
+    };
+  };
   "/admin/:store/settings/exchanges": {
     params: {
       "store": string;
@@ -122,7 +132,7 @@ type Pages = {
 type RouteFiles = {
   "root.tsx": {
     id: "root";
-    page: "/" | "/r/:slug" | "/r/:slug/items" | "/r/:slug/shop" | "/r/:slug/shop-return" | "/r/:slug/review" | "/r/:slug/status/:reference" | "/admin/login" | "/admin" | "/admin/:store" | "/admin/:store/returns" | "/admin/:store/returns/:id" | "/admin/:store/settings" | "/admin/:store/settings/policy" | "/admin/:store/settings/policies" | "/admin/:store/settings/exchanges" | "/admin/:store/settings/shop-now" | "/admin/:store/settings/portal" | "/admin/:store/settings/notifications" | "/admin/:store/settings/reasons" | "/admin/:store/settings/rules" | "/*";
+    page: "/" | "/r/:slug" | "/r/:slug/items" | "/r/:slug/shop" | "/r/:slug/shop-return" | "/r/:slug/review" | "/r/:slug/status/:reference" | "/admin/login" | "/admin" | "/admin/:store" | "/admin/:store/returns" | "/admin/:store/returns/:id" | "/admin/:store/settings" | "/admin/:store/settings/policy" | "/admin/:store/settings/policies" | "/admin/:store/settings/policies/destinations" | "/admin/:store/settings/policies/locations" | "/admin/:store/settings/exchanges" | "/admin/:store/settings/shop-now" | "/admin/:store/settings/portal" | "/admin/:store/settings/notifications" | "/admin/:store/settings/reasons" | "/admin/:store/settings/rules" | "/*";
   };
   "Home.tsx": {
     id: "Home";
@@ -158,7 +168,7 @@ type RouteFiles = {
   };
   "admin/AuthLayout.tsx": {
     id: "admin/AuthLayout";
-    page: "/admin/login" | "/admin" | "/admin/:store" | "/admin/:store/returns" | "/admin/:store/returns/:id" | "/admin/:store/settings" | "/admin/:store/settings/policy" | "/admin/:store/settings/policies" | "/admin/:store/settings/exchanges" | "/admin/:store/settings/shop-now" | "/admin/:store/settings/portal" | "/admin/:store/settings/notifications" | "/admin/:store/settings/reasons" | "/admin/:store/settings/rules";
+    page: "/admin/login" | "/admin" | "/admin/:store" | "/admin/:store/returns" | "/admin/:store/returns/:id" | "/admin/:store/settings" | "/admin/:store/settings/policy" | "/admin/:store/settings/policies" | "/admin/:store/settings/policies/destinations" | "/admin/:store/settings/policies/locations" | "/admin/:store/settings/exchanges" | "/admin/:store/settings/shop-now" | "/admin/:store/settings/portal" | "/admin/:store/settings/notifications" | "/admin/:store/settings/reasons" | "/admin/:store/settings/rules";
   };
   "admin/LoginPage.tsx": {
     id: "admin/LoginPage";
@@ -170,7 +180,7 @@ type RouteFiles = {
   };
   "admin/AdminLayout.tsx": {
     id: "admin/AdminLayout";
-    page: "/admin/:store" | "/admin/:store/returns" | "/admin/:store/returns/:id" | "/admin/:store/settings" | "/admin/:store/settings/policy" | "/admin/:store/settings/policies" | "/admin/:store/settings/exchanges" | "/admin/:store/settings/shop-now" | "/admin/:store/settings/portal" | "/admin/:store/settings/notifications" | "/admin/:store/settings/reasons" | "/admin/:store/settings/rules";
+    page: "/admin/:store" | "/admin/:store/returns" | "/admin/:store/returns/:id" | "/admin/:store/settings" | "/admin/:store/settings/policy" | "/admin/:store/settings/policies" | "/admin/:store/settings/policies/destinations" | "/admin/:store/settings/policies/locations" | "/admin/:store/settings/exchanges" | "/admin/:store/settings/shop-now" | "/admin/:store/settings/portal" | "/admin/:store/settings/notifications" | "/admin/:store/settings/reasons" | "/admin/:store/settings/rules";
   };
   "admin/DashboardPage.tsx": {
     id: "admin/DashboardPage";
@@ -198,8 +208,14 @@ type RouteFiles = {
     page: "/admin/:store/settings/shop-now";
   };
   "admin/PoliciesPage.tsx": {
-    id: "admin/PoliciesPage";
+    id: "policies-list";
     page: "/admin/:store/settings/policies";
+  } | {
+    id: "policies-destinations";
+    page: "/admin/:store/settings/policies/destinations";
+  } | {
+    id: "policies-locations";
+    page: "/admin/:store/settings/policies/locations";
   };
   "admin/PortalPage.tsx": {
     id: "admin/PortalPage";
@@ -242,7 +258,9 @@ type RouteModules = {
   "admin/ReturnDetailPage": typeof import("./src/admin/ReturnDetailPage.tsx");
   "settings-general": typeof import("./src/admin/SettingsPage.tsx");
   "settings-policy": typeof import("./src/admin/SettingsPage.tsx");
-  "admin/PoliciesPage": typeof import("./src/admin/PoliciesPage.tsx");
+  "policies-list": typeof import("./src/admin/PoliciesPage.tsx");
+  "policies-destinations": typeof import("./src/admin/PoliciesPage.tsx");
+  "policies-locations": typeof import("./src/admin/PoliciesPage.tsx");
   "settings-exchanges": typeof import("./src/admin/SettingsPage.tsx");
   "settings-shop-now": typeof import("./src/admin/SettingsPage.tsx");
   "admin/PortalPage": typeof import("./src/admin/PortalPage.tsx");

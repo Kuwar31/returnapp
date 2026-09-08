@@ -19,7 +19,31 @@ type Matches = [{
   id: "admin/AdminLayout";
   module: typeof import("../AdminLayout.js");
 }, {
-  id: "admin/PoliciesPage";
+  id: "policies-list";
+  module: typeof import("../PoliciesPage.js");
+}] | [{
+  id: "root";
+  module: typeof import("../../root.js");
+}, {
+  id: "admin/AuthLayout";
+  module: typeof import("../AuthLayout.js");
+}, {
+  id: "admin/AdminLayout";
+  module: typeof import("../AdminLayout.js");
+}, {
+  id: "policies-destinations";
+  module: typeof import("../PoliciesPage.js");
+}] | [{
+  id: "root";
+  module: typeof import("../../root.js");
+}, {
+  id: "admin/AuthLayout";
+  module: typeof import("../AuthLayout.js");
+}, {
+  id: "admin/AdminLayout";
+  module: typeof import("../AdminLayout.js");
+}, {
+  id: "policies-locations";
   module: typeof import("../PoliciesPage.js");
 }];
 

@@ -8,7 +8,7 @@ import { requirePortalSession } from "../../middleware/auth.js";
 import { rateLimit } from "../../middleware/rateLimit.js";
 import { validate } from "../../middleware/validate.js";
 import { serializeAddress, serializeReturn } from "../returns/serializers.js";
-import { returnDestination } from "../shopify/locations.service.js";
+import { destinationForShopper } from "../settings/destinations.service.js";
 import { recommendExchanges } from "./recommendations.service.js";
 import {
   feedbackSchema,
@@ -385,9 +385,8 @@ portalRouter.get(
        * the portal's own wording.
        */
       instructions: region?.instructions ?? [],
-      returnTo: region?.destinationLocationId
-        ? await returnDestination(merchant.id, region.destinationLocationId)
-        : null,
+      // The policy's destination, else the store's default; null with neither.
+      returnTo: await destinationForShopper(merchant.id, region?.destinationId ?? null),
     });
   }),
 );

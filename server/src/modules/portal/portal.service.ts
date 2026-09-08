@@ -9,7 +9,13 @@ import { logger } from "../../lib/logger.js";
 import { prisma } from "../../lib/prisma.js";
 import { displayConverter, round2, toDecimal, ZERO } from "../../lib/money.js";
 import { evaluateOrder } from "../policy/eligibility.service.js";
-import { effectivePolicyFor } from "../policy/regional.service.js";
+import { advancedExchangesAllowed } from "../policy/effective.js";
+import {
+  effectivePolicyFor,
+  inventoryScope,
+  inventoryScopeFor,
+  regionalTermsForOrder,
+} from "../policy/regional.service.js";
 import {
   getReasonTree,
   resolveGroupForProductType,
@@ -410,6 +416,12 @@ const resolveSelections = async (
     merchantId,
     orderId,
   );
+  /**
+   * Two things the region decides about exchanges: which locations' stock
+   * counts, and whether the store's exchange groups are on offer at all.
+   */
+  const scope = await inventoryScope(merchantId, policy.regional);
+  const allowRules = advancedExchangesAllowed(policy.regional);
 
   if (!eligibility.withinWindow) {
     throw unprocessable(
@@ -473,7 +485,7 @@ const resolveSelections = async (
     .map((i) => i.exchange?.variantId)
     .filter((v): v is string => Boolean(v));
   const variants = variantIds.length
-    ? await resolveVariants(merchantId, variantIds)
+    ? await resolveVariants(merchantId, variantIds, scope)
     : new Map();
 
   for (const item of input.items) {
@@ -501,7 +513,7 @@ const resolveSelections = async (
     }
     let rules = rulesByLine.get(entry.line.id);
     if (!rules) {
-      rules = await rulesForLine(merchantId, entry.line);
+      rules = allowRules ? await rulesForLine(merchantId, entry.line) : [];
       rulesByLine.set(entry.line.id, rules);
     }
     const rule = rules.find((r) => r.id === ruleId);
@@ -575,7 +587,7 @@ const resolveSelections = async (
     }
 
     const shopVariants = shopItems.length
-      ? await resolveVariants(merchantId, shopItems.map((i) => i.variantId))
+      ? await resolveVariants(merchantId, shopItems.map((i) => i.variantId), scope)
       : new Map<string, { price: number }>();
     const cartTotal = round2(
       shopItems.reduce((sum, item) => {
@@ -664,7 +676,11 @@ export const getExchangeOptions = async (
     };
   }
 
-  const product = await getProductVariants(merchantId, line.productId);
+  const product = await getProductVariants(
+    merchantId,
+    line.productId,
+    await inventoryScopeFor(merchantId, orderId),
+  );
 
   /**
    * Under same-price-only, an option worth something else isn't an option.
@@ -782,10 +798,13 @@ export const getAdvancedExchange = async (
   });
   if (!line) throw notFound("That item isn't part of this order.");
 
-  const rules = await rulesForLine(merchantId, line);
+  const rules = await rulesForOrderLine(merchantId, orderId, line);
   if (rules.length === 0) return null;
 
-  const fx = await catalogueConverter(merchantId, orderId);
+  const [fx, scope] = await Promise.all([
+    catalogueConverter(merchantId, orderId),
+    inventoryScopeFor(merchantId, orderId),
+  ]);
 
   /**
    * One option per matching group, in the merchant's order. Previews are
@@ -800,6 +819,7 @@ export const getAdvancedExchange = async (
           filter: offerQuery(rule),
           includeSoldOut: !rule.inStockOnly,
           limit: 5,
+          locationIds: scope,
         });
         preview = products.map((p) => ({
           id: p.id,
@@ -839,12 +859,29 @@ export const getAdvancedExchange = async (
  * doesn't means the group changed under the shopper — said plainly rather
  * than quietly priced another way, since the group decides the price.
  */
+/**
+ * The exchange groups that apply to an item, under the order's policy.
+ *
+ * A regional policy can switch advanced exchanges off for its orders, in
+ * which case no group applies however well it matches. Every read of the
+ * groups on the shopper's side goes through here so none can forget that.
+ */
+export const rulesForOrderLine = async (
+  merchantId: string,
+  orderId: string,
+  line: { productTags: string[]; title: string; productType: string | null; productId: string | null },
+) =>
+  advancedExchangesAllowed(await regionalTermsForOrder(merchantId, orderId))
+    ? rulesForLine(merchantId, line)
+    : [];
+
 const ruleForLine = async (
   merchantId: string,
+  orderId: string,
   line: { productTags: string[]; title: string; productType: string | null; productId: string | null },
   ruleId: string,
 ) => {
-  const rules = await rulesForLine(merchantId, line);
+  const rules = await rulesForOrderLine(merchantId, orderId, line);
   const rule = rules.find((r) => r.id === ruleId);
   if (!rule) {
     throw unprocessable(
@@ -917,7 +954,7 @@ export const browseExchangeProducts = async (
         })
       : null;
     if (!line) throw notFound("That item isn't part of this order.");
-    const rule = await ruleForLine(merchantId, line, ruleId);
+    const rule = await ruleForLine(merchantId, orderId, line, ruleId);
     filter = offerQuery(rule);
     includeSoldOut = !rule.inStockOnly;
   }
@@ -930,6 +967,7 @@ export const browseExchangeProducts = async (
       collectionId: ruleId ? undefined : collectionId,
       filter,
       includeSoldOut,
+      locationIds: await inventoryScopeFor(merchantId, orderId),
     }),
     // Sent alongside the products so the rail and the grid can't disagree
     // about which collections exist.
@@ -957,7 +995,7 @@ export const browseExchangeProducts = async (
  */
 const toQuoteLines = (
   resolved: Array<{
-    line: { unitPrice: Prisma.Decimal; productId: string | null };
+    line: { unitPrice: Prisma.Decimal; productId: string | null; productTags?: string[] };
     selection: QuoteInput["items"][number];
     /** The exchange group it came through said to settle the gap flat. */
     evenExchange?: boolean;
@@ -989,6 +1027,8 @@ const toQuoteLines = (
         chosen && line.productId && chosen.productId === line.productId,
       ),
       evenExchange: evenExchange === true,
+      // For a region charging its handling fee by product tag.
+      productTags: line.productTags ?? [],
     };
   });
 
@@ -1008,6 +1048,7 @@ export const quoteSelection = async (
     exchangeBonus: await exchangeBonusFor(
       merchantId,
       resolved.map(({ line }) => line),
+      advancedExchangesAllowed(policy.regional),
     ),
     ...(shopNow ? { shopNow } : {}),
   });
@@ -1076,6 +1117,7 @@ export const submitReturn = async (
     exchangeBonus: await exchangeBonusFor(
       merchantId,
       resolved.map(({ line }) => line),
+      advancedExchangesAllowed(policy.regional),
     ),
     ...(shopNow ? { shopNow } : {}),
     policy,
@@ -1333,7 +1375,7 @@ const confirmationInclude = {
   exchangeDraft: true,
   // The region's own instructions and destination, when it has them.
   regionalPolicy: {
-    select: { name: true, instructions: true, destinationLocationId: true },
+    select: { name: true, instructions: true, destinationId: true },
   },
 } satisfies Prisma.ReturnRequestInclude;
 

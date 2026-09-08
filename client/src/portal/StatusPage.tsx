@@ -288,9 +288,11 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
                       {t("status.returnTo")}
                     </div>
                     <div className="confirm__dest-name">{detail.returnTo.name}</div>
-                    {detail.returnTo.address && (
-                      <div className="muted">{detail.returnTo.address}</div>
-                    )}
+                    {detail.returnTo.lines.map((line, i) => (
+                      <div key={i} className="muted">
+                        {line}
+                      </div>
+                    ))}
                   </div>
                 )}
               </Section>

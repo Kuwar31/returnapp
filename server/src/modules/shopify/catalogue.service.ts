@@ -1,15 +1,94 @@
-import { badRequest } from "../../lib/errors.js";
+import { AppError, badRequest } from "../../lib/errors.js";
 import { storeAvailabilityRequired } from "../settings/merchant-settings.js";
 import { logger } from "../../lib/logger.js";
 import { queryShop } from "./shopify.client.js";
 import {
   BROWSE_COLLECTIONS,
-  BROWSE_PRODUCTS,
+  browseProductsQuery,
   PRODUCT_COLLECTIONS,
-  PRODUCT_VARIANTS,
+  productVariantsQuery,
   VARIANT_IMAGES,
+  variantsByIdQuery,
   VARIANTS_BY_ID,
 } from "./catalogue.graphql.js";
+
+/**
+ * Stock per location, when the query asked for it. See INVENTORY_LEVELS.
+ */
+interface InventoryNode {
+  inventoryPolicy?: "DENY" | "CONTINUE" | null;
+  inventoryItem?: {
+    inventoryLevels: {
+      nodes: Array<{
+        location: { id: string } | null;
+        quantities: Array<{ name: string; quantity: number }>;
+      }>;
+    };
+  } | null;
+}
+
+/**
+ * Whether a variant can be offered, counting only the chosen locations.
+ *
+ * `availableForSale` is Shopify's answer across every location, and stays the
+ * gate: an unpublished or discontinued variant is out however much stock sits
+ * in the chosen warehouses. Within that, a variant that keeps selling when
+ * out of stock is available anywhere; otherwise the chosen locations have to
+ * hold at least one unit between them.
+ */
+const availableAt = (
+  variant: { availableForSale: boolean } & InventoryNode,
+  locationIds: string[],
+): boolean => {
+  if (!variant.availableForSale) return false;
+  if (variant.inventoryPolicy === "CONTINUE") return true;
+  const wanted = new Set(locationIds);
+  let onHand = 0;
+  for (const level of variant.inventoryItem?.inventoryLevels.nodes ?? []) {
+    if (!level.location || !wanted.has(level.location.id)) continue;
+    onHand += level.quantities.find((q) => q.name === "available")?.quantity ?? 0;
+  }
+  return onHand > 0;
+};
+
+/**
+ * Runs a catalogue query, with stock per location when locations are chosen.
+ *
+ * Falls back to the plain query — and Shopify's aggregate availability — when
+ * the store's token can't read inventory: that is a store connected before
+ * the scope was requested, and the right answer for it is what it always had,
+ * not an empty catalogue. The Locations page tells the merchant to reconnect.
+ */
+const queryCatalogue = async <T>(
+  merchantId: string,
+  query: (withInventory: boolean) => string,
+  variables: Record<string, unknown>,
+  locationIds: string[] | undefined,
+): Promise<{ data: T; scoped: boolean }> => {
+  if (!locationIds || locationIds.length === 0) {
+    return { data: await queryShop<T>(merchantId, query(false), variables), scoped: false };
+  }
+  try {
+    return { data: await queryShop<T>(merchantId, query(true), variables), scoped: true };
+  } catch (error) {
+    if (error instanceof AppError && error.code === "SHOPIFY_GRAPHQL_ERROR") {
+      logger.warn(
+        { merchantId, error },
+        "Shopify refused an inventory-level query; using aggregate availability",
+      );
+      return { data: await queryShop<T>(merchantId, query(false), variables), scoped: false };
+    }
+    throw error;
+  }
+};
+
+/** Availability as the query could judge it: per location when it could. */
+const isAvailable = (
+  variant: { availableForSale: boolean } & InventoryNode,
+  locationIds: string[] | undefined,
+  scoped: boolean,
+): boolean =>
+  scoped && locationIds ? availableAt(variant, locationIds) : variant.availableForSale;
 
 export interface ExchangeVariant {
   id: string;
@@ -73,26 +152,30 @@ const firstImage = (media: MediaShape): string | null =>
 export const getProductVariants = async (
   merchantId: string,
   productId: string,
+  /** Count stock at these locations only; omitted, Shopify's aggregate applies. */
+  locationIds?: string[],
 ): Promise<ExchangeProduct | null> => {
-  const data = await queryShop<{
+  const { data, scoped } = await queryCatalogue<{
     product: {
       id: string;
       title: string;
       featuredMedia: { preview?: { image?: { url: string } | null } | null } | null;
       media: MediaShape;
       variants: {
-        nodes: Array<{
-          id: string;
-          title: string;
-          sku: string | null;
-          availableForSale: boolean;
-          price: string;
-          media: MediaShape;
-          selectedOptions: Array<{ name: string; value: string }>;
-        }>;
+        nodes: Array<
+          {
+            id: string;
+            title: string;
+            sku: string | null;
+            availableForSale: boolean;
+            price: string;
+            media: MediaShape;
+            selectedOptions: Array<{ name: string; value: string }>;
+          } & InventoryNode
+        >;
       };
     } | null;
-  }>(merchantId, PRODUCT_VARIANTS, { productId });
+  }>(merchantId, productVariantsQuery, { productId }, locationIds);
 
   const product = data.product;
   if (!product) return null;
@@ -102,7 +185,7 @@ export const getProductVariants = async (
     title: v.title,
     sku: v.sku,
     price: parseFloat(v.price),
-    available: v.availableForSale,
+    available: isAvailable(v, locationIds, scoped),
     imageUrl: firstImage(v.media) ?? product.featuredMedia?.preview?.image?.url ?? null,
     options: v.selectedOptions,
   }));
@@ -198,6 +281,7 @@ export const browseProducts = async (
     filter,
     includeSoldOut = false,
     limit = 24,
+    locationIds,
   }: {
     search?: string;
     cursor?: string;
@@ -207,6 +291,8 @@ export const browseProducts = async (
     /** Keep sold-out products, their variants marked unavailable. */
     includeSoldOut?: boolean;
     limit?: number;
+    /** Count stock at these locations only; omitted, Shopify's aggregate applies. */
+    locationIds?: string[];
   },
 ): Promise<{ products: ExchangeProduct[]; nextCursor: string | null }> => {
   /**
@@ -231,7 +317,7 @@ export const browseProducts = async (
     .concat(filter ? [filter] : [])
     .join(" AND ");
 
-  const data = await queryShop<{
+  const { data, scoped } = await queryCatalogue<{
     products: {
       pageInfo: { hasNextPage: boolean; endCursor: string | null };
       nodes: Array<{
@@ -244,23 +330,26 @@ export const browseProducts = async (
           maxVariantPrice: { amount: string; currencyCode: string };
         };
         variants: {
-          nodes: Array<{
-            id: string;
-            title: string;
-            sku: string | null;
-            availableForSale: boolean;
-            price: string;
-            media: MediaShape;
-            selectedOptions: Array<{ name: string; value: string }>;
-          }>;
+          nodes: Array<
+            {
+              id: string;
+              title: string;
+              sku: string | null;
+              availableForSale: boolean;
+              price: string;
+              media: MediaShape;
+              selectedOptions: Array<{ name: string; value: string }>;
+            } & InventoryNode
+          >;
         };
       }>;
     };
-  }>(merchantId, BROWSE_PRODUCTS, {
-    first: Math.min(limit, 50),
-    after: cursor ?? null,
-    query,
-  });
+  }>(
+    merchantId,
+    browseProductsQuery,
+    { first: Math.min(limit, 50), after: cursor ?? null, query },
+    locationIds,
+  );
 
   const products = data.products.nodes
     .map((p) => ({
@@ -272,15 +361,16 @@ export const browseProducts = async (
       maxPrice: parseFloat(p.priceRangeV2.maxVariantPrice.amount),
       currency: p.priceRangeV2.minVariantPrice.currencyCode,
       variants: p.variants.nodes
+        .map((v) => ({ node: v, available: isAvailable(v, locationIds, scoped) }))
         // Sold-out options are dropped, unless the group asked to show them
         // greyed so the shopper knows they exist.
-        .filter((v) => includeSoldOut || v.availableForSale)
-        .map((v) => ({
+        .filter(({ available }) => includeSoldOut || available)
+        .map(({ node: v, available }) => ({
           id: v.id,
           title: v.title,
           sku: v.sku,
           price: parseFloat(v.price),
-          available: v.availableForSale,
+          available,
           imageUrl:
             firstImage(v.media) ?? p.featuredMedia?.preview?.image?.url ?? null,
           options: v.selectedOptions,
@@ -364,32 +454,37 @@ export interface ResolvedVariant {
 export const resolveVariants = async (
   merchantId: string,
   variantIds: string[],
+  /** Count stock at these locations only; omitted, Shopify's aggregate applies. */
+  locationIds?: string[],
 ): Promise<Map<string, ResolvedVariant>> => {
   if (variantIds.length === 0) return new Map();
 
-  const data = await queryShop<{
-    nodes: Array<{
-      id: string;
-      title: string;
-      sku: string | null;
-      availableForSale: boolean;
-      price: string;
-      media: MediaShape;
-      product: {
-        id: string;
-        title: string;
-        featuredMedia?: { preview?: { image?: { url: string } | null } | null } | null;
-        tags?: string[] | null;
-        productType?: string | null;
-        collections?: { nodes: Array<{ id: string }> } | null;
-      } | null;
-    } | null>;
-  }>(merchantId, VARIANTS_BY_ID, { ids: [...new Set(variantIds)] });
+  const { data, scoped } = await queryCatalogue<{
+    nodes: Array<
+      | ({
+          id: string;
+          title: string;
+          sku: string | null;
+          availableForSale: boolean;
+          price: string;
+          media: MediaShape;
+          product: {
+            id: string;
+            title: string;
+            featuredMedia?: { preview?: { image?: { url: string } | null } | null } | null;
+            tags?: string[] | null;
+            productType?: string | null;
+            collections?: { nodes: Array<{ id: string }> } | null;
+          } | null;
+        } & InventoryNode)
+      | null
+    >;
+  }>(merchantId, variantsByIdQuery, { ids: [...new Set(variantIds)] }, locationIds);
 
   const map = new Map<string, ResolvedVariant>();
   for (const node of data.nodes) {
     if (!node) continue;
-    if (!node.availableForSale) {
+    if (!isAvailable(node, locationIds, scoped)) {
       throw badRequest(
         `"${node.product?.title ?? "That item"}" is out of stock in the option you chose.`,
       );

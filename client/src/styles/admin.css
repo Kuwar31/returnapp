@@ -3291,3 +3291,191 @@ table.data tbody tr:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------- return policies: sub-tabs, destinations, locations ---------- */
+
+/* The three tabs under the page title, on the same footing as the returns
+   board's, but with room beneath rather than a table. */
+.subtabs {
+  margin: -4px 0 20px;
+  padding: 0;
+  gap: 4px;
+}
+
+.subtabs .tab {
+  padding: 9px 14px;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  text-decoration: none;
+}
+
+.subtabs .tab.is-active {
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+/* Loop's two-column section: what it is on the left, the controls on the right. */
+.split {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 32px;
+  padding: 24px 0;
+  border-top: 1px solid var(--border);
+}
+
+.split__title {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.split__blurb {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.split__blurb + .split__blurb {
+  margin-top: 14px;
+}
+
+/* A destination listed rather than picked: no checkbox, an Edit at the end. */
+.dest-row--static {
+  cursor: default;
+}
+
+.dest-row__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.dest-row__badge {
+  margin: 0 0 0 8px;
+  vertical-align: 1px;
+}
+
+.dest-row .link-btn {
+  flex: none;
+  align-self: center;
+}
+
+/* The chosen inventory locations, listed. */
+.loc-list {
+  display: grid;
+  gap: 4px;
+}
+
+.loc-list__item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.loc-list__item:first-child {
+  border-top: none;
+}
+
+/* The address form, two fields to a row where the fields are short. */
+.dform {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 16px;
+}
+
+.dform__field {
+  display: block;
+}
+
+.dform__field--span {
+  grid-column: 1 / -1;
+}
+
+.dform .settings-input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font: inherit;
+  font-size: 14px;
+}
+
+.dform select.settings-input {
+  appearance: auto;
+}
+
+.dform .settings-row__hint {
+  display: block;
+  margin-top: 6px;
+}
+
+/* A grey note, like Loop's "No locations have been selected". */
+.infobox {
+  display: flex;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.infobox strong {
+  display: block;
+  margin-bottom: 2px;
+}
+
+.infobox code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 12.5px;
+}
+
+.infobox__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  font-style: italic;
+}
+
+/* A fee option this app can't compute yet: shown as Loop shows it, greyed. */
+.radio-list__item.is-disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+/* The fee amount runs the width of the fee block, as Loop's does. */
+.unit-field--wide {
+  display: flex;
+  width: 100%;
+  max-width: 420px;
+}
+
+.unit-field--wide input {
+  flex: 1;
+  width: auto;
+}
+
+@media (max-width: 900px) {
+  .split {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .dform {
+    grid-template-columns: 1fr;
+  }
+}

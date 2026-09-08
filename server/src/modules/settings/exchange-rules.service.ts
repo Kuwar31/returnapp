@@ -276,6 +276,15 @@ export const ruleBonusForLines = async (
  * than in the portal so the two callers above it don't have to import
  * downwards through it.
  */
-export const exchangeBonusFor = async (merchantId: string, lines: LineFacts[]) =>
-  (await ruleBonusForLines(merchantId, lines)) ??
+export const exchangeBonusFor = async (
+  merchantId: string,
+  lines: LineFacts[],
+  /**
+   * Whether the groups apply at all. A regional policy can switch advanced
+   * exchanges off for its orders, and a group's bonus goes with it — the
+   * store-wide sweetener is what's left.
+   */
+  allowRules = true,
+) =>
+  (allowRules ? await ruleBonusForLines(merchantId, lines) : null) ??
   (await resolveExchangeBonus(merchantId));

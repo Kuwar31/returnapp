@@ -443,8 +443,8 @@ export const restockLocationsFor = async (
   merchantId: string,
   request: {
     order: { externalId: string | null };
-    /** The region's return destination, when the return has one. */
-    regionalPolicy?: { destinationLocationId: string | null } | null;
+    /** The region's destination, when it is somewhere the store keeps stock. */
+    regionalPolicy?: { destination: { locationId: string | null } | null } | null;
     lineItems: Array<{
       id: string;
       fulfillmentLineItemId: string | null;
@@ -452,7 +452,7 @@ export const restockLocationsFor = async (
     }>;
   },
 ): Promise<{ byLine: Map<string, string>; names: Map<string, string> }> => {
-  const [merchant, locations] = await Promise.all([
+  const [merchant, locations, fallbackDestination] = await Promise.all([
     prisma.merchant.findUniqueOrThrow({
       where: { id: merchantId },
       select: { restockLocationId: true },
@@ -461,6 +461,10 @@ export const restockLocationsFor = async (
       logger.warn({ merchantId, error }, "Could not list Shopify locations");
       return [] as ShopLocation[];
     }),
+    prisma.returnDestination.findFirst({
+      where: { merchantId, isDefault: true },
+      select: { locationId: true },
+    }),
   ]);
   const names = new Map(locations.map((l) => [l.id, l.name]));
   // With no list to check against, take a chosen id on trust: Shopify will
@@ -468,12 +472,14 @@ export const restockLocationsFor = async (
   const valid = (id: string | null | undefined): string | undefined =>
     id && (names.size === 0 || names.has(id)) ? id : undefined;
   /**
-   * The region's destination outranks the store default: a policy that says
-   * UK returns go back to the UK warehouse means exactly that, and the store
-   * default is for returns no region speaks for.
+   * Where the parcel was sent outranks the store's restock default: a policy
+   * that says UK returns go back to the UK warehouse means exactly that. The
+   * region's destination first, then the store's default destination, then
+   * the Inventory setting for stores that never set a destination up.
    */
   const storeDefault =
-    valid(request.regionalPolicy?.destinationLocationId) ??
+    valid(request.regionalPolicy?.destination?.locationId) ??
+    valid(fallbackDestination?.locationId) ??
     valid(merchant.restockLocationId);
 
   const needsOrigin =
@@ -549,7 +555,7 @@ export const receiveShopifyReturn = async (
     include: {
       lineItems: true,
       order: { select: { externalId: true } },
-      regionalPolicy: { select: { destinationLocationId: true } },
+      regionalPolicy: { select: { destination: { select: { locationId: true } } } },
     },
   });
   if (!request.externalReturnId) return;

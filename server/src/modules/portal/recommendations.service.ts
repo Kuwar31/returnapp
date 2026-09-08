@@ -5,11 +5,13 @@ import {
   browseProducts,
   type ExchangeProduct,
 } from "../shopify/catalogue.service.js";
+import { offerQuery } from "../settings/exchange-rules.service.js";
+import { inventoryScopeFor } from "../policy/regional.service.js";
 import {
-  offerQuery,
-  rulesForLine,
-} from "../settings/exchange-rules.service.js";
-import { catalogueConverter, getOrderEligibility } from "./portal.service.js";
+  catalogueConverter,
+  getOrderEligibility,
+  rulesForOrderLine,
+} from "./portal.service.js";
 import {
   carrySizeAcross,
   readIntent,
@@ -126,7 +128,11 @@ export const recommendExchanges = async (
   );
   const history = await exchangeHistory(merchantId, line, reason?.code ?? null);
 
-  const rules = await rulesForLine(merchantId, line);
+  // The groups, and the locations whose stock counts, both under the order's policy.
+  const [rules, scope] = await Promise.all([
+    rulesForOrderLine(merchantId, orderId, line),
+    inventoryScopeFor(merchantId, orderId),
+  ]);
 
   interface Pool {
     products: ExchangeProduct[];
@@ -143,7 +149,11 @@ export const recommendExchanges = async (
     weight: number,
   ) => {
     try {
-      const { products } = await browseProducts(merchantId, { ...opts, limit: 12 });
+      const { products } = await browseProducts(merchantId, {
+        ...opts,
+        limit: 12,
+        locationIds: scope,
+      });
       pools.push({ products, ruleId, pricing, weight });
     } catch (error) {
       logger.warn({ merchantId, opts, error }, "Could not gather exchange recommendations");

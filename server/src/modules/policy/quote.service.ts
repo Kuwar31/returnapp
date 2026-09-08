@@ -30,7 +30,60 @@ export interface QuoteLine {
    * store-wide rule for size swaps.
    */
   evenExchange?: boolean;
+  /**
+   * The returned product's tags, as snapshotted when the order synced. Read
+   * only by a regional policy charging its handling fee by product tag.
+   */
+  productTags?: string[];
 }
+
+/**
+ * A fee written on a product as a tag, for policies that charge by tag.
+ *
+ * `handling-fee:10` charges 10 in shop currency whatever the outcome;
+ * `refund-fee:10`, `exchange-fee:10`, `credit-fee:10` and `gift-card-fee:10`
+ * name one outcome and outrank it. `…:free` exempts the whole return. The
+ * separators are forgiving — merchants type tags by hand — and comparison is
+ * case-insensitive.
+ */
+const TAG_FEE =
+  /^(handling|refund|exchange|store[-_ ]?credit|credit|gift[-_ ]?card)[-_ ]?fee\s*[:=-]?\s*(free|\d+(?:[.,]\d+)?)$/i;
+
+const TAG_OUTCOME: Record<string, "REFUND" | "EXCHANGE" | "STORE_CREDIT" | "GIFT_CARD" | "ANY"> = {
+  handling: "ANY",
+  refund: "REFUND",
+  exchange: "EXCHANGE",
+  credit: "STORE_CREDIT",
+  storecredit: "STORE_CREDIT",
+  giftcard: "GIFT_CARD",
+};
+
+export type TagFee = { free: true } | { free: false; amount: Prisma.Decimal };
+
+/** What a product's tags say its fee is for one outcome; null when they say nothing. */
+export const productTagFee = (
+  tags: string[] | undefined,
+  key: "REFUND" | "EXCHANGE" | "STORE_CREDIT" | "GIFT_CARD",
+): TagFee | null => {
+  let specific: TagFee | null = null;
+  let general: TagFee | null = null;
+  for (const raw of tags ?? []) {
+    const match = TAG_FEE.exec(raw.trim());
+    if (!match) continue;
+    const target = TAG_OUTCOME[match[1].toLowerCase().replace(/[-_ ]/g, "")];
+    if (!target || (target !== "ANY" && target !== key)) continue;
+    const fee: TagFee =
+      match[2].toLowerCase() === "free"
+        ? { free: true }
+        : { free: false, amount: round2(toDecimal(match[2].replace(",", "."))) };
+    // Within one scope, "free" wins; otherwise the higher amount does.
+    const pick = (prev: TagFee | null): TagFee =>
+      !prev ? fee : prev.free ? prev : fee.free ? fee : fee.amount.greaterThan(prev.amount) ? fee : prev;
+    if (target === "ANY") general = pick(general);
+    else specific = pick(specific);
+  }
+  return specific ?? general;
+};
 
 /**
  * The merchant covers any gap between a returned item and its replacement.
@@ -130,11 +183,36 @@ export const keepsMoneyInStore = (resolution: ResolutionType): boolean =>
   CREDIT_RESOLUTIONS.includes(resolution);
 
 /**
- * Each line's share of the flat handling fees a regional policy charges.
+ * The once-per-return fee for one outcome, by the rule the region set.
+ *
+ * FLAT is the stored amount. PRODUCT_TAG follows Loop's reading of the tags:
+ * a product tagged free exempts the whole return; otherwise every line
+ * contributes what its tag says, or the fallback amount when it carries no
+ * tag, and the highest of those is charged once. Zero when nothing applies.
+ */
+const perReturnFee = (
+  fee: { type: "FLAT" | "PERCENT" | "PRODUCT_TAG"; value: Prisma.Decimal },
+  key: "REFUND" | "EXCHANGE" | "STORE_CREDIT" | "GIFT_CARD",
+  lines: QuoteLine[],
+): Prisma.Decimal => {
+  if (fee.type === "FLAT") return round2(toDecimal(fee.value));
+  if (fee.type !== "PRODUCT_TAG") return ZERO;
+  let highest = ZERO;
+  for (const line of lines) {
+    const tagged = productTagFee(line.productTags, key);
+    if (tagged?.free) return ZERO;
+    const amount = tagged ? tagged.amount : round2(toDecimal(fee.value));
+    if (amount.greaterThan(highest)) highest = amount;
+  }
+  return highest;
+};
+
+/**
+ * Each line's share of the per-return handling fees a regional policy charges.
  *
  * A flat fee is per return, not per item — "5 to send anything back" — but
  * the engine accounts per line, because that is what tells resolution how
- * much to refund, credit or gift-card. So each outcome's flat fee is spread
+ * much to refund, credit or gift-card. So each outcome's fee is spread
  * across the lines taking that outcome in proportion to their value, with the
  * rounding remainder landing on the last of them so the total charged is
  * exactly the fee. Lines worth nothing are skipped: there is nothing to
@@ -152,13 +230,19 @@ const flatFeeShares = (
   lines.forEach((line, i) => {
     const key = outcomeKey(line.resolution);
     const fee = key ? outcomes[key]?.fee : undefined;
-    if (!fee || fee.type !== "FLAT" || toDecimal(fee.value).lessThanOrEqualTo(0)) return;
+    if (!fee || fee.type === "PERCENT") return;
     if (subtotals[i].lessThanOrEqualTo(0)) return;
     groups.set(key!, [...(groups.get(key!) ?? []), i]);
   });
 
   for (const [key, indexes] of groups) {
-    const fee = round2(toDecimal(outcomes[key as keyof OutcomeMap]!.fee!.value));
+    const outcome = key as keyof OutcomeMap;
+    const fee = perReturnFee(
+      outcomes[outcome]!.fee!,
+      outcome,
+      indexes.map((i) => lines[i]),
+    );
+    if (fee.lessThanOrEqualTo(0)) continue;
     const total = indexes.reduce((sum, i) => sum.add(subtotals[i]), ZERO);
     let allocated = ZERO;
     indexes.forEach((i, n) => {
