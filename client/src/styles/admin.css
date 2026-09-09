@@ -3607,3 +3607,10 @@ table.data tbody tr:hover {
   color: var(--text-muted);
   cursor: pointer;
 }
+
+/* The start event and the shared duration, one under the other so the
+   duration's two controls stay on a line at any width. */
+.window-grid {
+  display: grid;
+  gap: 16px;
+}

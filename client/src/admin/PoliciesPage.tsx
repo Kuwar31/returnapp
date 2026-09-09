@@ -932,6 +932,45 @@ export default function PoliciesPage() {
     ? (destinationById(editing.destinationId) ?? null)
     : null;
 
+  /**
+   * The window as one figure, for the panel at the top of the outcomes tab.
+   *
+   * Every outcome carries its own duration underneath, so the shared control
+   * shows the value they all agree on — or, when they differ, the first
+   * enabled outcome's — and writes to all of them at once. The summary line
+   * beside it always says what each outcome actually has.
+   */
+  const windowsOn = editing
+    ? OUTCOMES.filter((o) => editing.outcomes[o.key].enabled).map((o) => ({
+        title: o.title,
+        days: editing.outcomes[o.key].windowDays,
+      }))
+    : [];
+  const allWindows = editing ? OUTCOMES.map((o) => editing.outcomes[o.key].windowDays) : [];
+  const windowsAgree = allWindows.every((d) => d === allWindows[0]);
+  const sharedWindow: number | null = editing
+    ? windowsAgree
+      ? (allWindows[0] ?? 30)
+      : (windowsOn[0]?.days ?? allWindows[0] ?? 30)
+    : 30;
+  const setAllWindows = (days: number | null) =>
+    setEditing((prev) =>
+      prev
+        ? {
+            ...prev,
+            outcomes: Object.fromEntries(
+              OUTCOMES.map((o) => [o.key, { ...prev.outcomes[o.key], windowDays: days }]),
+            ) as Draft["outcomes"],
+          }
+        : prev,
+    );
+  const windowSummary =
+    windowsOn.length === 0
+      ? "No return outcome is on yet."
+      : windowsOn
+          .map((w) => `${w.title}: ${w.days === null ? "unlimited" : `${w.days} days`}`)
+          .join(" · ") + (windowsAgree ? "." : " — set per outcome below.");
+
   const subtabs = (
     <nav className="tabs subtabs" aria-label="Return policy settings">
       {PAGES.map((p) => (
@@ -1413,31 +1452,61 @@ export default function PoliciesPage() {
                 <div className="panel">
                   <h2 style={{ marginBottom: 4 }}>Shopper return window</h2>
                   <p className="settings-row__hint" style={{ marginBottom: 16 }}>
-                    Choose when the shopper's return window starts for all
-                    return outcomes below.
+                    Choose when the shopper's return window starts and how long
+                    it stays open, for all return outcomes below. Each outcome
+                    can then set a duration of its own.
                   </p>
-                  <div className="field-label">Start event</div>
-                  <div className="window-fields">
-                    <select
-                      value={editing.windowStartsFrom}
-                      aria-label="Start event"
-                      onChange={(e) =>
-                        patch({ windowStartsFrom: e.target.value as WindowStart })
-                      }
-                    >
-                      {START_EVENTS.map(([value, label]) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
+                  <div className="window-grid">
+                    <div>
+                      <div className="field-label">Start event</div>
+                      <div className="window-fields">
+                        <select
+                          value={editing.windowStartsFrom}
+                          aria-label="Start event"
+                          onChange={(e) =>
+                            patch({ windowStartsFrom: e.target.value as WindowStart })
+                          }
+                        >
+                          {START_EVENTS.map(([value, label]) => (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <div className="field-label">Return window duration</div>
+                      <div className="window-fields">
+                        <select
+                          value={sharedWindow === null ? "UNLIMITED" : "LIMITED"}
+                          aria-label="Return window duration for all outcomes"
+                          onChange={(e) =>
+                            setAllWindows(
+                              e.target.value === "UNLIMITED" ? null : (sharedWindow ?? 30),
+                            )
+                          }
+                        >
+                          <option value="LIMITED">Limited window</option>
+                          <option value="UNLIMITED">Unlimited window</option>
+                        </select>
+                        {sharedWindow !== null && (
+                          <NumberField
+                            value={sharedWindow}
+                            min={1}
+                            max={3650}
+                            unit="days"
+                            onChange={setAllWindows}
+                          />
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  {editing.windowStartsFrom === "DELIVERY" && (
-                    <p className="settings-row__hint" style={{ marginTop: 10 }}>
-                      Counted from the shipment if the carrier never confirms
-                      delivery.
-                    </p>
-                  )}
+                  <p className="settings-row__hint" style={{ marginTop: 10 }}>
+                    {windowSummary}
+                    {editing.windowStartsFrom === "DELIVERY" &&
+                      " Counted from the shipment if the carrier never confirms delivery."}
+                  </p>
                 </div>
 
                 {OUTCOMES.map((o) => (
