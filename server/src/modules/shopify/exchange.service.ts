@@ -112,6 +112,8 @@ export const priceExchange = async (
 
   const quote = quoteReturn({
     policy,
+    // Fixed at submission: the return method's cost as the shopper accepted it.
+    returnShippingFee: toDecimal(request.returnShippingFee),
     /**
      * The same rule the shopper was quoted under. Without it an absorbed swap
      * would show as free on the portal and still arrive as an invoice.

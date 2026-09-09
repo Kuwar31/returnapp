@@ -197,13 +197,31 @@ export interface QuoteLine {
   due: number;
 }
 
+/** A way of sending items back, as the routing rules offer it. */
+export type ReturnMethodKind = "LABEL" | "CARRIER" | "STORE" | "KEEP";
+export type ReturnCostMode = "HIDDEN" | "FREE" | "FIXED";
+
+export interface ReturnMethodOption {
+  kind: ReturnMethodKind;
+  name: string;
+  description: string | null;
+  costMode: ReturnCostMode;
+  /** In the quote's currency; zero unless the mode is FIXED. */
+  cost: number;
+  currency: string;
+}
+
 export interface Quote {
   currency: string;
   itemsSubtotal: number;
   bonusCredit: number;
   restockingFee: number;
+  /** The chosen return method's cost, deducted like a fee. */
+  returnShippingFee: number;
   estimatedTotal: number;
   amountDue: number;
+  /** The methods on offer for these selections, and the one priced in. */
+  returnMethods?: { selected: ReturnMethodKind; options: ReturnMethodOption[] };
   /**
    * What the replacements cost. Server-reported rather than added up from the
    * browser's own copy of the prices, which can be stale.
@@ -308,6 +326,8 @@ export interface ReturnDetail {
     itemsSubtotal: number;
     bonusCredit: number;
     restockingFee: number;
+    /** The return method's cost, deducted like a fee. */
+    returnShippingFee?: number;
     estimatedTotal: number;
     settledTotal: number | null;
     /**
@@ -327,6 +347,14 @@ export interface ReturnDetail {
    */
   instructions?: string[];
   returnTo?: { name: string; lines: string[] } | null;
+  /** How the shopper is sending the items back, as they were shown it. */
+  returnMethod?: {
+    kind: ReturnMethodKind;
+    name: string;
+    instructions: string | null;
+    storeUrl: string | null;
+    cost: number;
+  } | null;
   order: {
     orderNumber: string;
     placedAt: string;
@@ -699,6 +727,51 @@ export interface StorePolicySummary {
   restockingFeePercent: number;
   autoApprove: boolean;
   autoApproveUnder: number | null;
+}
+
+// ---------------------------------------------------------------------------
+// Return routing rules — which ways of sending items back are offered
+// ---------------------------------------------------------------------------
+
+export interface RoutingMethod {
+  enabled: boolean;
+  name: string;
+  description: string | null;
+  costMode: ReturnCostMode;
+  costAmount: number | null;
+  instructions: string | null;
+  autoApprove: boolean;
+  /** STORE only: a link to the retail locations. */
+  storeUrl: string | null;
+}
+
+/** Every condition present must match; none means the rule matches everything. */
+export interface RoutingConditions {
+  /** Regional policy ids, or "DEFAULT" for orders no regional policy claims. */
+  policies?: string[];
+  countries?: string[];
+  productTags?: string[];
+  productTypes?: string[];
+  reasonIds?: string[];
+  resolutions?: OutcomeKey[];
+  valueUnder?: number;
+  valueAtLeast?: number;
+}
+
+export interface RoutingRule {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  sortOrder: number;
+  conditions: RoutingConditions;
+  methods: Record<ReturnMethodKind, RoutingMethod>;
+}
+
+export interface RoutingRulesResponse {
+  rules: RoutingRule[];
+  policies: Array<{ id: string; name: string }>;
+  reasons: Array<{ id: string; label: string }>;
+  currency: string;
 }
 
 export interface RegionalPoliciesResponse {

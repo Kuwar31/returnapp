@@ -18,6 +18,7 @@ import * as reasonsService from "./reasons.service.js";
 import * as exchangeRules from "./exchange-rules.service.js";
 import * as regionalPolicies from "./regional-policies.service.js";
 import * as destinationsService from "./destinations.service.js";
+import * as routing from "./routing.service.js";
 import { inventoryAccessProblem } from "../shopify/locations.service.js";
 import { browseCollections } from "../shopify/catalogue.service.js";
 import { listLocationsIfConnected } from "../shopify/locations.service.js";
@@ -907,6 +908,153 @@ settingsRouter.delete(
   asyncHandler(async (req, res) => {
     await destinationsService.deleteDestination(req.admin!.merchantId, req.params.id);
     res.status(204).end();
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// Return routing rules — which ways of sending items back are offered
+// ---------------------------------------------------------------------------
+
+const blankToNull = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .nullable()
+    .optional()
+    .transform((v) => v || null);
+
+const routingMethodSchema = z.object({
+  enabled: z.boolean(),
+  name: z.string().trim().min(1).max(200),
+  description: blankToNull(200),
+  costMode: z.enum(["HIDDEN", "FREE", "FIXED"]),
+  costAmount: z.number().min(0).max(1_000_000).nullable().optional().transform((v) => v ?? null),
+  instructions: blankToNull(2000),
+  autoApprove: z.boolean(),
+  /** A link to the retail locations; only the store method keeps it. */
+  storeUrl: z
+    .string()
+    .trim()
+    .max(500)
+    .nullable()
+    .optional()
+    .transform((v) => v || null)
+    .refine((v) => v === null || /^https?:\/\/\S+$/i.test(v), {
+      message: "Enter a valid URL, starting with http:// or https://.",
+    }),
+});
+
+const list = (max: number, itemMax = 80) =>
+  z
+    .array(z.string().trim().min(1).max(itemMax))
+    .max(max)
+    .transform((values) => [...new Set(values)])
+    .optional();
+
+const routingConditionsSchema = z
+  .object({
+    policies: list(50, 60),
+    countries: z
+      .array(z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/))
+      .max(250)
+      .transform((values) => [...new Set(values)])
+      .optional(),
+    productTags: list(50),
+    productTypes: list(50),
+    reasonIds: list(200, 60),
+    resolutions: z
+      .array(z.enum(["REFUND", "EXCHANGE", "STORE_CREDIT", "GIFT_CARD"]))
+      .max(4)
+      .optional(),
+    valueUnder: z.number().min(0).max(10_000_000).optional(),
+    valueAtLeast: z.number().min(0).max(10_000_000).optional(),
+  })
+  .strict();
+
+const routingRuleSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  conditions: routingConditionsSchema,
+  methods: z.object({
+    LABEL: routingMethodSchema,
+    CARRIER: routingMethodSchema,
+    STORE: routingMethodSchema,
+    KEEP: routingMethodSchema,
+  }),
+});
+
+/**
+ * The rules, plus what the condition builder chooses from: the store's
+ * regional policies and its return reasons.
+ */
+settingsRouter.get(
+  "/routing-rules",
+  asyncHandler(async (req, res) => {
+    const merchantId = req.admin!.merchantId;
+    const [rules, policies, reasons, merchant] = await Promise.all([
+      routing.listRoutingRules(merchantId),
+      prisma.regionalPolicy.findMany({
+        where: { merchantId },
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        select: { id: true, name: true },
+      }),
+      prisma.returnReason.findMany({
+        where: { merchantId, active: true },
+        orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
+        select: { id: true, label: true },
+      }),
+      prisma.merchant.findUniqueOrThrow({
+        where: { id: merchantId },
+        select: { currency: true },
+      }),
+    ]);
+    res.json({
+      rules: rules.map(routing.serializeRule),
+      policies,
+      reasons,
+      currency: merchant.currency,
+    });
+  }),
+);
+
+settingsRouter.post(
+  "/routing-rules",
+  validate(routingRuleSchema),
+  asyncHandler(async (req, res) => {
+    const created = await routing.createRoutingRule(req.admin!.merchantId, req.body);
+    res.status(201).json(routing.serializeRule(created));
+  }),
+);
+
+settingsRouter.patch(
+  "/routing-rules/:id",
+  validate(routingRuleSchema),
+  asyncHandler(async (req, res) => {
+    const updated = await routing.updateRoutingRule(
+      req.admin!.merchantId,
+      req.params.id,
+      req.body,
+    );
+    res.json(routing.serializeRule(updated));
+  }),
+);
+
+settingsRouter.delete(
+  "/routing-rules/:id",
+  asyncHandler(async (req, res) => {
+    await routing.deleteRoutingRule(req.admin!.merchantId, req.params.id);
+    res.status(204).end();
+  }),
+);
+
+/** Priority is the whole list's order; the default stays last regardless. */
+settingsRouter.post(
+  "/routing-rules/reorder",
+  validate(z.object({ ids: z.array(z.string().min(1)).max(100) })),
+  asyncHandler(async (req, res) => {
+    await routing.reorderRoutingRules(req.admin!.merchantId, req.body.ids);
+    const rules = await routing.listRoutingRules(req.admin!.merchantId);
+    res.json({ rules: rules.map(routing.serializeRule) });
   }),
 );
 

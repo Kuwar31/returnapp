@@ -3052,3 +3052,87 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ---------- return method choice, on the review step ---------- */
+
+.methods {
+  display: grid;
+  gap: 10px;
+}
+
+.method {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+
+.method:hover {
+  border-color: var(--border-strong, var(--border));
+}
+
+.method.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.method input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.method__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--surface-muted, rgba(0, 0, 0, 0.05));
+  font-size: 20px;
+}
+
+.method__body {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.method__name {
+  font-weight: 600;
+}
+
+.method__cost {
+  flex: none;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* The chosen method on the status page: instructions keep their line breaks. */
+.confirm__method + .confirm__steps,
+.confirm__method + .confirm__dest {
+  margin-top: 18px;
+}
+
+.confirm__method-text {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.confirm__method-link {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 14px;
+}

@@ -610,6 +610,7 @@ export default function ReturnDetailPage() {
           <span className="chip">{detail.currency}</span>
           Created {dateTime(detail.submittedAt)}
           {detail.policyName && <> · Return policy: {detail.policyName}</>}
+          {detail.returnMethod && <> · Return method: {detail.returnMethod.name}</>}
         </div>
       </div>
 
@@ -885,6 +886,13 @@ export default function ReturnDetailPage() {
                   <span>Restocking fee</span>
                   <span className="tot__count" />
                   <span>−{money(totals.restockingFee, detail.currency)}</span>
+                </div>
+              )}
+              {(totals.returnShippingFee ?? 0) > 0 && (
+                <div className="tot__row">
+                  <span>Return shipping</span>
+                  <span className="tot__count" />
+                  <span>−{money(totals.returnShippingFee ?? 0, detail.currency)}</span>
                 </div>
               )}
 

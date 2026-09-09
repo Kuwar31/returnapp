@@ -95,8 +95,12 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
   const dead = detail.status === "CANCELLED" || detail.status === "EXPIRED";
   const payout = detail.totals.settledTotal ?? detail.totals.estimatedTotal;
 
-  // Asking someone to box up items is only useful while the return is live.
-  const showPacking = !dead && detail.lineItems.length > 0;
+  // Asking someone to box up items is only useful while the return is live —
+  // and not at all for a "green return", where nothing comes back.
+  const method = detail.returnMethod ?? null;
+  const keeping = method?.kind === "KEEP";
+  const showPacking = !dead && detail.lineItems.length > 0 && !keeping;
+  const methodInfo = Boolean(method && (method.instructions || method.storeUrl || keeping));
 
   /**
    * The three-step progress list — but only the steps that can still happen.
@@ -128,7 +132,9 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
                 title: t("status.resolved"),
                 detail: finished
                   ? shortDate(detail.resolvedAt ?? detail.submittedAt)
-                  : t("status.onceItemsArrive"),
+                  : keeping
+                    ? t("status.keepItems")
+                    : t("status.onceItemsArrive"),
                 done: finished,
               },
             ]),
@@ -153,7 +159,10 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
    * adds up: purchases, less the credit and any bonus, plus fees withheld.
    */
   const creditTotal =
-    creditSubtotal + detail.totals.bonusCredit - detail.totals.restockingFee;
+    creditSubtotal +
+    detail.totals.bonusCredit -
+    detail.totals.restockingFee -
+    (detail.totals.returnShippingFee ?? 0);
   const owed =
     draft && draft.currency === currency
       ? draft.balanceDue
@@ -272,9 +281,29 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
             Only while the return is live, for the same reason as the packing
             list above: nothing to send once the request is off the table.
           */}
-          {showPacking &&
-            ((detail.instructions?.length ?? 0) > 0 || detail.returnTo) && (
+          {!dead &&
+            (methodInfo || (detail.instructions?.length ?? 0) > 0 || (detail.returnTo && !keeping)) && (
               <Section title={t("status.instructions")}>
+                {method && (
+                  <div className="confirm__method">
+                    <div className="confirm__dest-label">{t("status.returnMethod")}</div>
+                    <div className="confirm__dest-name">{method.name}</div>
+                    {keeping && <p className="muted">{t("status.keepItems")}</p>}
+                    {method.instructions && (
+                      <p className="confirm__method-text">{method.instructions}</p>
+                    )}
+                    {method.storeUrl && (
+                      <a
+                        className="confirm__method-link"
+                        href={method.storeUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {t("status.storeLink")} ↗
+                      </a>
+                    )}
+                  </div>
+                )}
                 {(detail.instructions?.length ?? 0) > 0 && (
                   <ol className="confirm__steps">
                     {detail.instructions!.map((step, i) => (
@@ -282,7 +311,7 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
                     ))}
                   </ol>
                 )}
-                {detail.returnTo && (
+                {detail.returnTo && !keeping && (
                   <div className="confirm__dest">
                     <div className="confirm__dest-label">
                       {t("status.returnTo")}
@@ -434,6 +463,14 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
                       <span className="muted">{t("totals.restocking")}</span>
                       <span className="muted">
                         −{money(detail.totals.restockingFee, currency)}
+                      </span>
+                    </div>
+                  )}
+                  {(detail.totals.returnShippingFee ?? 0) > 0 && (
+                    <div className="summary__line">
+                      <span className="muted">{t("totals.returnShipping")}</span>
+                      <span className="muted">
+                        −{money(detail.totals.returnShippingFee ?? 0, currency)}
                       </span>
                     </div>
                   )}

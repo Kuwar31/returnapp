@@ -57,6 +57,9 @@ export default [
       route("settings/policies/locations", "admin/PoliciesPage.tsx", {
         id: "policies-locations",
       }),
+      route("settings/policies/routing", "admin/PoliciesPage.tsx", {
+        id: "policies-routing",
+      }),
       route("settings/exchanges", "admin/SettingsPage.tsx", {
         id: "settings-exchanges",
       }),

@@ -45,6 +45,18 @@ type Matches = [{
 }, {
   id: "policies-locations";
   module: typeof import("../PoliciesPage.js");
+}] | [{
+  id: "root";
+  module: typeof import("../../root.js");
+}, {
+  id: "admin/AuthLayout";
+  module: typeof import("../AuthLayout.js");
+}, {
+  id: "admin/AdminLayout";
+  module: typeof import("../AdminLayout.js");
+}, {
+  id: "policies-routing";
+  module: typeof import("../PoliciesPage.js");
 }];
 
 type Annotations = GetAnnotations<Info & { module: Module, matches: Matches }>;

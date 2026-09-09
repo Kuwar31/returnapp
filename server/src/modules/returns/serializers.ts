@@ -110,7 +110,8 @@ export const serializeReturn = (
   const credited =
     (fx.money(request.itemsSubtotal) ?? 0) +
     (fx.money(request.bonusCredit) ?? 0) -
-    (fx.money(request.restockingFee) ?? 0);
+    (fx.money(request.restockingFee) ?? 0) -
+    (fx.money(request.returnShippingFee) ?? 0);
   const amountDue = Math.max(0, Math.round((purchased - credited) * 100) / 100);
 
   return {
@@ -131,10 +132,25 @@ export const serializeReturn = (
     itemsSubtotal: fx.money(request.itemsSubtotal),
     bonusCredit: fx.money(request.bonusCredit),
     restockingFee: fx.money(request.restockingFee),
+    /** The return method's cost, deducted like a fee. */
+    returnShippingFee: fx.money(request.returnShippingFee),
     estimatedTotal: fx.money(request.estimatedTotal),
     settledTotal: fx.money(request.settledTotal),
     amountDue,
   },
+  /**
+   * How the shopper is sending the items back, as they were shown it. Null
+   * for a return made before routing rules existed.
+   */
+  returnMethod: request.returnMethod
+    ? {
+        kind: request.returnMethod,
+        name: request.returnMethodName ?? "",
+        instructions: request.returnInstructions,
+        storeUrl: request.returnStoreUrl,
+        cost: fx.money(request.returnShippingFee),
+      }
+    : null,
   flaggedAt: request.flaggedAt,
   flagReason: request.flagReason,
   submittedAt: request.submittedAt,

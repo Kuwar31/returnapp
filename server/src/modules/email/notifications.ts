@@ -82,6 +82,15 @@ const loadContext = async (returnRequestId: string) => {
       reasonLabel: item.reason?.label ?? null,
     })),
     payment: await resolvePayment(request.merchantId, request),
+    // The way back the shopper chose, as they were shown it at submission.
+    returnMethod: request.returnMethod
+      ? {
+          kind: request.returnMethod,
+          name: request.returnMethodName ?? "",
+          instructions: request.returnInstructions,
+          storeUrl: request.returnStoreUrl,
+        }
+      : null,
   };
 
   return {

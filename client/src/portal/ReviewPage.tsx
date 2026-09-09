@@ -7,9 +7,18 @@ import type {
   Quote,
   ResolutionType,
   ReturnDetail,
+  ReturnMethodKind,
 } from "../lib/types";
 import { ErrorAlert } from "../components/Feedback";
 import type { TranslateFn } from "../lib/i18n";
+
+/** One glyph per way of sending items back, on the review page's cards. */
+const METHOD_ICONS: Record<ReturnMethodKind, string> = {
+  LABEL: "🏷️",
+  CARRIER: "🚚",
+  STORE: "🏬",
+  KEEP: "🌱",
+};
 import { usePortal, useT } from "./PortalLayout";
 import {
   clearDraft,
@@ -93,6 +102,12 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
   const [submitting, setSubmitting] = useState(false);
   /** Where a trade-down's leftover should go. Only used when there is one. */
   const [surplusMethod, setSurplusMethod] = useState<SurplusMethod>("REFUND");
+  /**
+   * How the shopper wants to send the items back. Null until they choose,
+   * in which case the server's first offered method applies — the quote
+   * says which, so the card can show it selected.
+   */
+  const [returnMethod, setReturnMethod] = useState<ReturnMethodKind | null>(null);
   /** The "checkout opens in a new page" confirmation, for an upsell exchange. */
   const [payPrompt, setPayPrompt] = useState(false);
 
@@ -176,12 +191,16 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
     api
       .post<Quote>(
         "/portal/session/quote",
-        { items: shopping ? toShopSelections(draft) : items, ...shopPayload },
+        {
+          items: shopping ? toShopSelections(draft) : items,
+          ...shopPayload,
+          ...(returnMethod ? { returnMethod } : {}),
+        },
         { auth: "portal" },
       )
       .then(setQuote)
       .catch((e) => setError(e instanceof Error ? e.message : null));
-  }, [draft, shopping, shopPayloadKey]);
+  }, [draft, shopping, shopPayloadKey, returnMethod]);
 
   const remove = (id: string) => {
     const next = { ...draft };
@@ -214,6 +233,7 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
           items: shopping ? toShopSelections(draft) : toSelections(draft),
           ...shopPayload,
           exchangeSurplusMethod: surplusMethod,
+          ...(returnMethod ? { returnMethod } : {}),
         },
         { auth: "portal" },
       );
@@ -302,18 +322,61 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
 
           <ErrorAlert message={error} />
 
+          {/*
+            How the items go back. The store's routing rules decide what's
+            on offer for these particular items and reasons, which is why the
+            options come with the quote rather than with the order: a change
+            of reason a moment ago can change the answer.
+          */}
           <div className="card review__card">
-            <h2>{t("review.sendBack")}</h2>
-            <p className="muted">{t("review.handlingFees")}</p>
-            <div className="review__ship">
-              <span className="review__ship-icon" aria-hidden="true">
-                🚚
-              </span>
-              <div>
-                <div className="review__ship-title">{t("review.boxAndShip")}</div>
-                <p className="muted">{t("review.shipInstructions")}</p>
-              </div>
-            </div>
+            {quote?.returnMethods && quote.returnMethods.options.length > 0 ? (
+              <>
+                <h2>{t("review.method.title")}</h2>
+                <div className="methods" role="radiogroup" aria-label={t("review.method.title")}>
+                  {quote.returnMethods.options.map((m) => {
+                    const selected = (returnMethod ?? quote.returnMethods!.selected) === m.kind;
+                    return (
+                      <label key={m.kind} className={`method${selected ? " is-selected" : ""}`}>
+                        <input
+                          type="radio"
+                          name="return-method"
+                          checked={selected}
+                          onChange={() => setReturnMethod(m.kind)}
+                        />
+                        <span className="method__icon" aria-hidden="true">
+                          {METHOD_ICONS[m.kind]}
+                        </span>
+                        <span className="method__body">
+                          <span className="method__name">{m.name}</span>
+                          {m.description && <span className="muted">{m.description}</span>}
+                        </span>
+                        {m.costMode !== "HIDDEN" && (
+                          <span className="method__cost">
+                            {m.costMode === "FREE"
+                              ? t("review.method.free")
+                              : money(m.cost, m.currency)}
+                          </span>
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <>
+                <h2>{t("review.sendBack")}</h2>
+                <p className="muted">{t("review.handlingFees")}</p>
+                <div className="review__ship">
+                  <span className="review__ship-icon" aria-hidden="true">
+                    🚚
+                  </span>
+                  <div>
+                    <div className="review__ship-title">{t("review.boxAndShip")}</div>
+                    <p className="muted">{t("review.shipInstructions")}</p>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           <div className="card review__card">
@@ -534,6 +597,12 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
                 <div className="summary__line">
                   <span>{t("totals.restocking")}</span>
                   <span>−{money(quote.restockingFee, currency)}</span>
+                </div>
+              )}
+              {quote && quote.returnShippingFee > 0 && (
+                <div className="summary__line">
+                  <span>{t("totals.returnShipping")}</span>
+                  <span>−{money(quote.returnShippingFee, currency)}</span>
                 </div>
               )}
             </div>

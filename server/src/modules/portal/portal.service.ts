@@ -14,8 +14,10 @@ import {
   effectivePolicyFor,
   inventoryScope,
   inventoryScopeFor,
+  orderCountry,
   regionalTermsForOrder,
 } from "../policy/regional.service.js";
+import { routeReturn } from "../settings/routing.service.js";
 import {
   getReasonTree,
   resolveGroupForProductType,
@@ -619,7 +621,45 @@ const resolveSelections = async (
     for (const [id, variant] of shopVariants) variants.set(id, variant);
   }
 
-  return { order, policy, resolved, variants, shopNow, shopBasket, variantDifference };
+  /**
+   * How the items may be sent back, from the routing rules, and which way
+   * the shopper picked. Decided here, with everything the rules can ask
+   * about in hand, so the quote and the submission can't disagree about
+   * what was offered or what it costs.
+   */
+  const routing = await routeReturn(merchantId, {
+    policyKey: policy.regional?.id ?? "DEFAULT",
+    country: orderCountry(order.shippingAddress),
+    lines: resolved.map(({ line, selection }) => ({
+      productTags: line.productTags,
+      productType: line.productType,
+      reasonId: selection.reasonId,
+      resolution: selection.resolution,
+    })),
+    itemsSubtotal: round2(
+      resolved.reduce((sum, { line }) => sum.add(toDecimal(line.unitPrice)), ZERO),
+    ),
+  });
+  const method = input.returnMethod
+    ? routing.methods.find((m) => m.kind === input.returnMethod)
+    : routing.methods[0];
+  if (!method) {
+    throw unprocessable(
+      "That return method isn't available for this return. Please choose another.",
+    );
+  }
+
+  return {
+    order,
+    policy,
+    resolved,
+    variants,
+    shopNow,
+    shopBasket,
+    variantDifference,
+    routing,
+    method,
+  };
 };
 
 /**
@@ -1038,13 +1078,14 @@ export const quoteSelection = async (
   orderId: string,
   input: QuoteInput,
 ) => {
-  const { order, policy, resolved, variants, shopNow, variantDifference } =
+  const { order, policy, resolved, variants, shopNow, variantDifference, routing, method } =
     await resolveSelections(merchantId, orderId, input);
 
   const quote = quoteReturn({
     lines: toQuoteLines(resolved, variants),
     policy,
     variantDifference,
+    returnShippingFee: method.cost,
     exchangeBonus: await exchangeBonusFor(
       merchantId,
       resolved.map(({ line }) => line),
@@ -1086,10 +1127,28 @@ export const quoteSelection = async (
     itemsSubtotal: fx.money(quote.itemsSubtotal),
     bonusCredit: fx.money(quote.bonusCredit),
     restockingFee: fx.money(quote.restockingFee),
+    returnShippingFee: fx.money(quote.returnShippingFee),
     estimatedTotal: fx.money(quote.estimatedTotal),
     amountDue: fx.money(quote.amountDue),
     absorbedDifference: fx.money(quote.absorbedDifference),
     purchaseSubtotal: fx.money(purchaseSubtotal),
+    /**
+     * The ways of sending items back that the routing rules offer for this
+     * return, and which one the quote priced. The review page draws its
+     * choice from here rather than from anything it stored, because the
+     * rules can ask about reasons and resolutions the shopper just changed.
+     */
+    returnMethods: {
+      selected: method.kind,
+      options: routing.methods.map((m) => ({
+        kind: m.kind,
+        name: m.name,
+        description: m.description,
+        costMode: m.costMode,
+        cost: fx.money(m.cost) ?? 0,
+        currency: fx.currency,
+      })),
+    },
     // Per-item breakdown so the portal can show each line's own outcome.
     lines: quote.lines.map((l, i) => ({
       orderLineItemId: resolved[i].selection.orderLineItemId,
@@ -1108,12 +1167,22 @@ export const submitReturn = async (
   orderId: string,
   input: SubmitInput,
 ) => {
-  const { order, policy, resolved, variants, shopNow, shopBasket, variantDifference } =
-    await resolveSelections(merchantId, orderId, input);
+  const {
+    order,
+    policy,
+    resolved,
+    variants,
+    shopNow,
+    shopBasket,
+    variantDifference,
+    routing,
+    method,
+  } = await resolveSelections(merchantId, orderId, input);
 
   const quote = quoteReturn({
     lines: toQuoteLines(resolved, variants),
     variantDifference,
+    returnShippingFee: method.cost,
     exchangeBonus: await exchangeBonusFor(
       merchantId,
       resolved.map(({ line }) => line),
@@ -1141,7 +1210,8 @@ export const submitReturn = async (
     }
   }
 
-  const autoApproved = qualifiesForAutoApproval(policy, quote);
+  // The return method can approve on its own, as the policy can.
+  const autoApproved = method.autoApprove || qualifiesForAutoApproval(policy, quote);
 
   // One transaction so a partial write can't leave an order's returned
   // quantities out of step with the request that caused them.
@@ -1153,6 +1223,17 @@ export const submitReturn = async (
         policyId: policy.id,
         // Pinned, so a later edit to the region doesn't restate this quote.
         regionalPolicyId: policy.regional?.id ?? null,
+        /**
+         * The way back, as the shopper was shown it. Name, instructions and
+         * link are copied rather than read live: a rule edited next week
+         * must not restate what this shopper was told today.
+         */
+        routingRuleId: routing.rule?.id ?? null,
+        returnMethod: method.kind,
+        returnMethodName: method.name,
+        returnInstructions: method.instructions,
+        returnStoreUrl: method.storeUrl,
+        returnShippingFee: quote.returnShippingFee,
         reference: generateReference(),
         status: autoApproved ? "APPROVED" : "SUBMITTED",
         // A single label for lists and reporting; the per-line resolutions
@@ -1191,6 +1272,8 @@ export const submitReturn = async (
             resolution: selection.resolution as ResolutionType,
             unitPrice: toDecimal(line.unitPrice),
             lineTotal: round2(toDecimal(line.unitPrice)),
+            // "Green returns": nothing comes back, so nothing is restocked.
+            keepItem: method.kind === "KEEP",
           })),
         },
         events: {
@@ -1203,7 +1286,9 @@ export const submitReturn = async (
               ? [
                   {
                     type: "STATUS_CHANGED" as const,
-                    message: "Auto-approved by policy",
+                    message: method.autoApprove
+                      ? `Auto-approved by return method "${method.name}"`
+                      : "Auto-approved by policy",
                   },
                 ]
               : []),

@@ -35,6 +35,16 @@ export interface EmailReturn {
    * native one.
    */
   payment?: { url: string; amount: number; currency: string } | null;
+  /**
+   * How the shopper is sending the items back, with the merchant's own
+   * instructions for it. Null for a return made before routing rules existed.
+   */
+  returnMethod?: {
+    kind: "LABEL" | "CARRIER" | "STORE" | "KEEP";
+    name: string;
+    instructions: string | null;
+    storeUrl: string | null;
+  } | null;
 }
 
 /** Escapes interpolated values so a product title can't inject markup. */
@@ -185,26 +195,71 @@ const paymentText = (request: EmailReturn): string =>
       )}:\n${request.payment.url}`
     : "";
 
+/**
+ * The merchant's own instructions for the return method the shopper chose,
+ * as AfterShip prints them in the approval mail. Line breaks are kept: the
+ * merchant wrote a numbered list, and a paragraph would lose the numbers.
+ */
+const instructionsBlock = (request: EmailReturn): string => {
+  const method = request.returnMethod;
+  if (!method || (!method.instructions && !method.storeUrl)) return "";
+  const steps = method.instructions
+    ? `<p style="margin:0;font-size:14px;line-height:1.6;color:#1a1a1c;white-space:pre-wrap">${esc(method.instructions)}</p>`
+    : "";
+  const link = method.storeUrl
+    ? `<p style="margin:${method.instructions ? "12px" : "0"} 0 0;font-size:14px"><a href="${esc(method.storeUrl)}" style="color:#1a1a1c">Find a store near you</a></p>`
+    : "";
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px">
+  <tr><td style="background:#f5f5f6;border-radius:10px;padding:16px">
+    <p style="margin:0 0 8px;font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#8c9196">${esc(method.name)}</p>
+    ${steps}${link}
+  </td></tr>
+</table>`;
+};
+
+const instructionsText = (request: EmailReturn): string => {
+  const method = request.returnMethod;
+  if (!method || (!method.instructions && !method.storeUrl)) return "";
+  return (
+    `\n\n${method.name}\n` +
+    (method.instructions ? `${method.instructions}\n` : "") +
+    (method.storeUrl ? `Find a store: ${method.storeUrl}\n` : "")
+  );
+};
+
 export const approvedEmail = (
   request: EmailReturn,
   brand: EmailBrand,
-): Mail => ({
-  to: request.customerEmail,
-  subject: `Your return is approved (${request.reference})`,
-  html: shell({
-    brand,
-    heading: "Your return is approved",
-    intro: `${greeting(request)} good news — your return for order #${esc(request.orderNumber)} has been approved. Send the items back and we'll process your ${esc(RESOLUTION_WORD[request.resolution] ?? "return")} as soon as they arrive.`,
-    body: summaryBlock(request, "Estimated total") + paymentBlock(request),
-    ctaLabel: "See return instructions",
-  }),
-  text:
-    `${greeting(request)}\n\nYour return for order #${request.orderNumber} has been approved. Send the items back and we'll process your ${RESOLUTION_WORD[request.resolution] ?? "return"} once they arrive.\n\n` +
-    `Reference: ${request.reference}\n\n${itemLinesText(request)}\n\n` +
-    `Estimated total: ${formatMoney(request.estimatedTotal, request.currency)}` +
-    paymentText(request) +
-    footerText(brand),
-});
+): Mail => {
+  const word = RESOLUTION_WORD[request.resolution] ?? "return";
+  // A "green return" is approved with nothing to send: say so, rather than
+  // asking for a parcel that will never come.
+  const keeping = request.returnMethod?.kind === "KEEP";
+  const next = keeping
+    ? `There's no need to send anything back — keep the items, and we'll process your ${esc(word)}.`
+    : `Send the items back and we'll process your ${esc(word)} as soon as they arrive.`;
+  const nextText = keeping
+    ? `There's no need to send anything back — keep the items, and we'll process your ${word}.`
+    : `Send the items back and we'll process your ${word} once they arrive.`;
+  return {
+    to: request.customerEmail,
+    subject: `Your return is approved (${request.reference})`,
+    html: shell({
+      brand,
+      heading: "Your return is approved",
+      intro: `${greeting(request)} good news — your return for order #${esc(request.orderNumber)} has been approved. ${next}`,
+      body: instructionsBlock(request) + summaryBlock(request, "Estimated total") + paymentBlock(request),
+      ctaLabel: keeping ? "View your return" : "See return instructions",
+    }),
+    text:
+      `${greeting(request)}\n\nYour return for order #${request.orderNumber} has been approved. ${nextText}` +
+      instructionsText(request) +
+      `\n\nReference: ${request.reference}\n\n${itemLinesText(request)}\n\n` +
+      `Estimated total: ${formatMoney(request.estimatedTotal, request.currency)}` +
+      paymentText(request) +
+      footerText(brand),
+  };
+};
 
 export const declinedEmail = (
   request: EmailReturn,

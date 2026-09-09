@@ -111,6 +111,12 @@ export const shopItemSchema = z.object({
 const basket = {
   items: z.array(selectionSchema).min(1, "Select at least one item"),
   shopItems: z.array(shopItemSchema).max(50).optional(),
+  /**
+   * How the shopper wants to send the items back, from the methods the
+   * routing rules offered. Omitted, the first offered method applies —
+   * which is also what an older client that never sends it gets.
+   */
+  returnMethod: z.enum(["LABEL", "CARRIER", "STORE", "KEEP"]).optional(),
 };
 
 /** Returning something towards a basket means all of it goes to the basket. */

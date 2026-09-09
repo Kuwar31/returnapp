@@ -3479,3 +3479,131 @@ table.data tbody tr:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------- return routing rules ---------- */
+
+.rrule {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
+}
+
+.rrule:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.rrule:last-child {
+  padding-bottom: 0;
+}
+
+.rrule__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.rrule__methods {
+  margin-top: 4px;
+  color: var(--text);
+}
+
+.rform {
+  max-width: 820px;
+}
+
+.rform__section {
+  margin: 24px 0 12px;
+}
+
+.rform__section h2 {
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+
+.rform__field + .rform__field {
+  margin-top: 14px;
+}
+
+.rform__label {
+  font-size: 13.5px;
+  margin-bottom: 6px;
+}
+
+.rform .settings-input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font: inherit;
+  font-size: 14px;
+}
+
+.rform .settings-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* A counted multi-line box: the count sits inside its bottom corner. */
+.counted--multi .settings-textarea {
+  display: block;
+  min-height: 132px;
+  resize: vertical;
+  padding-bottom: 28px;
+  line-height: 1.5;
+}
+
+.counted--multi .counted__count {
+  top: auto;
+  bottom: 10px;
+  transform: none;
+}
+
+/* One condition in the builder: its kind, an editor, a way to drop it. */
+.cond {
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+}
+
+.cond + .cond {
+  margin-top: 10px;
+}
+
+.cond__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.cond__label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.cond .check-list__item + .check-list__item {
+  margin-top: 8px;
+}
+
+.cond .search input,
+.cond .settings-input {
+  background: var(--surface);
+}
+
+.cond__add {
+  margin-top: 12px;
+  padding: 9px 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font: inherit;
+  font-size: 14px;
+  color: var(--text-muted);
+  cursor: pointer;
+}

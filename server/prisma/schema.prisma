@@ -118,6 +118,7 @@ model Merchant {
   policies             ReturnPolicy[]
   regionalPolicies     RegionalPolicy[]
   destinations         ReturnDestination[]
+  routingRules         ReturnRoutingRule[]
   reasons              ReturnReason[]
   exchangeRules        ExchangeRule[]
   notificationSettings NotificationSetting[]
@@ -668,6 +669,81 @@ model RegionalPolicyOutcome {
 }
 
 /**
+ * A return routing rule — AfterShip's shape.
+ *
+ * Decides which ways of sending items back a shopper is offered, from
+ * conditions on the return: the policy it falls under, the country, the
+ * products, the reasons, the resolution, the value. Rules are checked top to
+ * bottom and the first match applies; the store's one default rule, which
+ * has no conditions and can't be deleted, catches everything else.
+ */
+model ReturnRoutingRule {
+  id         String   @id @default(cuid())
+  merchantId String
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  /// For the merchant's reference only; never shown to shoppers.
+  name       String
+  isDefault  Boolean  @default(false)
+  sortOrder  Int      @default(0)
+  /// See RoutingConditions in routing.service: every condition present must match.
+  conditions Json     @default("{}")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  methods        ReturnRoutingMethod[]
+  returnRequests ReturnRequest[]
+
+  @@index([merchantId, sortOrder])
+  @@map("return_routing_rules")
+}
+
+/**
+ * One way of sending items back under a rule, as the shopper sees it: its
+ * name and description, what it costs them, the instructions they get once
+ * approved, and whether choosing it approves the return on the spot.
+ */
+model ReturnRoutingMethod {
+  id           String            @id @default(cuid())
+  ruleId       String
+  rule         ReturnRoutingRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  kind         ReturnMethodKind
+  enabled      Boolean           @default(false)
+  name         String
+  description  String?
+  costMode     ReturnCostMode    @default(HIDDEN)
+  /// Shop currency; deducted from the payout when the mode is FIXED.
+  costAmount   Decimal?          @db.Decimal(12, 2)
+  /// Free text, shown on the confirmation page and in the approval email.
+  instructions String?
+  autoApprove  Boolean           @default(false)
+  /// STORE only: where to find the retail locations.
+  storeUrl     String?
+
+  @@unique([ruleId, kind])
+  @@map("return_routing_methods")
+}
+
+enum ReturnMethodKind {
+  /// The store sends a label after approval.
+  LABEL
+  /// The shopper ships with a carrier of their own choosing.
+  CARRIER
+  /// The shopper brings it to a retail store.
+  STORE
+  /// "Green returns": the shopper keeps the items.
+  KEEP
+}
+
+enum ReturnCostMode {
+  /// Nothing said and nothing charged.
+  HIDDEN
+  /// Shown as free.
+  FREE
+  /// A fixed amount, shown and deducted from the payout.
+  FIXED
+}
+
+/**
  * How a handling fee is expressed: a flat sum per return in shop currency, a
  * share of the value of the items coming back, or an amount read from the
  * returned products' own tags (with the stored value as the fallback for
@@ -891,6 +967,19 @@ model ReturnRequest {
    */
   regionalPolicyId String?
   regionalPolicy   RegionalPolicy? @relation(fields: [regionalPolicyId], references: [id], onDelete: SetNull)
+  /**
+   * How the shopper chose to send the items back, and the rule that offered
+   * it. The name, instructions and link are snapshots of what they were
+   * shown: a rule edited later must not restate a return already made.
+   */
+  routingRuleId      String?
+  routingRule        ReturnRoutingRule? @relation(fields: [routingRuleId], references: [id], onDelete: SetNull)
+  returnMethod       ReturnMethodKind?
+  returnMethodName   String?
+  returnInstructions String?
+  returnStoreUrl     String?
+  /// The method's fixed cost, deducted from the payout; fixed at submission.
+  returnShippingFee  Decimal            @default(0) @db.Decimal(12, 2)
 
   /// Short human-readable reference shown to the shopper, e.g. "R-7F3K2Q"
   /**

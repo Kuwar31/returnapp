@@ -529,6 +529,8 @@ const recalculateTotals = async (merchantId: string, id: string) => {
 
   const quote = quoteReturn({
     policy,
+    // Fixed at submission: the return method's cost as the shopper accepted it.
+    returnShippingFee: toDecimal(request.returnShippingFee),
     // Same rule the shopper was quoted under; see priceExchange.
     variantDifference: await resolveVariantDifference(merchantId),
     // A rule that matched the returned items overrides the store setting; see
@@ -650,6 +652,8 @@ const payoutSplit = async (merchantId: string, id: string) => {
 
   const quote = quoteReturn({
     policy,
+    // Fixed at submission: the return method's cost as the shopper accepted it.
+    returnShippingFee: toDecimal(request.returnShippingFee),
     // Same rule the shopper was quoted under; see priceExchange.
     variantDifference: await resolveVariantDifference(merchantId),
     // A rule that matched the returned items overrides the store setting; see

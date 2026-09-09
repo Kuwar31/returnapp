@@ -506,6 +506,12 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
                 <span>−{money(quote.restockingFee, currency)}</span>
               </div>
             )}
+            {quote.returnShippingFee > 0 && (
+              <div className="totals__row">
+                <span>{t("totals.returnShipping")}</span>
+                <span>−{money(quote.returnShippingFee, currency)}</span>
+              </div>
+            )}
             {/*
               No payout figure here on purpose.
 

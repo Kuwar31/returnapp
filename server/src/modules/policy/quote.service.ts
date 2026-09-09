@@ -131,6 +131,8 @@ export interface QuoteLineResult {
   itemsSubtotal: Prisma.Decimal;
   bonusCredit: Prisma.Decimal;
   restockingFee: Prisma.Decimal;
+  /** This line's share of the return method's cost. */
+  returnShippingFee: Prisma.Decimal;
   exchangeValue: Prisma.Decimal;
   /** What this line contributes to the payout. */
   credited: Prisma.Decimal;
@@ -144,6 +146,12 @@ export interface Quote {
   itemsSubtotal: Prisma.Decimal;
   bonusCredit: Prisma.Decimal;
   restockingFee: Prisma.Decimal;
+  /**
+   * What the chosen return method costs the shopper — a label, say — taken
+   * off the payout like a fee. Zero for a method that is free or says
+   * nothing about cost, and for stores without routing rules.
+   */
+  returnShippingFee: Prisma.Decimal;
   /** What the shopper receives: subtotal + bonus - fees, floored at zero. */
   estimatedTotal: Prisma.Decimal;
   /** Extra the shopper owes when exchange items cost more than the return. */
@@ -242,19 +250,33 @@ const flatFeeShares = (
       outcome,
       indexes.map((i) => lines[i]),
     );
-    if (fee.lessThanOrEqualTo(0)) continue;
-    const total = indexes.reduce((sum, i) => sum.add(subtotals[i]), ZERO);
-    let allocated = ZERO;
-    indexes.forEach((i, n) => {
-      const share =
-        n === indexes.length - 1
-          ? round2(fee.sub(allocated))
-          : round2(fee.mul(subtotals[i]).div(total));
-      shares[i] = share;
-      allocated = allocated.add(share);
-    });
+    spread(fee, indexes, subtotals, shares);
   }
   return shares;
+};
+
+/**
+ * Splits one amount across lines in proportion to their value, the rounding
+ * remainder landing on the last so the parts add up to exactly the whole.
+ * Writes into `shares`; a zero amount leaves it untouched.
+ */
+const spread = (
+  amount: Prisma.Decimal,
+  indexes: number[],
+  subtotals: Prisma.Decimal[],
+  shares: Prisma.Decimal[],
+): void => {
+  if (amount.lessThanOrEqualTo(0) || indexes.length === 0) return;
+  const total = indexes.reduce((sum, i) => sum.add(subtotals[i]), ZERO);
+  let allocated = ZERO;
+  indexes.forEach((i, n) => {
+    const share =
+      n === indexes.length - 1
+        ? round2(amount.sub(allocated))
+        : round2(amount.mul(subtotals[i]).div(total));
+    shares[i] = round2(shares[i].add(share));
+    allocated = allocated.add(share);
+  });
 };
 
 /**
@@ -272,8 +294,14 @@ export const quoteReturn = ({
   shopNow,
   exchangeBonus,
   variantDifference = "CHARGE",
+  returnShippingFee,
 }: {
   lines: QuoteLine[];
+  /**
+   * The return method's fixed cost, once per return. Spread across the lines
+   * like a flat handling fee so the payout split stays consistent.
+   */
+  returnShippingFee?: Prisma.Decimal;
   /**
    * The store policy, or a region's terms laid over it. With `outcomes`
    * present the handling fees come from there, per outcome; otherwise the
@@ -307,6 +335,13 @@ export const quoteReturn = ({
     round2(toDecimal(line.unitPrice).mul(line.quantity)),
   );
   const flatShares = flatFeeShares(lines, subtotals, policy.outcomes);
+  const shippingShares = lines.map(() => ZERO);
+  spread(
+    round2(toDecimal(returnShippingFee ?? ZERO)),
+    subtotals.flatMap((s, i) => (s.greaterThan(0) ? [i] : [])),
+    subtotals,
+    shippingShares,
+  );
 
   const results: QuoteLineResult[] = lines.map((line, index) => {
     const subtotal = subtotals[index];
@@ -336,8 +371,9 @@ export const quoteReturn = ({
         : ZERO
       : percentOf(subtotal, policy.restockingFeePercent);
     const restockingFee = round2(percentFee.add(flatShares[index]));
+    const shippingFee = shippingShares[index];
 
-    const gross = subtotal.add(bonusCredit).sub(restockingFee);
+    const gross = subtotal.add(bonusCredit).sub(restockingFee).sub(shippingFee);
     // Fees can exceed a cheap item's value; never hand back a negative.
     const value = gross.lessThan(0) ? ZERO : round2(gross);
 
@@ -375,6 +411,7 @@ export const quoteReturn = ({
       itemsSubtotal: subtotal,
       bonusCredit,
       restockingFee,
+      returnShippingFee: shippingFee,
       exchangeValue,
       credited,
       due,
@@ -499,6 +536,7 @@ export const quoteReturn = ({
     itemsSubtotal,
     bonusCredit,
     restockingFee,
+    returnShippingFee: sum((r) => r.returnShippingFee),
     estimatedTotal,
     amountDue,
     absorbedDifference,
