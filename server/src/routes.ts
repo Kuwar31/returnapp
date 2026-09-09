@@ -3,6 +3,7 @@ import { prisma } from "./lib/prisma.js";
 import { asyncHandler } from "./middleware/asyncHandler.js";
 import { requireAuth } from "./middleware/auth.js";
 import { authRouter } from "./modules/auth/auth.routes.js";
+import { ordersRouter } from "./modules/orders/orders.routes.js";
 import { portalRouter } from "./modules/portal/portal.routes.js";
 import { returnsRouter } from "./modules/returns/returns.routes.js";
 import { settingsRouter } from "./modules/settings/settings.routes.js";
@@ -37,4 +38,5 @@ apiRouter.use("/portal", portalRouter);
 // Merchant-facing.
 apiRouter.use("/auth", authRouter);
 apiRouter.use("/admin/returns", requireAuth, returnsRouter);
+apiRouter.use("/admin/orders", requireAuth, ordersRouter);
 apiRouter.use("/admin/settings", requireAuth, settingsRouter);

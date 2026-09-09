@@ -23,6 +23,8 @@ export default [
 
   route("r/:slug", "portal/PortalLayout.tsx", [
     index("portal/LookupPage.tsx"),
+    // Opened from a link a merchant made: signed in to one order already.
+    route("start", "portal/StartPage.tsx"),
     route("items", "portal/SelectItemsPage.tsx"),
     route("shop", "portal/ShopPage.tsx"),
     route("shop-return", "portal/ShopReturnPage.tsx"),
@@ -37,6 +39,8 @@ export default [
     route("admin/:store", "admin/AdminLayout.tsx", [
       index("admin/DashboardPage.tsx"),
       route("returns", "admin/ReturnsListPage.tsx"),
+      // Static before dynamic, so "find" is never read as a return id.
+      route("returns/find", "admin/FindOrderPage.tsx"),
       route("returns/:id", "admin/ReturnDetailPage.tsx"),
       /*
         Settings is one page shown a section at a time, rather than one long

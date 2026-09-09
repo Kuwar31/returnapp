@@ -28,7 +28,8 @@ const NAV: Array<{ label: string | null; items: NavItem[] }> = [
     label: null,
     items: [
       { to: "", label: "Dashboard", icon: "▦", end: true },
-      { to: "/returns", label: "Returns", icon: "↩", end: false },
+      { to: "/returns", label: "Returns", icon: "↩", end: false, exclude: ["/returns/find"] },
+      { to: "/returns/find", label: "Find an order", icon: "⌕", end: true },
     ],
   },
   {

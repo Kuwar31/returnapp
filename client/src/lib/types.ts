@@ -730,6 +730,33 @@ export interface StorePolicySummary {
 }
 
 // ---------------------------------------------------------------------------
+// Find an order — the merchant's way into a shopper's return
+// ---------------------------------------------------------------------------
+
+export interface FoundOrder {
+  id: string;
+  orderNumber: string;
+  placedAt: string;
+  itemCount: number;
+  shippingAddress: PostalAddress | null;
+  /** The order in the Shopify admin; null when the store isn't connected. */
+  shopifyUrl: string | null;
+  /** Returns already raised on it, cancelled ones aside. */
+  returns: Array<{ id: string; reference: string; status: ReturnStatus }>;
+}
+
+export interface FoundCustomer {
+  name: string | null;
+  email: string;
+  orderCount: number;
+  orders: FoundOrder[];
+}
+
+export interface OrderSearchResult {
+  customers: FoundCustomer[];
+}
+
+// ---------------------------------------------------------------------------
 // Return routing rules — which ways of sending items back are offered
 // ---------------------------------------------------------------------------
 

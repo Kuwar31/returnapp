@@ -3614,3 +3614,193 @@ table.data tbody tr:hover {
   display: grid;
   gap: 16px;
 }
+
+/* ---------- find an order ---------- */
+
+.finder__bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.finder__by {
+  flex: none;
+  width: 190px;
+  padding: 9px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font: inherit;
+  font-size: 14px;
+}
+
+.finder__bar .btn {
+  flex: none;
+}
+
+/* What the page is for, said big, until a search has been made. */
+.finder__hero {
+  margin-top: 20px;
+  padding: 56px 24px;
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+  text-align: center;
+}
+
+.finder__hero h2 {
+  font-size: 22px;
+  margin-bottom: 8px;
+}
+
+.finder__found {
+  margin: 24px 0 8px;
+  font-size: 14px;
+}
+
+.custs {
+  border-top: 1px solid var(--border);
+}
+
+.cust {
+  border-bottom: 1px solid var(--border);
+}
+
+/* The customer line: a button, so the whole row opens their orders. */
+.cust__row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(0, 1.4fr) 140px 28px;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 18px 12px;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cust__row:hover {
+  background: var(--surface-muted);
+}
+
+.cust__email,
+.cust__count {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cust__caret {
+  color: var(--accent);
+  transition: transform 0.15s;
+}
+
+.cust__caret.is-open {
+  transform: rotate(180deg);
+}
+
+.cust__orders {
+  margin-left: 28px;
+  border-left: 2px solid var(--border);
+}
+
+.orow {
+  display: grid;
+  grid-template-columns: 130px 180px 90px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 12px 16px 24px;
+  border-top: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.orow__number a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.orow__number a:hover {
+  text-decoration: underline;
+}
+
+.orow__address {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.orow__returns {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.orow__returns .chip {
+  padding: 2px 8px;
+  font-size: 12px;
+  text-decoration: none;
+  color: var(--text-muted);
+}
+
+.orow__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+}
+
+.orow__share {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--accent);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.orow__share:hover {
+  background: var(--accent-soft);
+}
+
+@media (max-width: 900px) {
+  .finder__bar {
+    flex-wrap: wrap;
+  }
+
+  .finder__by {
+    width: 100%;
+  }
+
+  .cust__row {
+    grid-template-columns: 1fr auto 20px;
+  }
+
+  .cust__email {
+    grid-column: 1 / -1;
+    color: var(--text-muted);
+  }
+
+  .cust__orders {
+    margin-left: 0;
+    border-left: none;
+  }
+
+  .orow {
+    grid-template-columns: 1fr 1fr;
+    padding-left: 12px;
+  }
+
+  .orow__address {
+    grid-column: 1 / -1;
+    white-space: normal;
+  }
+
+  .orow__actions {
+    grid-column: 1 / -1;
+  }
+}

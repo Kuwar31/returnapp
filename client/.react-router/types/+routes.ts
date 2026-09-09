@@ -19,6 +19,11 @@ type Pages = {
       "slug": string;
     };
   };
+  "/r/:slug/start": {
+    params: {
+      "slug": string;
+    };
+  };
   "/r/:slug/items": {
     params: {
       "slug": string;
@@ -57,6 +62,11 @@ type Pages = {
     };
   };
   "/admin/:store/returns": {
+    params: {
+      "store": string;
+    };
+  };
+  "/admin/:store/returns/find": {
     params: {
       "store": string;
     };
@@ -137,7 +147,7 @@ type Pages = {
 type RouteFiles = {
   "root.tsx": {
     id: "root";
-    page: "/" | "/r/:slug" | "/r/:slug/items" | "/r/:slug/shop" | "/r/:slug/shop-return" | "/r/:slug/review" | "/r/:slug/status/:reference" | "/admin/login" | "/admin" | "/admin/:store" | "/admin/:store/returns" | "/admin/:store/returns/:id" | "/admin/:store/settings" | "/admin/:store/settings/policy" | "/admin/:store/settings/policies" | "/admin/:store/settings/policies/destinations" | "/admin/:store/settings/policies/locations" | "/admin/:store/settings/policies/routing" | "/admin/:store/settings/exchanges" | "/admin/:store/settings/shop-now" | "/admin/:store/settings/portal" | "/admin/:store/settings/notifications" | "/admin/:store/settings/reasons" | "/admin/:store/settings/rules" | "/*";
+    page: "/" | "/r/:slug" | "/r/:slug/start" | "/r/:slug/items" | "/r/:slug/shop" | "/r/:slug/shop-return" | "/r/:slug/review" | "/r/:slug/status/:reference" | "/admin/login" | "/admin" | "/admin/:store" | "/admin/:store/returns" | "/admin/:store/returns/find" | "/admin/:store/returns/:id" | "/admin/:store/settings" | "/admin/:store/settings/policy" | "/admin/:store/settings/policies" | "/admin/:store/settings/policies/destinations" | "/admin/:store/settings/policies/locations" | "/admin/:store/settings/policies/routing" | "/admin/:store/settings/exchanges" | "/admin/:store/settings/shop-now" | "/admin/:store/settings/portal" | "/admin/:store/settings/notifications" | "/admin/:store/settings/reasons" | "/admin/:store/settings/rules" | "/*";
   };
   "Home.tsx": {
     id: "Home";
@@ -145,11 +155,15 @@ type RouteFiles = {
   };
   "portal/PortalLayout.tsx": {
     id: "portal/PortalLayout";
-    page: "/r/:slug" | "/r/:slug/items" | "/r/:slug/shop" | "/r/:slug/shop-return" | "/r/:slug/review" | "/r/:slug/status/:reference";
+    page: "/r/:slug" | "/r/:slug/start" | "/r/:slug/items" | "/r/:slug/shop" | "/r/:slug/shop-return" | "/r/:slug/review" | "/r/:slug/status/:reference";
   };
   "portal/LookupPage.tsx": {
     id: "portal/LookupPage";
     page: "/r/:slug";
+  };
+  "portal/StartPage.tsx": {
+    id: "portal/StartPage";
+    page: "/r/:slug/start";
   };
   "portal/SelectItemsPage.tsx": {
     id: "portal/SelectItemsPage";
@@ -173,7 +187,7 @@ type RouteFiles = {
   };
   "admin/AuthLayout.tsx": {
     id: "admin/AuthLayout";
-    page: "/admin/login" | "/admin" | "/admin/:store" | "/admin/:store/returns" | "/admin/:store/returns/:id" | "/admin/:store/settings" | "/admin/:store/settings/policy" | "/admin/:store/settings/policies" | "/admin/:store/settings/policies/destinations" | "/admin/:store/settings/policies/locations" | "/admin/:store/settings/policies/routing" | "/admin/:store/settings/exchanges" | "/admin/:store/settings/shop-now" | "/admin/:store/settings/portal" | "/admin/:store/settings/notifications" | "/admin/:store/settings/reasons" | "/admin/:store/settings/rules";
+    page: "/admin/login" | "/admin" | "/admin/:store" | "/admin/:store/returns" | "/admin/:store/returns/find" | "/admin/:store/returns/:id" | "/admin/:store/settings" | "/admin/:store/settings/policy" | "/admin/:store/settings/policies" | "/admin/:store/settings/policies/destinations" | "/admin/:store/settings/policies/locations" | "/admin/:store/settings/policies/routing" | "/admin/:store/settings/exchanges" | "/admin/:store/settings/shop-now" | "/admin/:store/settings/portal" | "/admin/:store/settings/notifications" | "/admin/:store/settings/reasons" | "/admin/:store/settings/rules";
   };
   "admin/LoginPage.tsx": {
     id: "admin/LoginPage";
@@ -185,7 +199,7 @@ type RouteFiles = {
   };
   "admin/AdminLayout.tsx": {
     id: "admin/AdminLayout";
-    page: "/admin/:store" | "/admin/:store/returns" | "/admin/:store/returns/:id" | "/admin/:store/settings" | "/admin/:store/settings/policy" | "/admin/:store/settings/policies" | "/admin/:store/settings/policies/destinations" | "/admin/:store/settings/policies/locations" | "/admin/:store/settings/policies/routing" | "/admin/:store/settings/exchanges" | "/admin/:store/settings/shop-now" | "/admin/:store/settings/portal" | "/admin/:store/settings/notifications" | "/admin/:store/settings/reasons" | "/admin/:store/settings/rules";
+    page: "/admin/:store" | "/admin/:store/returns" | "/admin/:store/returns/find" | "/admin/:store/returns/:id" | "/admin/:store/settings" | "/admin/:store/settings/policy" | "/admin/:store/settings/policies" | "/admin/:store/settings/policies/destinations" | "/admin/:store/settings/policies/locations" | "/admin/:store/settings/policies/routing" | "/admin/:store/settings/exchanges" | "/admin/:store/settings/shop-now" | "/admin/:store/settings/portal" | "/admin/:store/settings/notifications" | "/admin/:store/settings/reasons" | "/admin/:store/settings/rules";
   };
   "admin/DashboardPage.tsx": {
     id: "admin/DashboardPage";
@@ -194,6 +208,10 @@ type RouteFiles = {
   "admin/ReturnsListPage.tsx": {
     id: "admin/ReturnsListPage";
     page: "/admin/:store/returns";
+  };
+  "admin/FindOrderPage.tsx": {
+    id: "admin/FindOrderPage";
+    page: "/admin/:store/returns/find";
   };
   "admin/ReturnDetailPage.tsx": {
     id: "admin/ReturnDetailPage";
@@ -252,6 +270,7 @@ type RouteModules = {
   "Home": typeof import("./src/Home.tsx");
   "portal/PortalLayout": typeof import("./src/portal/PortalLayout.tsx");
   "portal/LookupPage": typeof import("./src/portal/LookupPage.tsx");
+  "portal/StartPage": typeof import("./src/portal/StartPage.tsx");
   "portal/SelectItemsPage": typeof import("./src/portal/SelectItemsPage.tsx");
   "portal/ShopPage": typeof import("./src/portal/ShopPage.tsx");
   "portal/ShopReturnPage": typeof import("./src/portal/ShopReturnPage.tsx");
@@ -263,6 +282,7 @@ type RouteModules = {
   "admin/AdminLayout": typeof import("./src/admin/AdminLayout.tsx");
   "admin/DashboardPage": typeof import("./src/admin/DashboardPage.tsx");
   "admin/ReturnsListPage": typeof import("./src/admin/ReturnsListPage.tsx");
+  "admin/FindOrderPage": typeof import("./src/admin/FindOrderPage.tsx");
   "admin/ReturnDetailPage": typeof import("./src/admin/ReturnDetailPage.tsx");
   "settings-general": typeof import("./src/admin/SettingsPage.tsx");
   "settings-policy": typeof import("./src/admin/SettingsPage.tsx");

@@ -86,10 +86,16 @@ export const signAdminToken = (payload: AdminTokenPayload): string =>
 export const signShopToken = (payload: ShopTokenPayload): string =>
   jwt.sign({ ...payload, kind: "shop" }, env.JWT_SECRET, { expiresIn: "1h" });
 
-export const signPortalToken = (payload: PortalTokenPayload): string =>
-  jwt.sign({ ...payload, kind: "portal" }, env.JWT_SECRET, {
-    expiresIn: `${env.PORTAL_TOKEN_TTL_MINUTES}m`,
-  });
+export const signPortalToken = (
+  payload: PortalTokenPayload,
+  /**
+   * How long it lasts. The default is a shopper's own session; a link a
+   * merchant makes to hand to a customer, or to open on their behalf, lives
+   * longer because it travels by email or chat and is opened later.
+   */
+  expiresIn: jwt.SignOptions["expiresIn"] = `${env.PORTAL_TOKEN_TTL_MINUTES}m`,
+): string =>
+  jwt.sign({ ...payload, kind: "portal" }, env.JWT_SECRET, { expiresIn });
 
 const verify = <T>(
   token: string,

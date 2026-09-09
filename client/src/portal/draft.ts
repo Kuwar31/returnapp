@@ -137,6 +137,19 @@ export const rememberSubmitted = (
   }
 };
 
+/**
+ * Drops the pointer, for a return started deliberately afresh — a merchant
+ * opening an order on a shopper's behalf shouldn't land on the summary of
+ * whatever this browser last submitted for it.
+ */
+export const forgetSubmitted = (orderId: string): void => {
+  try {
+    localStorage.removeItem(submittedKey(orderId));
+  } catch {
+    /* nothing to clean up */
+  }
+};
+
 export const loadSubmitted = (orderId: string): SubmittedReturn | null => {
   const read = (store: Storage) => {
     try {
