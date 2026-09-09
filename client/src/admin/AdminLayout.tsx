@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, NavLink, Navigate, Outlet, useParams } from "react-router";
+import { Link, NavLink, Navigate, Outlet, useLocation, useParams } from "react-router";
 import { Loading } from "../components/Feedback";
 import { useAuth } from "./AuthContext";
 import { storePath } from "./store-path";
@@ -14,7 +14,16 @@ import type { AdminSession } from "../lib/types";
  * store's configuration, and gives each area of configuration a name a merchant
  * can aim at directly.
  */
-const NAV = [
+interface NavItem {
+  to: string;
+  label: string;
+  icon: string;
+  end: boolean;
+  /** Paths under `to` that belong to another entry, so this one stays quiet there. */
+  exclude?: string[];
+}
+
+const NAV: Array<{ label: string | null; items: NavItem[] }> = [
   {
     label: null,
     items: [
@@ -27,7 +36,20 @@ const NAV = [
     items: [
       { to: "/settings", label: "General", icon: "⚙", end: true },
       { to: "/settings/policy", label: "Return policy", icon: "◷", end: true },
-      { to: "/settings/policies", label: "Return policies", icon: "◫", end: false },
+      /*
+        Destinations and Locations live under Return policies as tabs, but
+        each gets its own entry here so it can be reached in one click. The
+        parent stays lit for the policies and routing tabs only.
+      */
+      {
+        to: "/settings/policies",
+        label: "Return policies",
+        icon: "◫",
+        end: false,
+        exclude: ["/settings/policies/destinations", "/settings/policies/locations"],
+      },
+      { to: "/settings/policies/destinations", label: "Destinations", icon: "⌖", end: true },
+      { to: "/settings/policies/locations", label: "Locations", icon: "⊞", end: true },
       { to: "/settings/exchanges", label: "Exchanges", icon: "⇄", end: true },
       { to: "/settings/shop-now", label: "Shop now", icon: "◈", end: true },
       { to: "/settings/portal", label: "Portal", icon: "◎", end: false },
@@ -140,6 +162,7 @@ function StoreSwitcher({ session }: { session: AdminSession }) {
 export default function AdminLayout() {
   const { session, loading, logout } = useAuth();
   const { store } = useParams();
+  const { pathname } = useLocation();
 
   if (loading) return <Loading />;
   if (!session) return <Navigate to="/admin/login" replace />;
@@ -182,7 +205,12 @@ export default function AdminLayout() {
                   key={item.to}
                   to={`${base}${item.to}`}
                   end={item.end}
-                  className={({ isActive }) => (isActive ? "is-active" : "")}
+                  className={({ isActive }) =>
+                    isActive &&
+                    !item.exclude?.some((path) => pathname.startsWith(`${base}${path}`))
+                      ? "is-active"
+                      : ""
+                  }
                 >
                   <span className="admin__nav-icon" aria-hidden="true">
                     {item.icon}
