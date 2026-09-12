@@ -301,21 +301,39 @@ settingsRouter.patch(
   }),
 );
 
+/**
+ * Return reasons: the groups and the library they pick from — what the
+ * settings screen renders.
+ *
+ * Returned whole rather than paged: a merchant has a handful of groups and a
+ * few dozen reasons, and editing them is much easier against one payload than
+ * against a lazily-loaded tree.
+ */
 settingsRouter.get(
-  "/reason-groups",
+  "/reasons",
   asyncHandler(async (req, res) => {
+    const merchantId = req.admin!.merchantId;
+    const [groups, library] = await Promise.all([
+      reasonsService.listGroups(merchantId),
+      reasonsService.listLibrary(merchantId),
+    ]);
     res.json({
-      groups: await reasonsService.listGroups(req.admin!.merchantId),
+      groups: groups.map(reasonsService.serializeGroup),
+      library: library.map(reasonsService.serializeReason),
       /** The only codes Shopify accepts; the editor offers exactly these. */
       shopifyCodes: [...SHOPIFY_RETURN_REASONS].sort(),
     });
   }),
 );
 
+const termList = z.array(z.string().trim().min(1).max(80)).max(50).optional();
+
 const groupSchema = z.object({
   title: z.string().trim().min(1).max(80),
-  productTypes: z.array(z.string().trim().min(1).max(80)).max(50).optional(),
+  productTypes: termList,
+  productTags: termList,
   randomizeOrder: z.boolean().optional(),
+  reasonIds: z.array(z.string().min(1).max(60)).max(200).optional(),
 });
 
 settingsRouter.post(
@@ -327,7 +345,7 @@ settingsRouter.post(
       req.admin!.merchantId,
       req.body,
     );
-    res.status(201).json(group);
+    res.status(201).json(reasonsService.serializeGroup(group));
   }),
 );
 
@@ -336,13 +354,12 @@ settingsRouter.patch(
   requireRole("OWNER", "ADMIN"),
   validate(groupSchema.partial()),
   asyncHandler(async (req, res) => {
-    res.json(
-      await reasonsService.updateGroup(
-        req.admin!.merchantId,
-        req.params.id,
-        req.body,
-      ),
+    const group = await reasonsService.updateGroup(
+      req.admin!.merchantId,
+      req.params.id,
+      req.body,
     );
+    res.json(reasonsService.serializeGroup(group));
   }),
 );
 
@@ -355,13 +372,17 @@ settingsRouter.delete(
   }),
 );
 
-const reasonSchema = z.object({
-  groupId: z.string().min(1),
-  parentId: z.string().min(1).nullable().optional(),
+const subReasonSchema = z.object({
+  id: z.string().min(1).max(60).nullable().optional(),
+  label: z.string().trim().min(1).max(60),
   code: z.string().trim().min(1).max(40),
-  label: z.string().trim().min(1).max(120),
   requiresNote: z.boolean().optional(),
   requiresPhoto: z.boolean().optional(),
+});
+
+/** A reason and its whole set of sub-reasons, saved together. */
+const reasonSchema = subReasonSchema.omit({ id: true }).extend({
+  children: z.array(subReasonSchema).max(50).optional(),
 });
 
 settingsRouter.post(
@@ -373,30 +394,21 @@ settingsRouter.post(
       req.admin!.merchantId,
       req.body,
     );
-    res.status(201).json(reason);
+    res.status(201).json(reasonsService.serializeReason(reason));
   }),
 );
 
-settingsRouter.patch(
+settingsRouter.put(
   "/reasons/:id",
   requireRole("OWNER", "ADMIN"),
-  validate(
-    reasonSchema
-      .omit({ groupId: true, parentId: true })
-      .partial()
-      .extend({
-        active: z.boolean().optional(),
-        sortOrder: z.number().int().min(0).max(999).optional(),
-      }),
-  ),
+  validate(reasonSchema),
   asyncHandler(async (req, res) => {
-    res.json(
-      await reasonsService.updateReason(
-        req.admin!.merchantId,
-        req.params.id,
-        req.body,
-      ),
+    const reason = await reasonsService.updateReason(
+      req.admin!.merchantId,
+      req.params.id,
+      req.body,
     );
+    res.json(reasonsService.serializeReason(reason));
   }),
 );
 

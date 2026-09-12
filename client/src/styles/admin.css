@@ -2094,97 +2094,116 @@ table.data tbody tr:hover {
   color: var(--warn-fg);
 }
 
-/* ---------- return reasons editor ---------- */
+/* ---------- return reasons ---------- */
 
-.rz__heading {
-  margin: 24px 0 4px;
-  font-size: 15px;
-}
-
-.rz__legend {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 190px;
-  gap: 12px;
-  padding: 0 0 6px;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-subtle);
-}
-
-/* Label and Shopify code share the first two columns with the legend above,
-   so it stays obvious which field reports where. */
-.rz {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 190px auto auto auto auto;
-  gap: 12px;
+/* A row in the groups and library cards, and in an editor's lists: what it
+   is, where it's used, and the actions at the end. */
+.rsn-row {
+  display: flex;
   align-items: center;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border);
+  gap: 16px;
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
 }
 
-/* Sub-reasons are indented and rendered with a rule, so the two levels read as
-   a hierarchy rather than as a flat list with odd padding. */
-.rz--d1 {
-  padding-left: 22px;
-  border-left: 2px solid var(--border);
-  margin-left: 8px;
+.rsn-row:last-child {
+  padding-bottom: 0;
 }
 
-/* A retired reason is still shown: it is what past returns point at, and
-   hiding it would make the merchant think it had been deleted. */
-.rz--off .rz__label,
-.rz--off .rz__code {
-  opacity: 0.5;
-  text-decoration: line-through;
-}
-
-.rz__label,
-.rz__code {
-  padding: 8px 10px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  font: inherit;
-  font-size: 14px;
-  background: var(--surface);
+.rsn-row__body {
+  flex: 1;
   min-width: 0;
 }
 
-.rz__code {
-  font-size: 12.5px;
-  color: var(--text-muted);
+.rsn-row__title {
+  font-size: 14px;
+  font-weight: 600;
 }
 
-.rz__flag {
+.rsn-row__hint {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.rsn-row__actions {
   display: flex;
   align-items: center;
-  gap: 5px;
-  font-size: 12.5px;
-  color: var(--text-muted);
-  white-space: nowrap;
+  gap: 6px;
+  flex: none;
+}
+
+/* The page arrows under the library, as AfterShip's: ‹ 1/3 › */
+.pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 14px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.pager__btn {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font: inherit;
+  font-size: 16px;
+  color: var(--text);
   cursor: pointer;
 }
 
-.rz__actions {
-  display: flex;
-  gap: 12px;
-  white-space: nowrap;
+.pager__btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
-.rz__del {
-  color: var(--danger-fg);
+/* An empty card body, greyed and said plainly: "No return reasons". */
+.rsn-empty {
+  margin-top: 4px;
+  padding: 32px 24px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  text-align: center;
 }
 
-.rz__chip {
-  margin-left: 10px;
-  vertical-align: middle;
+.rsn-empty h3 {
+  font-size: 18px;
+  margin-bottom: 4px;
 }
 
-@media (max-width: 900px) {
-  .rz,
-  .rz__legend {
-    grid-template-columns: 1fr;
-  }
+.rsn-empty p {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+/* The library, picked from with checkboxes. */
+.rsn-picker .check-list__item {
+  margin: 0;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+
+.rsn-picker .check-list__item:first-child {
+  border-top: none;
+}
+
+.rform select.settings-input {
+  appearance: auto;
+}
+
+/* The editors' dialogs share the form's field styling. */
+.modal .rform {
+  padding: 8px 0 12px;
+}
+
+.modal__foot {
+  gap: 8px;
 }
 
 /* The stranded-exchange banner: explanation on the left, action on the right. */

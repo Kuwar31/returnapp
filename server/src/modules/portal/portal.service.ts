@@ -20,7 +20,9 @@ import {
 import { routeReturn } from "../settings/routing.service.js";
 import {
   getReasonTree,
-  resolveGroupForProductType,
+  groupsForMatching,
+  pickGroup,
+  requirementsOf,
 } from "../settings/reasons.service.js";
 import {
   resolveDisplayMode,
@@ -302,8 +304,9 @@ export const getOrderEligibility = async (
    */
   const groupByLine = new Map<string, string>();
   const groupsById = new Map<string, { id: string; randomizeOrder: boolean }>();
+  const groups = await groupsForMatching(merchantId);
   for (const line of order.lineItems) {
-    const group = await resolveGroupForProductType(merchantId, line.productType);
+    const group = pickGroup(groups, line);
     if (!group) continue;
     groupByLine.set(line.id, group.id);
     groupsById.set(group.id, {
@@ -1194,6 +1197,7 @@ export const submitReturn = async (
 
   const reasons = await prisma.returnReason.findMany({
     where: { merchantId, active: true },
+    include: { parent: true },
   });
   // Keyed by id, not code: several reasons legitimately share a Shopify code,
   // so a code no longer identifies which one the shopper actually chose.
@@ -1202,12 +1206,15 @@ export const submitReturn = async (
   for (const { selection } of resolved) {
     const reason = reasonById.get(selection.reasonId);
     if (!reason) throw badRequest("Choose a valid reason for each item.");
-    if (reason.requiresNote && !selection.reasonNote) {
+    // A sub-reason asks at least what its parent asks.
+    if (requirementsOf(reason, reason.parent).requiresNote && !selection.reasonNote) {
       throw badRequest(`Add a note explaining "${reason.label}".`);
     }
-    if (reason.requiresPhoto && selection.photoUrls.length === 0) {
-      throw badRequest(`Add a photo for "${reason.label}".`);
-    }
+    /*
+      A reason can be marked as wanting a photo, but the portal has no way to
+      upload one yet, so that isn't demanded here: insisting on what the
+      shopper cannot supply would block the return outright.
+    */
   }
 
   // The return method can approve on its own, as the policy can.

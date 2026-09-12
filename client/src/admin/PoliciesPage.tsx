@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useBlocker, useLocation } from "react-router";
+import { Modal } from "./Modal";
 import { api } from "../lib/api";
 import { COUNTRIES, countryName, flagOf } from "../lib/countries";
 import type {
@@ -185,48 +186,6 @@ const describeOutcome = (o: RegionalOutcome, currency: string): string => {
       : formatMoney(o.fee.value, currency);
   return `${window}, ${fee} handling fee`;
 };
-
-/** A dialog, dimmed behind, closed by its button, the backdrop or Escape. */
-function Modal({
-  title,
-  onClose,
-  children,
-  footer,
-}: {
-  title: string;
-  onClose: () => void;
-  children: React.ReactNode;
-  footer: React.ReactNode;
-}) {
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div
-        className="modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="modal__head">
-          <h2>{title}</h2>
-          <button type="button" className="modal__close" aria-label="Close" onClick={onClose}>
-            ×
-          </button>
-        </div>
-        <div className="modal__body">{children}</div>
-        <div className="modal__foot">{footer}</div>
-      </div>
-    </div>
-  );
-}
 
 /** The store's destinations, one of which the region's returns go to. */
 function DestinationsModal({

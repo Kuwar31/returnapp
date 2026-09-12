@@ -78,7 +78,7 @@ export const DEFAULT_REASON_TREE = [
 type Db = PrismaClient | Prisma.TransactionClient;
 
 /**
- * Gives a merchant the default group and its reason tree.
+ * Gives a merchant the default group, and a reason library it offers whole.
  *
  * Every path that creates a merchant has to call this. The portal resolves
  * reasons through a group, so a store with none — however many loose reasons
@@ -95,7 +95,7 @@ export const seedDefaultReasonGroup = async (
   if (existing > 0) return;
 
   const group = await db.returnReasonGroup.create({
-    data: { merchantId, title: "Default Group", isDefault: true },
+    data: { merchantId, title: "Default group", isDefault: true },
   });
 
   let order = 0;
@@ -103,21 +103,23 @@ export const seedDefaultReasonGroup = async (
     const created = await db.returnReason.create({
       data: {
         merchantId,
-        groupId: group.id,
         code: parent.code,
         label: parent.label,
         requiresNote: parent.requiresNote ?? false,
         requiresPhoto: parent.requiresPhoto ?? false,
-        sortOrder: order++,
+        sortOrder: order,
       },
     });
+    await db.returnReasonGroupEntry.create({
+      data: { groupId: group.id, reasonId: created.id, sortOrder: order },
+    });
+    order++;
 
     let childOrder = 0;
     for (const child of parent.children) {
       await db.returnReason.create({
         data: {
           merchantId,
-          groupId: group.id,
           parentId: created.id,
           code: child.code,
           label: child.label,

@@ -792,8 +792,13 @@ model ReturnDestination {
 /// A set of reasons offered for a particular kind of product.
 ///
 /// Merchants word returns differently for footwear than for homeware, so the
-/// portal picks a group per line item from the product's type. Exactly one
-/// group per merchant is the default, catching everything unclaimed.
+/// portal picks a group per line item from the product's type and tags.
+/// Groups are checked in order and the first whose conditions the product
+/// meets applies; exactly one group per merchant is the default, catching
+/// everything unclaimed.
+///
+/// A group doesn't own its reasons — it picks them from the store's library
+/// (see `ReturnReasonGroupEntry`), so one wording can serve several groups.
 model ReturnReasonGroup {
   id             String   @id @default(cuid())
   merchantId     String
@@ -802,6 +807,9 @@ model ReturnReasonGroup {
   title          String
   /// Shopify product types this group claims, matched case-insensitively.
   productTypes   String[] @default([])
+  /// Product tags this group claims, matched case-insensitively. With both
+  /// set, a product has to satisfy both.
+  productTags    String[] @default([])
   /// Shuffle the order per shopper, so position stops biasing the answer —
   /// merchants use this to stop "Too small" absorbing every ambiguous return.
   randomizeOrder Boolean  @default(false)
@@ -812,13 +820,29 @@ model ReturnReasonGroup {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  reasons ReturnReason[]
+  entries ReturnReasonGroupEntry[]
 
   @@index([merchantId])
   @@map("return_reason_groups")
 }
 
-/// Reasons are per-merchant so stores can word them their own way.
+/// One reason's place in one group: which top-level reasons a group offers,
+/// and in what order. Sub-reasons come along with their parent.
+model ReturnReasonGroupEntry {
+  id        String            @id @default(cuid())
+  groupId   String
+  group     ReturnReasonGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  reasonId  String
+  reason    ReturnReason      @relation(fields: [reasonId], references: [id], onDelete: Cascade)
+  sortOrder Int               @default(0)
+
+  @@unique([groupId, reasonId])
+  @@index([reasonId])
+  @@map("return_reason_group_entries")
+}
+
+/// The store's reason library: per-merchant, so stores can word them their
+/// own way, and shared between groups.
 ///
 /// Two levels: a parent is what the shopper picks first ("I received the wrong
 /// item"), a child narrows it ("Right item, but in the wrong size"). Only
@@ -827,16 +851,17 @@ model ReturnReasonGroup {
 /// `code` is the mapping onto Shopify's fixed ReturnReason enum and is
 /// deliberately NOT unique — several differently-worded reasons legitimately
 /// report as WRONG_ITEM.
+///
+/// A reason past returns point at is never deleted, only retired
+/// (`active: false`) and dropped from every group, so history keeps its label.
 model ReturnReason {
-  id         String             @id @default(cuid())
+  id         String         @id @default(cuid())
   merchantId String
-  merchant   Merchant           @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  groupId    String?
-  group      ReturnReasonGroup? @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  merchant   Merchant       @relation(fields: [merchantId], references: [id], onDelete: Cascade)
   /// Null for a top-level reason.
   parentId   String?
-  parent     ReturnReason?      @relation("ReasonTree", fields: [parentId], references: [id], onDelete: Cascade)
-  children   ReturnReason[]     @relation("ReasonTree")
+  parent     ReturnReason?  @relation("ReasonTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children   ReturnReason[] @relation("ReasonTree")
 
   code          String
   label         String
@@ -846,10 +871,10 @@ model ReturnReason {
   active        Boolean @default(true)
   sortOrder     Int     @default(0)
 
+  groups          ReturnReasonGroupEntry[]
   returnLineItems ReturnLineItem[]
 
   @@index([merchantId])
-  @@index([groupId])
   @@index([parentId])
   @@map("return_reasons")
 }

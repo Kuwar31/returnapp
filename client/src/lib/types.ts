@@ -801,6 +801,43 @@ export interface RoutingRulesResponse {
   currency: string;
 }
 
+// ---------------------------------------------------------------------------
+// Return reasons — the library, and the groups that pick from it
+// ---------------------------------------------------------------------------
+
+export interface LibrarySubReason {
+  id: string;
+  label: string;
+  /** How it reports to Shopify; several reasons can share one. */
+  code: string;
+  requiresNote: boolean;
+  requiresPhoto: boolean;
+}
+
+export interface LibraryReason extends LibrarySubReason {
+  /** How many groups offer it. */
+  groupCount: number;
+  children: LibrarySubReason[];
+}
+
+export interface ReasonGroupSummary {
+  id: string;
+  title: string;
+  productTypes: string[];
+  productTags: string[];
+  randomizeOrder: boolean;
+  isDefault: boolean;
+  /** Top-level library reasons, in the order the shopper sees them. */
+  reasonIds: string[];
+}
+
+export interface ReasonsResponse {
+  /** In the order they're checked, the default last. */
+  groups: ReasonGroupSummary[];
+  library: LibraryReason[];
+  shopifyCodes: string[];
+}
+
 export interface RegionalPoliciesResponse {
   policies: RegionalPolicy[];
   /** Null only for a store that has no policy yet. */

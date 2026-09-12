@@ -12,7 +12,7 @@ import type {
   RoutingRulesResponse,
 } from "../lib/types";
 import { ErrorAlert, Loading } from "../components/Feedback";
-import { CountryPicker, NumberField, Switch } from "./policy-controls";
+import { Counted, CountryPicker, NumberField, Switch } from "./policy-controls";
 
 /**
  * Return routing rules, laid out as AfterShip's are.
@@ -146,52 +146,6 @@ const splitList = (raw: string): string[] => [
       .filter(Boolean),
   ),
 ];
-
-/** A counted text field, as AfterShip's are: the length beside the box. */
-function Counted({
-  value,
-  max,
-  onChange,
-  placeholder,
-  multiline = false,
-  label,
-}: {
-  value: string;
-  max: number;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  multiline?: boolean;
-  label: string;
-}) {
-  return (
-    <div className={`counted${multiline ? " counted--multi" : ""}`}>
-      {multiline ? (
-        <textarea
-          className="settings-input settings-textarea"
-          maxLength={max}
-          value={value}
-          rows={5}
-          placeholder={placeholder}
-          aria-label={label}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      ) : (
-        <input
-          type="text"
-          className="settings-input"
-          maxLength={max}
-          value={value}
-          placeholder={placeholder}
-          aria-label={label}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      )}
-      <span className="counted__count">
-        {value.length}/{max}
-      </span>
-    </div>
-  );
-}
 
 export function RoutingRulesTab({
   subtabs,
