@@ -403,18 +403,29 @@ interface OrderPhoneResult {
   } | null;
 }
 
-/** Best-effort: null both when there is no number and when Shopify won't say. */
-export const fetchOrderPhone = async (
+/**
+ * Why an order's phone couldn't be read, when it couldn't: the store isn't
+ * connected, Shopify hasn't approved the app for the field, or Shopify
+ * couldn't be reached. Null with a null phone means Shopify has no number.
+ */
+export type PhoneProblem = "NOT_CONNECTED" | "NOT_APPROVED" | "UNREACHABLE";
+
+/**
+ * The order's phone number, with the reason when there isn't one. A caller
+ * that has to explain the gap to a merchant — a courier booking, say — needs
+ * "Shopify won't say" and "Shopify has none" told apart.
+ */
+export const readOrderPhone = async (
   merchantId: string,
   orderExternalId: string,
-): Promise<string | null> => {
+): Promise<{ phone: string | null; problem: PhoneProblem | null }> => {
   try {
     const { order } = await queryShop<OrderPhoneResult>(
       merchantId,
       ORDER_PHONE_QUERY,
       { id: orderExternalId },
     );
-    if (!order) return null;
+    if (!order) return { phone: null, problem: null };
     /**
      * The order's own number first: it is what the shopper typed at checkout.
      * The addresses and the customer record are where one lands when checkout
@@ -426,15 +437,26 @@ export const fetchOrderPhone = async (
       order.billingAddress?.phone,
       order.customer?.phone,
     ].find((p): p is string => typeof p === "string" && p.trim().length > 0);
-    return found?.trim() ?? null;
+    return { phone: found?.trim() ?? null, problem: null };
   } catch (error) {
     logger.warn(
       { merchantId, orderExternalId, error },
       "Could not read this order's phone number from Shopify",
     );
-    return null;
+    const code = error instanceof AppError ? error.code : null;
+    if (code === "NOT_CONNECTED" || code === "TOKEN_UNREADABLE" || code === "SHOPIFY_UNAUTHORIZED") {
+      return { phone: null, problem: "NOT_CONNECTED" };
+    }
+    if (code === "SHOPIFY_GRAPHQL_ERROR") return { phone: null, problem: "NOT_APPROVED" };
+    return { phone: null, problem: "UNREACHABLE" };
   }
 };
+
+/** Best-effort: null both when there is no number and when Shopify won't say. */
+export const fetchOrderPhone = async (
+  merchantId: string,
+  orderExternalId: string,
+): Promise<string | null> => (await readOrderPhone(merchantId, orderExternalId)).phone;
 
 /**
  * Whether Shopify will give this app phone numbers at all.

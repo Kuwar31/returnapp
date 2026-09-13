@@ -9,7 +9,7 @@ import { prisma } from "../../lib/prisma.js";
 import { notify } from "../email/notifications.js";
 import { changeStatus, markReceived } from "../returns/returns.service.js";
 import { defaultDestination } from "../settings/destinations.service.js";
-import { fetchOrderPhone } from "../shopify/order.sync.js";
+import { readOrderPhone } from "../shopify/order.sync.js";
 import * as api from "./shiprocket.client.js";
 import { ShiprocketError } from "./shiprocket.client.js";
 import {
@@ -287,16 +287,35 @@ const shopperPhone = async (
   merchantId: string,
   order: { id: string; externalId: string | null; phone: string | null },
   address: Record<string, unknown>,
-): Promise<string | null> => {
+): Promise<string> => {
   if (order.phone) return order.phone;
   const onAddress = str(address, "phone");
   if (onAddress) return onAddress;
-  if (!order.externalId) return null;
-  const fetched = await fetchOrderPhone(merchantId, order.externalId);
-  if (fetched) {
-    await prisma.order.update({ where: { id: order.id }, data: { phone: fetched } });
+  const { phone, problem } = order.externalId
+    ? await readOrderPhone(merchantId, order.externalId)
+    : { phone: null, problem: null };
+  if (phone) {
+    await prisma.order.update({ where: { id: order.id }, data: { phone } });
+    return phone;
   }
-  return fetched;
+  // Say why, since "the order has no number" is often untrue: Shopify has
+  // one and won't hand it over until the app is approved for the field.
+  const fix = "Enter the customer's number on the return, then book again.";
+  switch (problem) {
+    case "NOT_APPROVED":
+      throw unprocessable(
+        "Shopify hasn't approved this app to read customer phone numbers, so the number on the order can't be read. " +
+          `Request the Phone field under Protected customer data in your Partner Dashboard, or: ${fix}`,
+      );
+    case "UNREACHABLE":
+      throw unprocessable(
+        `Shopify couldn't be reached to read the customer's phone number. Try again in a moment, or: ${fix}`,
+      );
+    default:
+      throw unprocessable(
+        `Shiprocket needs a 10-digit Indian mobile number for the pickup, and the order doesn't carry one. ${fix}`,
+      );
+  }
 };
 
 /** The shopper, from the order's shipping address in either of its shapes. */
@@ -331,11 +350,6 @@ const shopperParty = async (
     );
   }
   const raw = await shopperPhone(merchantId, order, a);
-  if (!raw) {
-    throw unprocessable(
-      "Shiprocket needs a 10-digit Indian mobile number for the pickup, and the order doesn't carry one. Add the customer's number on the return, then book again.",
-    );
-  }
   const phone = indianMobile(raw);
   if (!phone) {
     throw unprocessable(
