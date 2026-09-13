@@ -784,7 +784,8 @@ model ReturnDestination {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  policies RegionalPolicy[]
+  policies           RegionalPolicy[]
+  shiprocketAccounts ShiprocketAccount[]
 
   @@index([merchantId])
   @@map("return_destinations")
@@ -1332,6 +1333,10 @@ model ShiprocketAccount {
   /// What Shiprocket sends in `x-api-key` on every tracking webhook; the
   /// merchant pastes it into their Shiprocket webhook settings.
   webhookSecret  String   @unique
+  /// Where the courier delivers, unless the shopper's regional policy names
+  /// its own destination. Null means the store's default destination.
+  destinationId  String?
+  destination    ReturnDestination? @relation(fields: [destinationId], references: [id], onDelete: SetNull)
   /// Make the label the moment a "ship with a return label" return is approved.
   autoCreate     Boolean  @default(true)
   /// Move the return to received when the courier delivers the parcel.

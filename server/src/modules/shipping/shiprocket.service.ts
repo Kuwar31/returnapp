@@ -47,8 +47,22 @@ const newSecret = () => randomBytes(24).toString("hex");
 /** Where Shiprocket posts tracking events. Must not contain "shiprocket". */
 export const webhookUrl = () => `${env.APP_URL.replace(/\/+$/, "")}/api/shipping/events`;
 
+/** The account with the destination it delivers to, when one is chosen. */
 export const getAccount = (merchantId: string) =>
-  prisma.shiprocketAccount.findUnique({ where: { merchantId } });
+  prisma.shiprocketAccount.findUnique({
+    where: { merchantId },
+    include: { destination: true },
+  });
+
+/**
+ * Where the courier delivers for this store: the destination chosen on the
+ * Shipping page, else the store's default. A regional policy's own
+ * destination outranks both, per return.
+ */
+export const deliveryDestination = async (merchantId: string) => {
+  const account = await getAccount(merchantId);
+  return account?.destination ?? (await defaultDestination(merchantId));
+};
 
 export const serializeAccount = (account: ShiprocketAccount | null) =>
   account
@@ -59,6 +73,8 @@ export const serializeAccount = (account: ShiprocketAccount | null) =>
         tokenExpiresAt: account.tokenExpiresAt,
         webhookUrl: webhookUrl(),
         webhookSecret: account.webhookSecret,
+        /** Null means the store's default destination. */
+        destinationId: account.destinationId,
         autoCreate: account.autoCreate,
         receiveOnDelivery: account.receiveOnDelivery,
         qcEnabled: account.qcEnabled,
@@ -116,12 +132,25 @@ export interface AccountInput {
   breadthCm?: number;
   heightCm?: number;
   weightKg?: number;
+  /** A destination of this store's, or null for the default. */
+  destinationId?: string | null;
 }
 
 export const updateAccount = async (merchantId: string, input: AccountInput) => {
   const account = await getAccount(merchantId);
   if (!account) throw notFound("Shiprocket isn't connected.");
-  return prisma.shiprocketAccount.update({ where: { merchantId }, data: input });
+  if (input.destinationId) {
+    const owned = await prisma.returnDestination.findFirst({
+      where: { id: input.destinationId, merchantId },
+      select: { id: true },
+    });
+    if (!owned) throw notFound("That destination isn't one of this store's.");
+  }
+  return prisma.shiprocketAccount.update({
+    where: { merchantId },
+    data: input,
+    include: { destination: true },
+  });
 };
 
 export const rotateWebhookSecret = async (merchantId: string) => {
@@ -130,6 +159,7 @@ export const rotateWebhookSecret = async (merchantId: string) => {
   return prisma.shiprocketAccount.update({
     where: { merchantId },
     data: { webhookSecret: newSecret() },
+    include: { destination: true },
   });
 };
 
@@ -362,15 +392,19 @@ const orderDate = (at: Date): string => {
 
 export const trackingUrlFor = (awb: string) => `https://shiprocket.co/tracking/${encodeURIComponent(awb)}`;
 
+type Account = NonNullable<Awaited<ReturnType<typeof getAccount>>>;
+
 const buildReturnOrder = async (
   request: LabelRequest,
-  account: ShiprocketAccount,
+  account: Account,
   orderId: string,
 ): Promise<api.ReturnOrderInput> => {
   const shopper = shopperParty(request.order, request.reference);
+  // The region's own destination first, then the one chosen for Shiprocket,
+  // then the store default (inside destinationParty).
   const store = await destinationParty(
     request.merchantId,
-    request.regionalPolicy?.destination ?? null,
+    request.regionalPolicy?.destination ?? account.destination ?? null,
     request.merchant.email,
   );
   const items: api.ReturnOrderItem[] = request.lineItems

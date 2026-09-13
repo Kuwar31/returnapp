@@ -348,6 +348,9 @@ export interface ReturnShipment {
   deliveredAt: string | null;
 }
 
+/** A return destination, with whether a Shiprocket courier can deliver to it. */
+export type DeliveryDestination = ReturnDestination & { hasPhone: boolean; hasZip: boolean };
+
 /** The store's Shiprocket connection, as the settings page shows it. */
 export type ShiprocketSettings = (
   | {
@@ -360,12 +363,15 @@ export type ShiprocketSettings = (
       receiveOnDelivery: boolean;
       qcEnabled: boolean;
       parcel: { lengthCm: number; breadthCm: number; heightCm: number; weightKg: number };
+      /** The destination parcels go to; null means the store's default. */
+      destinationId: string | null;
     }
   | { connected: false }
 ) & {
   webhookUrl: string;
-  /** The default return destination, and whether the courier can deliver to it. */
-  destination: { name: string; hasPhone: boolean; hasZip: boolean } | null;
+  destinations: DeliveryDestination[];
+  /** Where parcels go today: the chosen destination, else the default. */
+  destination: { id: string; name: string; hasPhone: boolean; hasZip: boolean } | null;
 };
 
 /** A postal address flattened server-side into printable lines. */

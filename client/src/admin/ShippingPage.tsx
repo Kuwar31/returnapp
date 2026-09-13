@@ -36,6 +36,12 @@ export default function ShippingPage() {
   const [password, setPassword] = useState("");
   const [parcel, setParcel] = useState<Parcel>(DEFAULT_PARCEL);
   const [showSecret, setShowSecret] = useState(false);
+  /** The delivery destination's phone and postcode, editable in place. */
+  const [contact, setContact] = useState<{ id: string | null; phone: string; zip: string }>({
+    id: null,
+    phone: "",
+    zip: "",
+  });
 
   const load = () =>
     api
@@ -50,6 +56,24 @@ export default function ShippingPage() {
   useEffect(() => {
     void load();
   }, []);
+
+  /** Where parcels go today: the chosen destination, else the default. */
+  const effectiveOf = (found: ShiprocketSettings) => {
+    const chosen = found.connected ? found.destinationId : null;
+    return (
+      found.destinations.find((d) => d.id === chosen) ??
+      found.destinations.find((d) => d.isDefault) ??
+      found.destinations[0] ??
+      null
+    );
+  };
+
+  // The contact fields follow whichever destination is in effect.
+  useEffect(() => {
+    if (!data) return;
+    const d = effectiveOf(data);
+    setContact({ id: d?.id ?? null, phone: d?.phone ?? "", zip: d?.zip ?? "" });
+  }, [data]);
 
   /** Every change reloads; the payload is small and the server is authoritative. */
   const run = async (fn: () => Promise<unknown>, message?: string) => {
@@ -75,8 +99,46 @@ export default function ShippingPage() {
     }, "Shiprocket connected.");
   };
 
-  const patch = (changes: Partial<Parcel & { autoCreate: boolean; receiveOnDelivery: boolean; qcEnabled: boolean }>, message?: string) =>
-    run(() => api.patch("/admin/settings/shiprocket", changes, { auth: "admin" }), message);
+  const patch = (
+    changes: Partial<
+      Parcel & {
+        autoCreate: boolean;
+        receiveOnDelivery: boolean;
+        qcEnabled: boolean;
+        destinationId: string | null;
+      }
+    >,
+    message?: string,
+  ) => run(() => api.patch("/admin/settings/shiprocket", changes, { auth: "admin" }), message);
+
+  /**
+   * Saves the phone and postcode onto the destination itself, through the
+   * destinations endpoint, which wants the whole address back.
+   */
+  const saveContact = () => {
+    const d = data?.destinations.find((x) => x.id === contact.id);
+    if (!d) return;
+    void run(
+      () =>
+        api.patch(
+          `/admin/settings/destinations/${d.id}`,
+          {
+            name: d.name,
+            address1: d.address1,
+            address2: d.address2,
+            city: d.city,
+            province: d.province,
+            zip: contact.zip.trim() || null,
+            countryCode: d.countryCode,
+            phone: contact.phone.trim() || null,
+            isDefault: d.isDefault,
+            locationId: d.locationId,
+          },
+          { auth: "admin" },
+        ),
+      `Saved ${d.name}.`,
+    );
+  };
 
   if (loading) return <Loading />;
   if (!data) {
@@ -95,12 +157,18 @@ export default function ShippingPage() {
       parcel.heightCm !== data.parcel.heightCm ||
       parcel.weightKg !== data.parcel.weightKg);
 
-  const destinationProblems = data.destination
+  const effective = effectiveOf(data);
+  const storeDefault = data.destinations.find((d) => d.isDefault) ?? null;
+  const destinationProblems = effective
     ? [
-        ...(data.destination.hasPhone ? [] : ["a 10-digit Indian mobile number"]),
-        ...(data.destination.hasZip ? [] : ["a postcode"]),
+        ...(effective.hasPhone ? [] : ["a 10-digit Indian mobile number"]),
+        ...(effective.hasZip ? [] : ["a postcode"]),
       ]
     : [];
+  const contactDirty =
+    effective !== null &&
+    contact.id === effective.id &&
+    (contact.phone !== (effective.phone ?? "") || contact.zip !== (effective.zip ?? ""));
 
   return (
     <>
@@ -388,27 +456,13 @@ export default function ShippingPage() {
         <div>
           <h3 className="split__title">Where parcels go</h3>
           <p className="split__blurb">
-            The courier delivers to the return destination of the customer's
-            policy, or your default destination. Shiprocket needs a phone
-            number and a postcode for it.
+            The courier delivers to the destination chosen here, unless the
+            customer's regional policy names one of its own. Shiprocket needs
+            a 10-digit Indian mobile number and a postcode for it.
           </p>
         </div>
         <div className="panel">
-          {data.destination ? (
-            <div className="settings-row">
-              <div>
-                <div className="settings-row__label">{data.destination.name}</div>
-                <div className="settings-row__hint">
-                  {destinationProblems.length === 0
-                    ? "Ready for deliveries."
-                    : `Add ${destinationProblems.join(" and ")} before a label can be made.`}
-                </div>
-              </div>
-              <Link className="btn btn--secondary btn--sm" to={`${base}/settings/policies/destinations`}>
-                Destinations
-              </Link>
-            </div>
-          ) : (
+          {data.destinations.length === 0 ? (
             <div className="settings-row">
               <div>
                 <div className="settings-row__label">No return destination yet</div>
@@ -420,6 +474,98 @@ export default function ShippingPage() {
                 Add a destination
               </Link>
             </div>
+          ) : (
+            <>
+              <div className="settings-row">
+                <div>
+                  <div className="settings-row__label">Deliver returns to</div>
+                  <div className="settings-row__hint">
+                    {effective ? effective.address : "Choose a destination."}
+                  </div>
+                </div>
+                {data.connected ? (
+                  <select
+                    value={data.destinationId ?? ""}
+                    aria-label="Deliver returns to"
+                    disabled={busy}
+                    style={{ minWidth: 280 }}
+                    onChange={(e) =>
+                      void patch({ destinationId: e.target.value || null }, "Delivery destination saved.")
+                    }
+                  >
+                    <option value="">
+                      Store default{storeDefault ? ` · ${storeDefault.name}` : ""}
+                    </option>
+                    {data.destinations.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name}
+                        {d.isDefault ? " (default)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className="settings-row__hint">Connect Shiprocket to choose.</span>
+                )}
+              </div>
+
+              {effective && (
+                <div className="settings-row settings-row--stacked">
+                  <div>
+                    <div className="settings-row__label">
+                      {effective.name}: mobile number and postcode
+                    </div>
+                    <div className="settings-row__hint">
+                      {destinationProblems.length === 0
+                        ? "Ready for deliveries."
+                        : `Add ${destinationProblems.join(" and ")} before a label can be made.`}
+                    </div>
+                  </div>
+                  <div className="ship-parcel">
+                    <label className="ship-parcel__field">
+                      <span className="rform__label">Mobile number</span>
+                      <input
+                        type="tel"
+                        className="settings-input"
+                        value={contact.phone}
+                        placeholder="98765 43210"
+                        onChange={(e) => setContact({ ...contact, phone: e.target.value })}
+                      />
+                    </label>
+                    <label className="ship-parcel__field">
+                      <span className="rform__label">Postcode</span>
+                      <input
+                        type="text"
+                        className="settings-input"
+                        value={contact.zip}
+                        placeholder="110034"
+                        onChange={(e) => setContact({ ...contact, zip: e.target.value })}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="btn btn--sm"
+                      disabled={busy || !contactDirty}
+                      onClick={saveContact}
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="settings-row">
+                <div>
+                  <div className="settings-row__label">Addresses</div>
+                  <div className="settings-row__hint">
+                    Change an address, or add another destination, under Return
+                    policies.
+                  </div>
+                </div>
+                <Link className="btn btn--secondary btn--sm" to={`${base}/settings/policies/destinations`}>
+                  Destinations
+                </Link>
+              </div>
+            </>
           )}
         </div>
       </div>

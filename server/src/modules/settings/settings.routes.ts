@@ -1141,31 +1141,38 @@ const shiprocketSettingsSchema = z
     breadthCm: cm,
     heightCm: cm,
     weightKg: z.number().min(0.05).max(500),
+    destinationId: z.string().min(1).max(60).nullable(),
   })
   .partial();
 
 /**
- * The store's Shiprocket connection and label settings, plus whether the
- * default return destination is ready to receive parcels — Shiprocket wants
- * a phone number and a postcode for the delivery, and it's better to say so
- * here than at the first approval.
+ * The store's Shiprocket connection and label settings, plus every return
+ * destination with whether the courier can deliver to it — Shiprocket wants
+ * a phone number and a postcode, and it's better to say so here than at the
+ * first approval.
  */
 settingsRouter.get(
   "/shiprocket",
   asyncHandler(async (req, res) => {
     const merchantId = req.admin!.merchantId;
-    const [account, destination] = await Promise.all([
+    const [account, destinations, destination] = await Promise.all([
       shiprocket.getAccount(merchantId),
-      destinationsService.defaultDestination(merchantId),
+      destinationsService.listDestinations(merchantId),
+      shiprocket.deliveryDestination(merchantId),
     ]);
+    const readiness = (d: { phone: string | null; zip: string | null }) => ({
+      hasPhone: shiprocket.indianMobile(d.phone) !== null,
+      hasZip: Boolean(d.zip),
+    });
     res.json({
       ...shiprocket.serializeAccount(account),
+      destinations: destinations.map((d) => ({
+        ...destinationsService.serializeDestination(d),
+        ...readiness(d),
+      })),
+      /** Where parcels go today: the chosen destination, else the default. */
       destination: destination
-        ? {
-            name: destination.name,
-            hasPhone: shiprocket.indianMobile(destination.phone) !== null,
-            hasZip: Boolean(destination.zip),
-          }
+        ? { id: destination.id, name: destination.name, ...readiness(destination) }
         : null,
     });
   }),

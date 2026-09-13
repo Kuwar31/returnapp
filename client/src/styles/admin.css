@@ -3900,3 +3900,14 @@ table.data tbody tr:hover {
   color: var(--text-muted);
   white-space: nowrap;
 }
+
+/* Plain text fields beside the parcel numbers: same box, fixed width. */
+.ship-parcel .settings-input {
+  width: 180px;
+  padding: 9px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font: inherit;
+  font-size: 14px;
+}
