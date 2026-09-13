@@ -144,9 +144,23 @@ export const deleteDestination = async (merchantId: string, id: string) => {
 };
 
 /**
+ * The destination chosen for courier deliveries under Settings → Shipping,
+ * when the store has one. Read here rather than through the shipping module
+ * so this file stays free of it.
+ */
+const shippingDestination = async (merchantId: string) =>
+  (
+    await prisma.shiprocketAccount.findUnique({
+      where: { merchantId },
+      select: { destination: true },
+    })
+  )?.destination ?? null;
+
+/**
  * Where a shopper should send their parcel: the policy's destination when it
- * has one, else the store's default. Null when the store has set none up,
- * and the confirmation page keeps its own wording.
+ * has one, else the one chosen for courier deliveries, else the store's
+ * default. Null when the store has set none up, and the confirmation page
+ * keeps its own wording.
  */
 export const destinationForShopper = async (
   merchantId: string,
@@ -157,7 +171,8 @@ export const destinationForShopper = async (
         where: { id: destinationId, merchantId },
       })
     : null;
-  const destination = chosen ?? (await defaultDestination(merchantId));
+  const destination =
+    chosen ?? (await shippingDestination(merchantId)) ?? (await defaultDestination(merchantId));
   return destination
     ? { name: destination.name, lines: destinationLines(destination) }
     : null;

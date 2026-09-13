@@ -3911,3 +3911,23 @@ table.data tbody tr:hover {
   font: inherit;
   font-size: 14px;
 }
+
+/* The customer's phone on the return: the number and an Add/Change beside it. */
+.shopper__phone {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  font-size: 14px;
+}
+
+.shopper__phone--editing .settings-input {
+  width: 170px;
+  padding: 7px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font: inherit;
+  font-size: 14px;
+}

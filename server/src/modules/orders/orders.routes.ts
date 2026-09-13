@@ -148,3 +148,33 @@ ordersRouter.post(
     });
   }),
 );
+
+const phoneSchema = z.object({
+  /** As the merchant types it; the courier booking normalises it later. */
+  phone: z.string().trim().max(40).nullable(),
+});
+
+/**
+ * The customer's phone number, entered by hand.
+ *
+ * The sync never fetches it — Shopify guards phone as protected data — so a
+ * courier pickup can find an order without one even though the shopper gave
+ * it at checkout. This is the merchant's way to supply it from the return.
+ */
+ordersRouter.patch(
+  "/:id",
+  validate(phoneSchema),
+  asyncHandler(async (req, res) => {
+    const order = await prisma.order.findFirst({
+      where: { id: req.params.id, merchantId: req.admin!.merchantId },
+      select: { id: true },
+    });
+    if (!order) throw notFound("Order not found.");
+    const updated = await prisma.order.update({
+      where: { id: order.id },
+      data: { phone: req.body.phone || null },
+      select: { id: true, phone: true },
+    });
+    res.json(updated);
+  }),
+);

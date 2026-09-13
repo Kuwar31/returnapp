@@ -15,6 +15,97 @@ import { ErrorAlert, Loading } from "../components/Feedback";
 import { StatusBadge } from "../components/StatusBadge";
 import { ShipmentPanel } from "./ShipmentPanel";
 
+/**
+ * The customer's phone number on the return: shown when known, entered when
+ * not, and changeable when wrong — a courier pickup won't book without one.
+ */
+function PhoneField({
+  orderId,
+  phone,
+  onSaved,
+}: {
+  orderId: string;
+  phone: string | null;
+  onSaved: (phone: string | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(phone ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const updated = await api.patch<{ phone: string | null }>(
+        `/admin/orders/${orderId}`,
+        { phone: value.trim() || null },
+        { auth: "admin" },
+      );
+      onSaved(updated.phone);
+      setEditing(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't save the number.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!editing) {
+    return (
+      <div className="shopper__phone">
+        {phone ? (
+          <a className="shopper__email" href={`tel:${phone}`}>
+            {phone}
+          </a>
+        ) : (
+          <span className="muted">No phone number</span>
+        )}
+        <button
+          type="button"
+          className="link-btn"
+          onClick={() => {
+            setValue(phone ?? "");
+            setEditing(true);
+          }}
+        >
+          {phone ? "Change" : "Add"}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="shopper__phone shopper__phone--editing">
+      <input
+        type="tel"
+        className="settings-input"
+        value={value}
+        placeholder="98765 43210"
+        aria-label="Customer phone number"
+        autoFocus
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") void save();
+          if (e.key === "Escape") setEditing(false);
+        }}
+      />
+      <button type="button" className="btn btn--sm" disabled={saving} onClick={() => void save()}>
+        Save
+      </button>
+      <button
+        type="button"
+        className="btn btn--secondary btn--sm"
+        disabled={saving}
+        onClick={() => setEditing(false)}
+      >
+        Cancel
+      </button>
+      {error && <div className="muted" style={{ color: "var(--danger-fg)" }}>{error}</div>}
+    </div>
+  );
+}
+
 /** Where a payout lands, in the words a merchant would use to a customer. */
 const PAYOUT_LABEL: Record<string, string> = {
   REFUND: "To original payment method",
@@ -1053,20 +1144,21 @@ export default function ReturnDetailPage() {
               {detail.customerEmail}
             </a>
             {/*
-              Rendered only when we actually hold one. Shopify gates phone
-              behind protected customer data approval, and an unapproved app
-              doesn't get the field omitted — it has the whole order query
-              rejected. So "No phone number" would be a claim about the shopper
-              we have no standing to make; silence is the accurate version.
+              The number we hold, and a way to enter one. Shopify gates phone
+              behind protected customer data approval, so the sync never
+              fetches it — a shopper who gave one at checkout can still show
+              up here without it, and a courier pickup needs it.
             */}
-            {detail.order?.shippingAddress?.phone && (
-              <a
-                className="shopper__email"
-                href={`tel:${detail.order.shippingAddress.phone}`}
-              >
-                {detail.order.shippingAddress.phone}
-              </a>
-            )}
+            <PhoneField
+              orderId={detail.orderId}
+              phone={detail.order?.phone ?? detail.order?.shippingAddress?.phone ?? null}
+              onSaved={(phone) =>
+                setDetail((prev) =>
+                  prev && prev.order ? { ...prev, order: { ...prev.order, phone } } : prev,
+                )
+              }
+            />
+
 
             {detail.order?.shippingAddress && (
               <>

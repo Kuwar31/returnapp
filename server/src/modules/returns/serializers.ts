@@ -162,6 +162,8 @@ export const serializeReturn = (
     ? {
         orderNumber: request.order.orderNumber,
         placedAt: request.order.placedAt,
+        /** What the shopper typed at checkout, or what the merchant entered. */
+        phone: request.order.phone,
         shippingAddress: serializeAddress(request.order.shippingAddress),
       }
     : null,

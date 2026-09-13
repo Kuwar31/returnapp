@@ -384,6 +384,8 @@ export interface PostalAddress {
 export interface ReturnDetail {
   id: string;
   reference: string;
+  /** The order it was raised on. */
+  orderId: string;
   status: ReturnStatus;
   statusLabel: string;
   resolution: ResolutionType;
@@ -428,6 +430,8 @@ export interface ReturnDetail {
   order: {
     orderNumber: string;
     placedAt: string;
+    /** What the shopper typed at checkout, or what the merchant entered. */
+    phone: string | null;
     shippingAddress: PostalAddress | null;
   } | null;
   lineItems: Array<{

@@ -9,6 +9,7 @@ import { prisma } from "../../lib/prisma.js";
 import { notify } from "../email/notifications.js";
 import { changeStatus, markReceived } from "../returns/returns.service.js";
 import { defaultDestination } from "../settings/destinations.service.js";
+import { fetchOrderPhone } from "../shopify/order.sync.js";
 import * as api from "./shiprocket.client.js";
 import { ShiprocketError } from "./shiprocket.client.js";
 import {
@@ -274,11 +275,43 @@ const str = (a: Record<string, unknown>, ...keys: string[]): string | null => {
   return null;
 };
 
+/**
+ * The shopper's phone number, wherever it can be had.
+ *
+ * The order's own field first: it holds what the shopper typed at checkout,
+ * or what the merchant entered on the return. The order sync never fetches
+ * phone — it's protected customer data — so an order without one is asked
+ * about now, once, and the answer kept.
+ */
+const shopperPhone = async (
+  merchantId: string,
+  order: { id: string; externalId: string | null; phone: string | null },
+  address: Record<string, unknown>,
+): Promise<string | null> => {
+  if (order.phone) return order.phone;
+  const onAddress = str(address, "phone");
+  if (onAddress) return onAddress;
+  if (!order.externalId) return null;
+  const fetched = await fetchOrderPhone(merchantId, order.externalId);
+  if (fetched) {
+    await prisma.order.update({ where: { id: order.id }, data: { phone: fetched } });
+  }
+  return fetched;
+};
+
 /** The shopper, from the order's shipping address in either of its shapes. */
-const shopperParty = (
-  order: { shippingAddress: unknown; phone: string | null; email: string; customerName: string | null },
+const shopperParty = async (
+  merchantId: string,
+  order: {
+    id: string;
+    externalId: string | null;
+    shippingAddress: unknown;
+    phone: string | null;
+    email: string;
+    customerName: string | null;
+  },
   reference: string,
-): Party => {
+): Promise<Party> => {
   const a =
     order.shippingAddress && typeof order.shippingAddress === "object"
       ? (order.shippingAddress as Record<string, unknown>)
@@ -297,10 +330,16 @@ const shopperParty = (
       `Order for ${reference} has no complete shipping address to collect the parcel from.`,
     );
   }
-  const phone = indianMobile(str(a, "phone") ?? order.phone);
+  const raw = await shopperPhone(merchantId, order, a);
+  if (!raw) {
+    throw unprocessable(
+      "Shiprocket needs a 10-digit Indian mobile number for the pickup, and the order doesn't carry one. Add the customer's number on the return, then book again.",
+    );
+  }
+  const phone = indianMobile(raw);
   if (!phone) {
     throw unprocessable(
-      "Shiprocket needs a 10-digit Indian mobile number for the pickup, and the order doesn't carry one.",
+      `The order's phone number, ${raw}, isn't a 10-digit Indian mobile number, which Shiprocket needs for the pickup. Add one on the return, then book again.`,
     );
   }
   return {
@@ -399,7 +438,7 @@ const buildReturnOrder = async (
   account: Account,
   orderId: string,
 ): Promise<api.ReturnOrderInput> => {
-  const shopper = shopperParty(request.order, request.reference);
+  const shopper = await shopperParty(request.merchantId, request.order, request.reference);
   // The region's own destination first, then the one chosen for Shiprocket,
   // then the store default (inside destinationParty).
   const store = await destinationParty(
