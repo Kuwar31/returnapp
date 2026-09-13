@@ -1,7 +1,7 @@
-import { randomBytes } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
 import type { Prisma, ReturnShipment, ReturnStatus, ShiprocketAccount } from "@prisma/client";
 import { env } from "../../config/env.js";
-import { encrypt } from "../../lib/crypto.js";
+import { encrypt, safeEqual } from "../../lib/crypto.js";
 import { notFound, unprocessable } from "../../lib/errors.js";
 import { logger } from "../../lib/logger.js";
 import { toDecimal } from "../../lib/money.js";
@@ -76,6 +76,7 @@ export const serializeAccount = (account: ShiprocketAccount | null) =>
         webhookSecret: account.webhookSecret,
         /** Null means the store's default destination. */
         destinationId: account.destinationId,
+        testMode: account.testMode,
         autoCreate: account.autoCreate,
         receiveOnDelivery: account.receiveOnDelivery,
         qcEnabled: account.qcEnabled,
@@ -135,6 +136,7 @@ export interface AccountInput {
   weightKg?: number;
   /** A destination of this store's, or null for the default. */
   destinationId?: string | null;
+  testMode?: boolean;
 }
 
 export const updateAccount = async (merchantId: string, input: AccountInput) => {
@@ -542,6 +544,197 @@ const event = (
 
 const OPEN_FOR_LABEL: ReturnStatus[] = ["APPROVED", "IN_TRANSIT"];
 
+// ---------------------------------------------------------------------------
+// Test mode — pretend pickups, since Shiprocket has no sandbox
+// ---------------------------------------------------------------------------
+
+/** Signs a test label's address, so the page can't be guessed. */
+export const testLabelSignature = (shipmentId: string): string =>
+  createHmac("sha256", env.JWT_SECRET).update(`test-label:${shipmentId}`).digest("hex").slice(0, 32);
+
+const testLabelUrl = (shipmentId: string) =>
+  `${env.APP_URL.replace(/\/+$/, "")}/api/shipping/test-label/${shipmentId}?sig=${testLabelSignature(shipmentId)}`;
+
+/** "2026-09-13 14:05:00", Indian time, as Shiprocket's own scans read. */
+const istStamp = (at: Date): string =>
+  at.toLocaleString("sv-SE", { timeZone: "Asia/Kolkata", hour12: false }).replace("T", " ");
+
+/**
+ * A pretend booking. The addresses and phone numbers were checked the same
+ * way a real one checks them — that is most of what test mode is for — and
+ * then a made-up courier, AWB and label stand in for Shiprocket's. The
+ * emails and the shopper's page can't tell the difference; the return page
+ * can, and offers to simulate the pickup and the delivery.
+ */
+const bookTestLabel = async (
+  request: LabelRequest,
+  input: api.ReturnOrderInput,
+  actorId: string | null,
+  options: { email?: boolean },
+): Promise<ReturnShipment> => {
+  const awb = `TEST${String(Date.now()).slice(-8)}${String(Math.floor(Math.random() * 100)).padStart(2, "0")}`;
+  const pickup = new Date();
+  pickup.setDate(pickup.getDate() + 1);
+  pickup.setHours(14, 0, 0, 0);
+  const saved = await saveShipment(request.id, {
+    provider: "SHIPROCKET",
+    isTest: true,
+    status: "LABEL_CREATED",
+    externalOrderId: `TEST-${input.order_id}`,
+    externalShipmentId: `TEST-${input.order_id}`,
+    externalStatus: "PICKUP SCHEDULED",
+    externalStatusId: 4,
+    carrier: "Test courier",
+    trackingNumber: awb,
+    trackingUrl: null,
+    labelUrl: null,
+    pickupScheduledAt: pickup,
+    pickupToken: "Test booking — no courier is coming",
+    scans: [
+      {
+        date: istStamp(new Date()),
+        activity: "Pickup scheduled (test mode)",
+        location: "Test mode",
+        status: "PICKUP SCHEDULED",
+      },
+    ],
+    shippedAt: null,
+    deliveredAt: null,
+    lastError: null,
+    lastTrackedAt: new Date(),
+  });
+  const shipment = await prisma.returnShipment.update({
+    where: { id: saved.id },
+    data: { labelUrl: testLabelUrl(saved.id) },
+  });
+  await event(
+    request.id,
+    actorId,
+    "LABEL_GENERATED",
+    `Test label made — test mode, nothing sent to Shiprocket — AWB ${awb}`,
+    { ok: true, test: true, awb },
+  );
+  if (options.email !== false) await notify(request.id, "LABEL_READY");
+  return shipment;
+};
+
+/**
+ * Moves a test parcel along by hand: collected, then delivered. Goes through
+ * the same tracking path a real scan does, so the return follows.
+ */
+export const simulateTracking = async (
+  merchantId: string,
+  returnId: string,
+  step: "PICKED_UP" | "DELIVERED",
+): Promise<ReturnShipment> => {
+  const shipment = await prisma.returnShipment.findFirst({
+    where: { returnRequestId: returnId, returnRequest: { merchantId } },
+    include: trackedInclude,
+  });
+  if (!shipment) throw notFound("This return has no shipment.");
+  if (!shipment.isTest) {
+    throw unprocessable("Only a test-mode booking can be simulated; a real parcel reports through Shiprocket.");
+  }
+  if (["CANCELLED", "DELIVERED", "FAILED"].includes(shipment.status)) {
+    throw unprocessable("That parcel is finished.");
+  }
+  const stamp = istStamp(new Date());
+  const scan =
+    step === "PICKED_UP"
+      ? { statusId: 42, statusLabel: "PICKED UP", activity: "In Transit - Shipment picked up (simulated)" }
+      : { statusId: 7, statusLabel: "DELIVERED", activity: "Delivered (simulated)" };
+  await applyTracking(
+    shipment,
+    {
+      statusId: scan.statusId,
+      statusLabel: scan.statusLabel,
+      courier: "Test courier",
+      scans: [
+        { date: stamp, activity: scan.activity, location: "Test mode", status: scan.statusLabel },
+        ...normaliseScans(shipment.scans),
+      ],
+      pickedUpAt: step === "PICKED_UP" ? stamp : undefined,
+      deliveredAt: step === "DELIVERED" ? stamp : undefined,
+    },
+    "poll",
+  );
+  return prisma.returnShipment.findUniqueOrThrow({ where: { id: shipment.id } });
+};
+
+const escapeHtml = (value: string): string =>
+  value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+/**
+ * The test label, as a printable page. Null when the signature is wrong or
+ * the shipment isn't a test one — a real label is Shiprocket's PDF.
+ */
+export const testLabelHtml = async (shipmentId: string, sig: string | undefined): Promise<string | null> => {
+  if (!sig || !safeEqual(sig, testLabelSignature(shipmentId))) return null;
+  const shipment = await prisma.returnShipment.findUnique({
+    where: { id: shipmentId },
+    include: { returnRequest: { include: labelInclude } },
+  });
+  if (!shipment?.isTest) return null;
+  const request = shipment.returnRequest;
+  const account = await getAccount(request.merchantId);
+  const from = await shopperParty(request.merchantId, request.order, request.reference);
+  const to = await destinationParty(
+    request.merchantId,
+    request.regionalPolicy?.destination ?? account?.destination ?? null,
+    request.merchant.email,
+  );
+  const party = (p: Party) =>
+    [
+      `${p.firstName} ${p.lastName}`.trim(),
+      p.address1,
+      p.address2,
+      `${p.city} ${p.state} ${p.pincode}`.replace(/\s+/g, " ").trim(),
+      p.country,
+      `Phone ${p.phone}`,
+    ]
+      .filter(Boolean)
+      .map((line) => `<div>${escapeHtml(line)}</div>`)
+      .join("");
+  const items = request.lineItems
+    .filter((line) => !line.keepItem)
+    .map((line) => {
+      const title = line.orderLineItem?.title ?? "Item";
+      const variant = line.orderLineItem?.variantTitle ? ` — ${line.orderLineItem.variantTitle}` : "";
+      return `<li>${escapeHtml(`${line.quantity} × ${title}${variant}`)}</li>`;
+    })
+    .join("");
+  const awb = shipment.trackingNumber ?? "";
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Test return label ${escapeHtml(request.reference)}</title>
+<style>
+  body{margin:0;padding:24px;font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;color:#111;background:#f4f4f5}
+  .label{max-width:640px;margin:0 auto;background:#fff;border:2px solid #111;padding:24px}
+  .banner{background:#fff3cd;border:1px solid #e0b33c;padding:10px 14px;font-weight:700;margin-bottom:20px}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:20px}
+  h2{margin:0 0 6px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#666}
+  .awb{margin:20px 0 8px;font-size:22px;font-weight:700;letter-spacing:.06em}
+  .bars{height:56px;background:repeating-linear-gradient(90deg,#111 0 2px,#fff 2px 4px,#111 4px 5px,#fff 5px 9px,#111 9px 12px,#fff 12px 14px);margin-bottom:20px}
+  ul{margin:6px 0 0;padding-left:18px}
+  .meta{color:#555;font-size:13px;margin-top:16px}
+  @media print{body{background:#fff;padding:0}.label{border-width:1px}}
+</style></head><body>
+<div class="label">
+  <div class="banner">TEST LABEL — not valid for shipping. Made in test mode; no courier is coming.</div>
+  <div class="row">
+    <div><h2>Pickup from</h2>${party(from)}</div>
+    <div><h2>Deliver to</h2>${party(to)}</div>
+  </div>
+  <h2>AWB · Test courier</h2>
+  <div class="awb">${escapeHtml(awb)}</div>
+  <div class="bars" aria-hidden="true"></div>
+  <h2>Return ${escapeHtml(request.reference)} · Order #${escapeHtml(request.order.orderNumber)}</h2>
+  <ul>${items}</ul>
+  <div class="meta">Parcel ${Number(account?.lengthCm ?? 0)} × ${Number(account?.breadthCm ?? 0)} × ${Number(account?.heightCm ?? 0)} cm, ${Number(account?.weightKg ?? 0)} kg · ${escapeHtml(request.merchant.name)}</div>
+</div>
+</body></html>`;
+};
+
 /**
  * Makes the label, resuming a half-made one.
  *
@@ -590,6 +783,17 @@ export const createReturnLabel = async (
     });
     throw friendly(error, message);
   };
+
+  // Test mode books a pretend pickup: the same checks, nothing sent.
+  if (account.testMode) {
+    let input: api.ReturnOrderInput;
+    try {
+      input = await buildReturnOrder(request, account, orderId);
+    } catch (error) {
+      return fail("checking addresses", error);
+    }
+    return bookTestLabel(request, input, actorId, options);
+  }
 
   let shipmentId = resume?.externalShipmentId ?? null;
   let awb = resume?.trackingNumber ?? null;
@@ -826,6 +1030,13 @@ export const refreshTracking = async (merchantId: string, returnId: string): Pro
     include: trackedInclude,
   });
   if (!shipment?.externalShipmentId) throw notFound("This return has no Shiprocket shipment.");
+  if (shipment.isTest) {
+    // Nothing to ask: a test parcel moves only when simulated from the return.
+    return prisma.returnShipment.update({
+      where: { id: shipment.id },
+      data: { lastTrackedAt: new Date() },
+    });
+  }
   let reply: api.TrackingReply;
   try {
     reply = await api.trackShipment(merchantId, shipment.externalShipmentId);
@@ -875,6 +1086,7 @@ export const runTrackingSweep = async (): Promise<{ checked: number; failed: num
   const due = await prisma.returnShipment.findMany({
     where: {
       provider: "SHIPROCKET",
+      isTest: false,
       status: { in: ["PENDING", "LABEL_CREATED", "IN_TRANSIT"] },
       externalShipmentId: { not: null },
       returnRequest: { status: { in: ["APPROVED", "IN_TRANSIT"] } },
@@ -970,14 +1182,15 @@ export const cancelLabel = async (
     throw unprocessable("That parcel can't be cancelled any more.");
   }
   const problems: string[] = [];
-  if (shipment.trackingNumber) {
+  // A test booking exists nowhere but here.
+  if (shipment.trackingNumber && !shipment.isTest) {
     try {
       await api.cancelShipment(merchantId, shipment.trackingNumber);
     } catch (error) {
       problems.push(error instanceof Error ? error.message : String(error));
     }
   }
-  if (shipment.externalOrderId) {
+  if (shipment.externalOrderId && !shipment.isTest) {
     try {
       await api.cancelOrder(merchantId, shipment.externalOrderId);
     } catch (error) {

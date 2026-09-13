@@ -1270,6 +1270,9 @@ model ReturnShipment {
 
   /// Which integration made it; null for a row written by hand.
   provider           ShipmentProvider?
+  /// Booked in test mode: nothing exists at the provider, and tracking is
+  /// simulated from the return page rather than fetched.
+  isTest             Boolean           @default(false)
   carrier            String?
   /// The courier's AWB.
   trackingNumber     String?
@@ -1339,6 +1342,10 @@ model ShiprocketAccount {
   destination    ReturnDestination? @relation(fields: [destinationId], references: [id], onDelete: SetNull)
   /// Make the label the moment a "ship with a return label" return is approved.
   autoCreate     Boolean  @default(true)
+  /// Book pretend pickups instead of calling Shiprocket: nothing is charged
+  /// and no courier comes, but the emails, the status page and the tracking
+  /// can all be walked through. Shiprocket has no sandbox of its own.
+  testMode       Boolean  @default(false)
   /// Move the return to received when the courier delivers the parcel.
   receiveOnDelivery Boolean @default(true)
   /// Ask the courier to check the items at pickup against name and picture.

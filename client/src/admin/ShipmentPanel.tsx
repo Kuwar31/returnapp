@@ -27,7 +27,7 @@ export function ShipmentPanel({
 }: {
   detail: ReturnDetail;
   acting: boolean;
-  onAct: (path: string) => void;
+  onAct: (path: string, body?: unknown) => void;
   /** Where Shiprocket is connected, for the hint when it isn't. */
   settingsPath: string;
 }) {
@@ -40,9 +40,13 @@ export function ShipmentPanel({
   // that isn't sending one.
   if (!shipment && (!open || keeping)) return null;
 
+  const test = Boolean(shipment?.isTest);
   const canCreate = open && (!shipment || ["FAILED", "CANCELLED"].includes(shipment.status));
   const canCancel = Boolean(shipment && ["PENDING", "LABEL_CREATED", "IN_TRANSIT"].includes(shipment.status));
-  const canRefresh = Boolean(shipment?.externalShipmentId && shipment.status !== "CANCELLED");
+  const canRefresh = Boolean(shipment?.externalShipmentId && shipment.status !== "CANCELLED") && !test;
+  // A test parcel only moves when told to.
+  const canSimulatePickup = test && shipment?.status === "LABEL_CREATED";
+  const canSimulateDelivery = test && ["LABEL_CREATED", "IN_TRANSIT"].includes(shipment?.status ?? "");
 
   return (
     <div className="panel">
@@ -51,9 +55,18 @@ export function ShipmentPanel({
         {shipment && (
           <span className={`chip ship-chip ship-chip--${shipment.status.toLowerCase()}`}>
             {STATUS_COPY[shipment.status]}
+            {test && " · Test"}
           </span>
         )}
       </div>
+
+      {test && (
+        <p className="muted" style={{ marginBottom: 12 }}>
+          Booked in test mode: nothing was sent to Shiprocket and no courier is
+          coming. The customer got the usual email and sees the usual page.
+          Move the parcel along with the buttons below.
+        </p>
+      )}
 
       {!shipment && (
         <p className="muted" style={{ marginBottom: 12 }}>
@@ -161,6 +174,26 @@ export function ShipmentPanel({
             onClick={() => onAct("label/refresh")}
           >
             Refresh tracking
+          </button>
+        )}
+        {canSimulatePickup && (
+          <button
+            type="button"
+            className="btn btn--secondary btn--sm"
+            disabled={acting}
+            onClick={() => onAct("label/simulate", { step: "PICKED_UP" })}
+          >
+            Simulate pickup
+          </button>
+        )}
+        {canSimulateDelivery && (
+          <button
+            type="button"
+            className="btn btn--secondary btn--sm"
+            disabled={acting}
+            onClick={() => onAct("label/simulate", { step: "DELIVERED" })}
+          >
+            Simulate delivery
           </button>
         )}
         {canCancel && (

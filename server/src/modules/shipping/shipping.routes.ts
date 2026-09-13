@@ -1,9 +1,27 @@
 import { Router } from "express";
 import { logger } from "../../lib/logger.js";
 import { asyncHandler } from "../../middleware/asyncHandler.js";
-import { handleWebhook } from "./shiprocket.service.js";
+import { handleWebhook, testLabelHtml } from "./shiprocket.service.js";
 
 export const shippingRouter = Router();
+
+/**
+ * A test-mode label, as a printable page. Reached from the label link in
+ * the shopper's email and status page, so it's public — guarded by the
+ * signature in the link rather than a login.
+ */
+shippingRouter.get(
+  "/test-label/:id",
+  asyncHandler(async (req, res) => {
+    const sig = typeof req.query.sig === "string" ? req.query.sig : undefined;
+    const html = await testLabelHtml(req.params.id, sig);
+    if (!html) {
+      res.status(404).type("text/plain").send("No such label.");
+      return;
+    }
+    res.type("text/html").send(html);
+  }),
+);
 
 /**
  * Shiprocket's tracking webhook.

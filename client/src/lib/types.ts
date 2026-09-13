@@ -326,6 +326,8 @@ export interface ShipmentScan {
 
 export interface ReturnShipment {
   provider: "SHIPROCKET" | null;
+  /** Booked in test mode: no courier exists, tracking is simulated. */
+  isTest: boolean;
   carrier: string | null;
   /** The courier's AWB. */
   trackingNumber: string | null;
@@ -365,6 +367,8 @@ export type ShiprocketSettings = (
       parcel: { lengthCm: number; breadthCm: number; heightCm: number; weightKg: number };
       /** The destination parcels go to; null means the store's default. */
       destinationId: string | null;
+      /** Pretend pickups: nothing sent to Shiprocket, nothing charged. */
+      testMode: boolean;
     }
   | { connected: false }
 ) & {

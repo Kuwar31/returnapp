@@ -1142,6 +1142,7 @@ const shiprocketSettingsSchema = z
     heightCm: cm,
     weightKg: z.number().min(0.05).max(500),
     destinationId: z.string().min(1).max(60).nullable(),
+    testMode: z.boolean(),
   })
   .partial();
 

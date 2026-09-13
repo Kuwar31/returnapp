@@ -558,6 +558,14 @@ export default function ReturnDetailPage() {
       setDetail(updated);
     } catch (e) {
       setError(e instanceof Error ? e.message : "That action failed.");
+      // A failed action can still have left its mark — a booking that got
+      // partway, a timeline entry — so the page must not keep showing the
+      // state from before it.
+      try {
+        setDetail(await api.get<ReturnDetail>(`/admin/returns/${id}`, { auth: "admin" }));
+      } catch {
+        // The banner above already says what went wrong.
+      }
     } finally {
       setActing(false);
     }
@@ -1180,7 +1188,7 @@ export default function ReturnDetailPage() {
           <ShipmentPanel
             detail={detail}
             acting={acting}
-            onAct={(path) => void act(path)}
+            onAct={(path, body) => void act(path, body)}
             settingsPath={`${base}/settings/shipping`}
           />
 

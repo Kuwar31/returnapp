@@ -106,6 +106,7 @@ export default function ShippingPage() {
         receiveOnDelivery: boolean;
         qcEnabled: boolean;
         destinationId: string | null;
+        testMode: boolean;
       }
     >,
     message?: string,
@@ -184,6 +185,12 @@ export default function ShippingPage() {
 
       <ErrorAlert message={error} />
       {status && <div className="alert alert--info">{status}</div>}
+      {data.connected && data.testMode && (
+        <div className="alert alert--warn">
+          Test mode is on: return labels are pretend and no courier is booked.
+          Turn it off below before real returns come in.
+        </div>
+      )}
 
       <div className="split">
         <div>
@@ -304,6 +311,27 @@ export default function ShippingPage() {
             </p>
           </div>
           <div className="panel">
+            <div className="settings-row">
+              <div>
+                <div className="settings-row__label">Test mode</div>
+                <div className="settings-row__hint">
+                  Books pretend pickups: nothing is sent to Shiprocket and
+                  nothing is charged to your wallet. Customers get the usual
+                  email and page with a test label, and you move the parcel
+                  along from the return. Shiprocket has no sandbox of its own.
+                </div>
+              </div>
+              <Switch
+                on={data.testMode}
+                label="Test mode"
+                onChange={(testMode) =>
+                  void patch(
+                    { testMode },
+                    testMode ? "Test mode on — labels are pretend from now." : "Test mode off — labels are real again.",
+                  )
+                }
+              />
+            </div>
             <div className="settings-row">
               <div>
                 <div className="settings-row__label">Book the courier at approval</div>

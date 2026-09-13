@@ -11,6 +11,7 @@ import {
   cancelLabel,
   createReturnLabel,
   refreshTracking,
+  simulateTracking,
 } from "../shipping/shiprocket.service.js";
 import {
   diagnoseExchange,
@@ -496,6 +497,18 @@ returnsRouter.post(
   requireRole("OWNER", "ADMIN"),
   asyncHandler(async (req, res) => {
     await cancelLabel(req.admin!.merchantId, req.params.id, req.admin!.sub);
+    await withLabel(req, res);
+  }),
+);
+
+const simulateSchema = z.object({ step: z.enum(["PICKED_UP", "DELIVERED"]) });
+
+/** Moves a test-mode parcel along by hand; refused for a real one. */
+returnsRouter.post(
+  "/:id/label/simulate",
+  validate(simulateSchema),
+  asyncHandler(async (req, res) => {
+    await simulateTracking(req.admin!.merchantId, req.params.id, req.body.step);
     await withLabel(req, res);
   }),
 );
