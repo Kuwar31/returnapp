@@ -51,6 +51,7 @@ const NAV: Array<{ label: string | null; items: NavItem[] }> = [
       },
       { to: "/settings/policies/destinations", label: "Destinations", icon: "⌖", end: true },
       { to: "/settings/policies/locations", label: "Locations", icon: "⊞", end: true },
+      { to: "/settings/shipping", label: "Shipping", icon: "⛟", end: true },
       { to: "/settings/exchanges", label: "Exchanges", icon: "⇄", end: true },
       { to: "/settings/shop-now", label: "Shop now", icon: "◈", end: true },
       { to: "/settings/portal", label: "Portal", icon: "◎", end: false },

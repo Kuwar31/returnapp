@@ -63,6 +63,16 @@ const schema = z.object({
   MAIL_FROM: z.string().default("Returns <returns@example.com>"),
   // Where shopper-facing links point. Defaults to the first CORS origin.
   PORTAL_BASE_URL: z.string().url().optional(),
+
+  // --- Shipping ---
+  // Shiprocket's API. Overridden only to point a probe at a stand-in.
+  SHIPROCKET_API_URL: z
+    .string()
+    .url()
+    .default("https://apiv2.shiprocket.in/v1/external"),
+  // How often open shipments are asked for tracking, for stores without the
+  // webhook set up. Zero turns it off, as on a second instance.
+  TRACKING_SWEEP_MINUTES: z.coerce.number().int().min(0).max(1440).default(30),
 });
 
 const parsed = schema.safeParse(process.env);

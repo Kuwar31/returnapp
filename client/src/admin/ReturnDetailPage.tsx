@@ -13,6 +13,7 @@ import type {
 } from "../lib/types";
 import { ErrorAlert, Loading } from "../components/Feedback";
 import { StatusBadge } from "../components/StatusBadge";
+import { ShipmentPanel } from "./ShipmentPanel";
 
 /** Where a payout lands, in the words a merchant would use to a customer. */
 const PAYOUT_LABEL: Record<string, string> = {
@@ -1084,41 +1085,13 @@ export default function ReturnDetailPage() {
             )}
           </div>
 
-          {detail.shipment && (
-            <div className="panel">
-              <h2>Return method</h2>
-              <dl style={{ margin: 0 }}>
-                <div className="kv">
-                  <dt>Shipment status</dt>
-                  <dd>{titleCase(detail.shipment.status)}</dd>
-                </div>
-                {detail.shipment.carrier && (
-                  <div className="kv">
-                    <dt>Carrier</dt>
-                    <dd>{detail.shipment.carrier}</dd>
-                  </div>
-                )}
-                {detail.shipment.trackingNumber && (
-                  <div className="kv">
-                    <dt>Tracking</dt>
-                    <dd>
-                      {detail.shipment.trackingUrl ? (
-                        <a
-                          href={detail.shipment.trackingUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          {detail.shipment.trackingNumber}
-                        </a>
-                      ) : (
-                        detail.shipment.trackingNumber
-                      )}
-                    </dd>
-                  </div>
-                )}
-              </dl>
-            </div>
-          )}
+          <ShipmentPanel
+            detail={detail}
+            acting={acting}
+            onAct={(path) => void act(path)}
+            settingsPath={`${base}/settings/shipping`}
+          />
+
 
           {detail.exchangeDraft ? (
             <ExchangePanel

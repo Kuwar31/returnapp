@@ -375,8 +375,11 @@ portalRouter.get(
     // and forget: it must never delay or fail the page it decorates.
     void backfillExchangeItemImages(merchant.id, request.id);
     const region = request.regionalPolicy;
+    const serialized = serializeReturn(request, await resolveDisplayMode(merchant.id));
     res.json({
-      ...serializeReturn(request, await resolveDisplayMode(merchant.id)),
+      ...serialized,
+      // Why a label failed is the merchant's to read, not the shopper's.
+      shipment: serialized.shipment ? { ...serialized.shipment, lastError: null } : null,
       // Only present when a native exchange actually leaves a balance owed.
       exchangePayment: await getExchangePaymentUrl(merchant.id, request.id),
       /**

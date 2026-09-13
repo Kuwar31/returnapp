@@ -15,6 +15,7 @@ import {
   editedEmail,
   expiredEmail,
   expiringEmail,
+  labelReadyEmail,
   receivedEmail,
   reminderEmail,
   resolvedEmail,
@@ -45,6 +46,8 @@ const loadContext = async (returnRequestId: string) => {
       storeCredit: { select: { code: true } },
       // Carries the invoice link on the draft-order route.
       exchangeDraft: true,
+      // The courier pickup, when one is booked.
+      shipment: true,
     },
   });
   if (!request) return null;
@@ -91,6 +94,18 @@ const loadContext = async (returnRequestId: string) => {
           storeUrl: request.returnStoreUrl,
         }
       : null,
+    // Only a label that exists and hasn't been called off.
+    label:
+      request.shipment?.labelUrl &&
+      !["CANCELLED", "FAILED"].includes(request.shipment.status)
+        ? {
+            courier: request.shipment.carrier,
+            trackingNumber: request.shipment.trackingNumber,
+            trackingUrl: request.shipment.trackingUrl,
+            labelUrl: request.shipment.labelUrl,
+            pickupScheduledAt: request.shipment.pickupScheduledAt?.toISOString() ?? null,
+          }
+        : null,
   };
 
   return {
@@ -172,6 +187,8 @@ const build = (
       return expiringEmail(payload, brand, options.days ?? 0);
     case "EXPIRED":
       return expiredEmail(payload, brand);
+    case "LABEL_READY":
+      return labelReadyEmail(payload, brand);
   }
 };
 

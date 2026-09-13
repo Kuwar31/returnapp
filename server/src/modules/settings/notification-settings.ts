@@ -78,6 +78,13 @@ export const NOTIFICATIONS: NotificationDefinition[] = [
     defaultEnabled: false,
   },
   {
+    kind: "LABEL_READY",
+    label: "Return label ready",
+    description:
+      "Sent when a return label is made after the approval email has already gone out — a label made at approval travels in that email instead.",
+    defaultEnabled: true,
+  },
+  {
     kind: "RECEIVED",
     label: "Items received",
     description: "Sent when you mark the returned items as received.",

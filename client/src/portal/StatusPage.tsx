@@ -100,6 +100,11 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
   const method = detail.returnMethod ?? null;
   const keeping = method?.kind === "KEEP";
   const showPacking = !dead && detail.lineItems.length > 0 && !keeping;
+  // The courier booked to collect the parcel, while that booking stands.
+  const label =
+    detail.shipment?.labelUrl && !["CANCELLED", "FAILED"].includes(detail.shipment.status)
+      ? detail.shipment
+      : null;
   const methodInfo = Boolean(method && (method.instructions || method.storeUrl || keeping));
 
   /**
@@ -274,6 +279,52 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
               ))}
             </div>
           </Section>
+          )}
+
+          {/*
+            The courier pickup the store booked: who's coming, the label to
+            put on the parcel, and where the parcel is once it's collected.
+          */}
+          {!dead && label && (
+            <Section title={t("status.label.title")}>
+              <p className="confirm__method-text" style={{ margin: 0 }}>
+                {t("status.label.pickup", { courier: label.carrier ?? t("status.label.courier") })}
+                {label.pickupScheduledAt &&
+                  ` ${t("status.label.pickupOn", { date: shortDate(label.pickupScheduledAt) })}`}
+              </p>
+              {label.trackingNumber && (
+                <div className="confirm__dest">
+                  <div className="confirm__dest-label">{t("status.label.tracking")}</div>
+                  <div className="confirm__dest-name">{label.trackingNumber}</div>
+                </div>
+              )}
+              {label.statusLabel && (
+                <div className="confirm__dest">
+                  <div className="confirm__dest-label">{t("status.label.status")}</div>
+                  <div className="confirm__dest-name">{label.statusLabel}</div>
+                  {label.scans[0] && (
+                    <div className="muted">
+                      {label.scans[0].activity} · {label.scans[0].date.slice(0, 16)}
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="confirm__label-actions">
+                <a className="btn" href={label.labelUrl!} target="_blank" rel="noreferrer">
+                  {t("status.label.download")}
+                </a>
+                {label.trackingUrl && (
+                  <a
+                    className="confirm__method-link"
+                    href={label.trackingUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {t("status.label.track")} ↗
+                  </a>
+                )}
+              </div>
+            </Section>
           )}
 
           {/*

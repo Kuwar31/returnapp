@@ -70,6 +70,7 @@ export default [
       route("settings/shop-now", "admin/SettingsPage.tsx", {
         id: "settings-shop-now",
       }),
+      route("settings/shipping", "admin/ShippingPage.tsx"),
       route("settings/portal", "admin/PortalPage.tsx"),
       route("settings/notifications", "admin/NotificationsPage.tsx"),
       route("settings/reasons", "admin/ReasonsPage.tsx"),

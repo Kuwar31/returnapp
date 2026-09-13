@@ -19,6 +19,7 @@ import * as exchangeRules from "./exchange-rules.service.js";
 import * as regionalPolicies from "./regional-policies.service.js";
 import * as destinationsService from "./destinations.service.js";
 import * as routing from "./routing.service.js";
+import * as shiprocket from "../shipping/shiprocket.service.js";
 import { inventoryAccessProblem } from "../shopify/locations.service.js";
 import { browseCollections } from "../shopify/catalogue.service.js";
 import { listLocationsIfConnected } from "../shopify/locations.service.js";
@@ -1118,5 +1119,99 @@ settingsRouter.post(
       req.admin!.merchantId,
     );
     res.json({ policies: policies.map(regionalPolicies.serializeRegionalPolicy) });
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// Shiprocket — return labels
+// ---------------------------------------------------------------------------
+
+const shiprocketConnectSchema = z.object({
+  email: z.string().trim().email().max(200),
+  password: z.string().min(1).max(200),
+});
+
+const cm = z.number().min(1).max(500);
+const shiprocketSettingsSchema = z
+  .object({
+    autoCreate: z.boolean(),
+    receiveOnDelivery: z.boolean(),
+    qcEnabled: z.boolean(),
+    lengthCm: cm,
+    breadthCm: cm,
+    heightCm: cm,
+    weightKg: z.number().min(0.05).max(500),
+  })
+  .partial();
+
+/**
+ * The store's Shiprocket connection and label settings, plus whether the
+ * default return destination is ready to receive parcels — Shiprocket wants
+ * a phone number and a postcode for the delivery, and it's better to say so
+ * here than at the first approval.
+ */
+settingsRouter.get(
+  "/shiprocket",
+  asyncHandler(async (req, res) => {
+    const merchantId = req.admin!.merchantId;
+    const [account, destination] = await Promise.all([
+      shiprocket.getAccount(merchantId),
+      destinationsService.defaultDestination(merchantId),
+    ]);
+    res.json({
+      ...shiprocket.serializeAccount(account),
+      destination: destination
+        ? {
+            name: destination.name,
+            hasPhone: shiprocket.indianMobile(destination.phone) !== null,
+            hasZip: Boolean(destination.zip),
+          }
+        : null,
+    });
+  }),
+);
+
+settingsRouter.post(
+  "/shiprocket/connect",
+  validate(shiprocketConnectSchema),
+  asyncHandler(async (req, res) => {
+    const account = await shiprocket.connectAccount(
+      req.admin!.merchantId,
+      req.body.email,
+      req.body.password,
+    );
+    res.json(shiprocket.serializeAccount(account));
+  }),
+);
+
+settingsRouter.delete(
+  "/shiprocket",
+  asyncHandler(async (req, res) => {
+    await shiprocket.disconnectAccount(req.admin!.merchantId);
+    res.status(204).end();
+  }),
+);
+
+settingsRouter.patch(
+  "/shiprocket",
+  validate(shiprocketSettingsSchema),
+  asyncHandler(async (req, res) => {
+    const account = await shiprocket.updateAccount(req.admin!.merchantId, req.body);
+    res.json(shiprocket.serializeAccount(account));
+  }),
+);
+
+settingsRouter.post(
+  "/shiprocket/webhook-secret",
+  asyncHandler(async (req, res) => {
+    const account = await shiprocket.rotateWebhookSecret(req.admin!.merchantId);
+    res.json(shiprocket.serializeAccount(account));
+  }),
+);
+
+settingsRouter.post(
+  "/shiprocket/test",
+  asyncHandler(async (req, res) => {
+    res.json(await shiprocket.testConnection(req.admin!.merchantId));
   }),
 );

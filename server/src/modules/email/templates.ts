@@ -45,6 +45,18 @@ export interface EmailReturn {
     instructions: string | null;
     storeUrl: string | null;
   } | null;
+  /**
+   * The courier pickup the app booked, when it has. Present only once a
+   * label exists, so the mail never promises a courier that isn't coming.
+   */
+  label?: {
+    courier: string | null;
+    trackingNumber: string | null;
+    trackingUrl: string | null;
+    labelUrl: string;
+    /** ISO; shown as a date in Indian time, where the courier is. */
+    pickupScheduledAt: string | null;
+  } | null;
 }
 
 /** Escapes interpolated values so a product title can't inject markup. */
@@ -227,20 +239,77 @@ const instructionsText = (request: EmailReturn): string => {
   );
 };
 
+/** "25 Nov 2024", in the courier's own time zone. */
+const pickupDay = (iso: string | null): string | null => {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Kolkata",
+  });
+};
+
+/**
+ * The courier pickup, when one is booked: who's coming, when, and the
+ * label to put on the parcel. Sits above the merchant's own instructions,
+ * since it answers the question those usually raise — "how do I send it?".
+ */
+const labelBlock = (request: EmailReturn): string => {
+  const label = request.label;
+  if (!label) return "";
+  const who = label.courier ? esc(label.courier) : "A courier";
+  const day = pickupDay(label.pickupScheduledAt);
+  const links = [
+    `<a href="${esc(label.labelUrl)}" style="display:inline-block;background:#1a1a1c;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-size:14px;font-weight:600">Download label</a>`,
+    label.trackingUrl
+      ? `<a href="${esc(label.trackingUrl)}" style="display:inline-block;margin-left:12px;color:#1a1a1c;font-size:14px">Track parcel</a>`
+      : "",
+  ].join("");
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px">
+  <tr><td style="background:#eef6ff;border:1px solid #cfe1f7;border-radius:10px;padding:16px">
+    <p style="margin:0 0 8px;font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#8c9196">Your return label</p>
+    <p style="margin:0;font-size:14px;line-height:1.6;color:#1a1a1c">${who} will collect the parcel from your address${day ? `, with pickup scheduled for ${esc(day)}` : ""}. Keep it packed and ready, and put the label on it if you can print it.</p>
+    ${label.trackingNumber ? `<p style="margin:6px 0 0;font-size:13px;color:#8c9196">Tracking number ${esc(label.trackingNumber)}</p>` : ""}
+    <p style="margin:14px 0 0">${links}</p>
+  </td></tr>
+</table>`;
+};
+
+const labelText = (request: EmailReturn): string => {
+  const label = request.label;
+  if (!label) return "";
+  const day = pickupDay(label.pickupScheduledAt);
+  return (
+    `\n\nYour return label\n${label.courier ?? "A courier"} will collect the parcel from your address${day ? `, with pickup scheduled for ${day}` : ""}. Keep it packed and ready.\n` +
+    (label.trackingNumber ? `Tracking number: ${label.trackingNumber}\n` : "") +
+    `Download label: ${label.labelUrl}\n` +
+    (label.trackingUrl ? `Track parcel: ${label.trackingUrl}\n` : "")
+  );
+};
+
 export const approvedEmail = (
   request: EmailReturn,
   brand: EmailBrand,
 ): Mail => {
   const word = RESOLUTION_WORD[request.resolution] ?? "return";
   // A "green return" is approved with nothing to send: say so, rather than
-  // asking for a parcel that will never come.
+  // asking for a parcel that will never come. A booked pickup says that
+  // instead of asking the shopper to post anything.
   const keeping = request.returnMethod?.kind === "KEEP";
+  const collected = Boolean(request.label);
   const next = keeping
     ? `There's no need to send anything back — keep the items, and we'll process your ${esc(word)}.`
-    : `Send the items back and we'll process your ${esc(word)} as soon as they arrive.`;
+    : collected
+      ? `A courier will collect the items from you, and we'll process your ${esc(word)} as soon as they arrive.`
+      : `Send the items back and we'll process your ${esc(word)} as soon as they arrive.`;
   const nextText = keeping
     ? `There's no need to send anything back — keep the items, and we'll process your ${word}.`
-    : `Send the items back and we'll process your ${word} once they arrive.`;
+    : collected
+      ? `A courier will collect the items from you, and we'll process your ${word} as soon as they arrive.`
+      : `Send the items back and we'll process your ${word} once they arrive.`;
   return {
     to: request.customerEmail,
     subject: `Your return is approved (${request.reference})`,
@@ -248,11 +317,16 @@ export const approvedEmail = (
       brand,
       heading: "Your return is approved",
       intro: `${greeting(request)} good news — your return for order #${esc(request.orderNumber)} has been approved. ${next}`,
-      body: instructionsBlock(request) + summaryBlock(request, "Estimated total") + paymentBlock(request),
+      body:
+        labelBlock(request) +
+        instructionsBlock(request) +
+        summaryBlock(request, "Estimated total") +
+        paymentBlock(request),
       ctaLabel: keeping ? "View your return" : "See return instructions",
     }),
     text:
       `${greeting(request)}\n\nYour return for order #${request.orderNumber} has been approved. ${nextText}` +
+      labelText(request) +
       instructionsText(request) +
       `\n\nReference: ${request.reference}\n\n${itemLinesText(request)}\n\n` +
       `Estimated total: ${formatMoney(request.estimatedTotal, request.currency)}` +
@@ -260,6 +334,30 @@ export const approvedEmail = (
       footerText(brand),
   };
 };
+
+/**
+ * The label on its own, for one made after the approval mail had gone —
+ * a courier's refusal retried later, or a merchant booking it by hand.
+ */
+export const labelReadyEmail = (
+  request: EmailReturn,
+  brand: EmailBrand,
+): Mail => ({
+  to: request.customerEmail,
+  subject: `Your return label is ready (${request.reference})`,
+  html: shell({
+    brand,
+    heading: "Your return label is ready",
+    intro: `${greeting(request)} here's the return label for order #${esc(request.orderNumber)}. A courier will collect the parcel from your address — there's nothing to post.`,
+    body: labelBlock(request) + summaryBlock(request, "Estimated total"),
+    ctaLabel: "View your return",
+  }),
+  text:
+    `${greeting(request)}\n\nHere's the return label for order #${request.orderNumber}. A courier will collect the parcel from your address — there's nothing to post.` +
+    labelText(request) +
+    `\n\nReference: ${request.reference}\n\n${itemLinesText(request)}` +
+    footerText(brand),
+});
 
 export const declinedEmail = (
   request: EmailReturn,

@@ -127,6 +127,7 @@ model Merchant {
   returnRequests       ReturnRequest[]
   storeCredits         StoreCredit[]
   integrations         Integration[]
+  shiprocket           ShiprocketAccount?
 
   @@map("merchants")
 }
@@ -1253,24 +1254,55 @@ model ExchangeItem {
   @@map("exchange_items")
 }
 
+/// The parcel coming back, when the app arranged it.
+///
+/// One per return. Made through a carrier integration — Shiprocket today —
+/// when a return that chose "ship with a return label" is approved: a
+/// reverse pickup from the shopper's address to the return destination, with
+/// the courier's label and tracking. Tracking events move `status` here and,
+/// through it, the return itself: picked up means in transit, delivered
+/// means received.
 model ReturnShipment {
   id              String        @id @default(cuid())
   returnRequestId String        @unique
   returnRequest   ReturnRequest @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
 
-  carrier        String?
-  trackingNumber String?
-  trackingUrl    String?
-  labelUrl       String?
-  status         ShipmentStatus @default(PENDING)
+  /// Which integration made it; null for a row written by hand.
+  provider           ShipmentProvider?
+  carrier            String?
+  /// The courier's AWB.
+  trackingNumber     String?
+  trackingUrl        String?
+  labelUrl           String?
+  status             ShipmentStatus    @default(PENDING)
   /// Cost of the label, for merchant reporting
-  labelCost      Decimal?       @db.Decimal(12, 2)
-  shippedAt      DateTime?
-  deliveredAt    DateTime?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  labelCost          Decimal?          @db.Decimal(12, 2)
+  /// The provider's own ids: its order for the return, and the shipment on it.
+  externalOrderId    String?
+  externalShipmentId String?
+  /// The provider's latest word on the parcel, as it names it: "PICKED UP".
+  externalStatus     String?
+  externalStatusId   Int?
+  pickupScheduledAt  DateTime?
+  pickupToken        String?
+  /// Estimated delivery.
+  etd                DateTime?
+  /// The courier's scan history, latest first: { date, activity, location, status }.
+  scans              Json?
+  /// Why the last attempt to make or update it failed, for the merchant.
+  lastError          String?
+  lastTrackedAt      DateTime?
+  shippedAt          DateTime?
+  deliveredAt        DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
 
+  @@index([provider, status])
   @@map("return_shipments")
+}
+
+enum ShipmentProvider {
+  SHIPROCKET
 }
 
 enum ShipmentStatus {
@@ -1278,7 +1310,43 @@ enum ShipmentStatus {
   LABEL_CREATED
   IN_TRANSIT
   DELIVERED
+  /// Couldn't be made, or the courier lost, damaged or returned it.
   FAILED
+  CANCELLED
+}
+
+/// A store's Shiprocket account, for making return labels.
+///
+/// Shiprocket is used through an "API user" the merchant creates in their
+/// Shiprocket panel; its password is kept encrypted, and the login token it
+/// yields — good for ten days — is cached so every label doesn't cost a login.
+model ShiprocketAccount {
+  id             String   @id @default(cuid())
+  merchantId     String   @unique
+  merchant       Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  email          String
+  /// Encrypted at rest by the service layer before it lands here.
+  password       String
+  token          String?
+  tokenExpiresAt DateTime?
+  /// What Shiprocket sends in `x-api-key` on every tracking webhook; the
+  /// merchant pastes it into their Shiprocket webhook settings.
+  webhookSecret  String   @unique
+  /// Make the label the moment a "ship with a return label" return is approved.
+  autoCreate     Boolean  @default(true)
+  /// Move the return to received when the courier delivers the parcel.
+  receiveOnDelivery Boolean @default(true)
+  /// Ask the courier to check the items at pickup against name and picture.
+  qcEnabled      Boolean  @default(false)
+  /// Parcel defaults, since orders carry no dimensions. Centimetres and kilograms.
+  lengthCm       Decimal  @default(20) @db.Decimal(8, 2)
+  breadthCm      Decimal  @default(15) @db.Decimal(8, 2)
+  heightCm       Decimal  @default(10) @db.Decimal(8, 2)
+  weightKg       Decimal  @default(0.5) @db.Decimal(8, 3)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("shiprocket_accounts")
 }
 
 model StoreCredit {
@@ -1482,4 +1550,6 @@ enum NotificationKind {
   EXPIRING
   /// It closed.
   EXPIRED
+  /// A return label was made after the approval mail had already gone out.
+  LABEL_READY
 }

@@ -304,6 +304,70 @@ export interface ExchangeProduct {
   variants: ExchangeVariant[];
 }
 
+// ---------------------------------------------------------------------------
+// Return shipments — the courier pickup booked for a return
+// ---------------------------------------------------------------------------
+
+export type ShipmentStatus =
+  | "PENDING"
+  | "LABEL_CREATED"
+  | "IN_TRANSIT"
+  | "DELIVERED"
+  | "FAILED"
+  | "CANCELLED";
+
+/** One courier scan, latest first in the list. */
+export interface ShipmentScan {
+  date: string;
+  activity: string;
+  location: string;
+  status: string;
+}
+
+export interface ReturnShipment {
+  provider: "SHIPROCKET" | null;
+  carrier: string | null;
+  /** The courier's AWB. */
+  trackingNumber: string | null;
+  trackingUrl: string | null;
+  labelUrl: string | null;
+  status: ShipmentStatus;
+  /** The courier's own word for where the parcel is, and a readable form. */
+  externalStatus: string | null;
+  statusLabel: string | null;
+  externalShipmentId: string | null;
+  pickupScheduledAt: string | null;
+  pickupToken: string | null;
+  /** Estimated delivery. */
+  etd: string | null;
+  scans: ShipmentScan[];
+  /** Why the last attempt failed; null for the shopper. */
+  lastError: string | null;
+  lastTrackedAt: string | null;
+  shippedAt: string | null;
+  deliveredAt: string | null;
+}
+
+/** The store's Shiprocket connection, as the settings page shows it. */
+export type ShiprocketSettings = (
+  | {
+      connected: true;
+      email: string;
+      connectedAt: string;
+      tokenExpiresAt: string | null;
+      webhookSecret: string;
+      autoCreate: boolean;
+      receiveOnDelivery: boolean;
+      qcEnabled: boolean;
+      parcel: { lengthCm: number; breadthCm: number; heightCm: number; weightKg: number };
+    }
+  | { connected: false }
+) & {
+  webhookUrl: string;
+  /** The default return destination, and whether the courier can deliver to it. */
+  destination: { name: string; hasPhone: boolean; hasZip: boolean } | null;
+};
+
 /** A postal address flattened server-side into printable lines. */
 export interface PostalAddress {
   name: string | null;
@@ -399,15 +463,8 @@ export interface ReturnDetail {
     /** What the shopper wrote with the pick, when the group allowed it. */
     note: string | null;
   }>;
-  shipment: {
-    carrier: string | null;
-    trackingNumber: string | null;
-    trackingUrl: string | null;
-    labelUrl: string | null;
-    status: string;
-    shippedAt: string | null;
-    deliveredAt: string | null;
-  } | null;
+  /** The parcel coming back, when the app booked the courier. */
+  shipment: ReturnShipment | null;
   events: Array<{
     id: string;
     type: string;

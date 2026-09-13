@@ -3823,3 +3823,80 @@ table.data tbody tr:hover {
     grid-column: 1 / -1;
   }
 }
+
+/* ---------- shipping: Shiprocket ---------- */
+
+/* Parcel defaults: four short fields and a save, on one line where they fit. */
+.ship-parcel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.ship-parcel__field {
+  display: grid;
+  gap: 6px;
+}
+
+.ship-parcel .btn {
+  margin-bottom: 1px;
+}
+
+/* The webhook token: hidden until asked for, next to its buttons. */
+.ship-secret {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.ship-secret__value {
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-muted);
+  font-size: 12.5px;
+  letter-spacing: 0.02em;
+  overflow-wrap: anywhere;
+}
+
+/* The parcel's state, on the return page. */
+.ship-chip--label_created,
+.ship-chip--in_transit {
+  background: #e8f1fb;
+  color: #1d4f91;
+}
+
+.ship-chip--delivered {
+  background: #e3f5e9;
+  color: #1a6b3a;
+}
+
+.ship-chip--failed {
+  background: #fdecec;
+  color: #a12626;
+}
+
+/* The courier's scans, latest first. */
+.scans {
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--border);
+}
+
+.scans__item {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.scans__date {
+  color: var(--text-muted);
+  white-space: nowrap;
+}

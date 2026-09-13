@@ -3136,3 +3136,20 @@
   margin-top: 10px;
   font-size: 14px;
 }
+
+/* The courier pickup on the status page: the label to print, and tracking. */
+.confirm__label-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.confirm__label-actions .btn {
+  width: auto;
+}
+
+.confirm__label-actions .confirm__method-link {
+  margin-top: 0;
+}

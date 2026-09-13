@@ -3,6 +3,7 @@ import { env } from "./config/env.js";
 import { logger } from "./lib/logger.js";
 import { prisma } from "./lib/prisma.js";
 import { runReminderSweepSafely } from "./modules/returns/reminders.service.js";
+import { runTrackingSweepSafely } from "./modules/shipping/shiprocket.service.js";
 
 const app = createApp();
 const server = app.listen(env.PORT, () => {
@@ -28,6 +29,16 @@ if (env.REMINDER_SWEEP_MINUTES > 0) {
   );
   // Not on boot: a restart loop would otherwise sweep on every crash.
   setInterval(() => void runReminderSweepSafely(), period).unref();
+}
+
+/**
+ * Tracking for return parcels, for stores that haven't set up Shiprocket's
+ * webhook. Same shape as the reminder sweep, for the same reasons.
+ */
+if (env.TRACKING_SWEEP_MINUTES > 0) {
+  const period = env.TRACKING_SWEEP_MINUTES * 60_000;
+  logger.info(`Tracking sweep every ${env.TRACKING_SWEEP_MINUTES} minutes`);
+  setInterval(() => void runTrackingSweepSafely(), period).unref();
 }
 
 /** Finish in-flight requests and close the pool before exiting. */

@@ -6,6 +6,10 @@ import { displayConverter, forDisplay, toDecimal } from "../../lib/money.js";
 import { logger } from "../../lib/logger.js";
 import { notifyInBackground } from "../email/notifications.js";
 import {
+  cancelLabelQuietly,
+  createLabelOnApproval,
+} from "../shipping/shiprocket.service.js";
+import {
   issueShopifyGiftCard,
   issueShopifyStoreCredit,
   type CreditResult,
@@ -289,6 +293,14 @@ export const approveReturn = async (
    * Also non-fatal — see ensureShopifyReturn above.
    */
   await ensureExchangeDraftOrder(merchantId, id);
+
+  /**
+   * The return label, when the shopper asked for one and the store makes
+   * them itself. Before the mail goes, so the approval email can carry it.
+   * Non-fatal, like the two above: a courier's refusal lands on the timeline
+   * to be retried from the return.
+   */
+  await createLabelOnApproval(merchantId, id, actorId);
 
   notifyInBackground(id, "APPROVED");
   return getReturn(merchantId, id);
@@ -584,14 +596,15 @@ const recalculateTotals = async (merchantId: string, id: string) => {
 export const markReceived = async (
   merchantId: string,
   id: string,
-  actorId: string,
+  /** Null when the courier's delivery scan did it rather than a person. */
+  actorId: string | null,
 ) => {
   await changeStatus({
     merchantId,
     id,
     to: "RECEIVED",
-    actorId,
-    message: "Items received at the warehouse",
+    actorId: actorId ?? undefined,
+    message: actorId ? "Items received at the warehouse" : "Delivered by the courier",
     extraData: { receivedAt: new Date() },
   });
 
@@ -762,7 +775,9 @@ export const cancelReturn = async (
     actorId,
     message: reason ? `Return cancelled: ${reason}` : "Return cancelled",
   });
-  return updated;
+  // A courier booked for it is called off too.
+  await cancelLabelQuietly(merchantId, id, actorId);
+  return getReturn(merchantId, id).catch(() => updated);
 };
 
 /**

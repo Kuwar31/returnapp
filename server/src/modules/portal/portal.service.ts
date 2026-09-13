@@ -24,6 +24,7 @@ import {
   pickGroup,
   requirementsOf,
 } from "../settings/reasons.service.js";
+import { createLabelOnApproval } from "../shipping/shiprocket.service.js";
 import {
   resolveDisplayMode,
   resolveShopNowBonus,
@@ -1409,6 +1410,9 @@ export const submitReturn = async (
   // the auto-approve threshold would exist only in our database.
   if (created.status === "APPROVED") {
     await ensureShopifyReturn(merchantId, created.id);
+    // And book the courier, where the return asked for a label — before the
+    // approval mail below, which carries it.
+    await createLabelOnApproval(merchantId, created.id, null);
   }
 
   /**

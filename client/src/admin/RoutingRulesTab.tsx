@@ -694,9 +694,11 @@ export function RoutingRulesTab({
                       <div className="pairing__divider" />
                       <div className="field-label">Prepaid return labels</div>
                       <p className="settings-row__hint">
-                        Automatic label generation isn't set up yet, so you'll
-                        send the label yourself once the return is approved.
-                        The instructions below tell the customer what to expect.
+                        With Shiprocket connected under Settings → Shipping, a
+                        courier is booked to collect the parcel when the return
+                        is approved, and the label goes out in the approval
+                        email. The instructions below tell the customer what to
+                        expect either way.
                       </p>
                     </>
                   )}

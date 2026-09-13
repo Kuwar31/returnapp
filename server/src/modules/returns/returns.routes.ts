@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import { prisma } from "../../lib/prisma.js";
 import { asyncHandler } from "../../middleware/asyncHandler.js";
@@ -7,6 +7,11 @@ import { validate } from "../../middleware/validate.js";
 import { serializeReturn, serializeReturnSummary } from "./serializers.js";
 import * as returnsService from "./returns.service.js";
 import { resolveDisplayMode } from "../settings/merchant-settings.js";
+import {
+  cancelLabel,
+  createReturnLabel,
+  refreshTracking,
+} from "../shipping/shiprocket.service.js";
 import {
   diagnoseExchange,
   runExchangeRepair,
@@ -456,5 +461,41 @@ returnsRouter.post(
       message: event.message,
       createdAt: event.createdAt,
     });
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// The return label — booking, tracking and calling off the courier
+// ---------------------------------------------------------------------------
+
+const withLabel = async (req: Request, res: Response) => {
+  const request = await returnsService.getReturn(req.admin!.merchantId, req.params.id);
+  res.json(serializeReturn(request, await resolveDisplayMode(req.admin!.merchantId)));
+};
+
+/** Makes the label now, or again after a failure. Costs money, so admins only. */
+returnsRouter.post(
+  "/:id/label",
+  requireRole("OWNER", "ADMIN"),
+  asyncHandler(async (req, res) => {
+    await createReturnLabel(req.admin!.merchantId, req.params.id, req.admin!.sub);
+    await withLabel(req, res);
+  }),
+);
+
+returnsRouter.post(
+  "/:id/label/refresh",
+  asyncHandler(async (req, res) => {
+    await refreshTracking(req.admin!.merchantId, req.params.id);
+    await withLabel(req, res);
+  }),
+);
+
+returnsRouter.post(
+  "/:id/label/cancel",
+  requireRole("OWNER", "ADMIN"),
+  asyncHandler(async (req, res) => {
+    await cancelLabel(req.admin!.merchantId, req.params.id, req.admin!.sub);
+    await withLabel(req, res);
   }),
 );

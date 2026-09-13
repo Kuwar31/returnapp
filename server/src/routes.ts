@@ -7,6 +7,7 @@ import { ordersRouter } from "./modules/orders/orders.routes.js";
 import { portalRouter } from "./modules/portal/portal.routes.js";
 import { returnsRouter } from "./modules/returns/returns.routes.js";
 import { settingsRouter } from "./modules/settings/settings.routes.js";
+import { shippingRouter } from "./modules/shipping/shipping.routes.js";
 import { proxyRouter } from "./modules/shopify/proxy.routes.js";
 import { shopifyRouter } from "./modules/shopify/shopify.routes.js";
 
@@ -31,6 +32,9 @@ apiRouter.use("/shopify", shopifyRouter);
  * routes above, and outside every other auth scheme.
  */
 apiRouter.use("/proxy", proxyRouter);
+
+// Courier tracking webhooks, authenticated by the token the merchant set.
+apiRouter.use("/shipping", shippingRouter);
 
 // Shopper-facing. No admin auth; sessions are scoped to one order.
 apiRouter.use("/portal", portalRouter);

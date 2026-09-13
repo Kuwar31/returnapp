@@ -11,6 +11,7 @@ import type {
   ReturnShipment,
 } from "@prisma/client";
 import { displayConverter, serializeMoney } from "../../lib/money.js";
+import { describeStatus, normaliseScans } from "../shipping/shiprocket.status.js";
 import { STATUS_LABELS } from "./status.js";
 
 type FullReturn = ReturnRequest & {
@@ -204,13 +205,28 @@ export const serializeReturn = (
       /** What the shopper wrote with the pick, when the group allowed it. */
       note: item.note,
     })) ?? [],
+  /**
+   * The parcel coming back, when the app booked it. The courier's own status
+   * comes as they word it, plus a readable form of it; the scan list is
+   * latest first.
+   */
   shipment: request.shipment
     ? {
+        provider: request.shipment.provider,
         carrier: request.shipment.carrier,
         trackingNumber: request.shipment.trackingNumber,
         trackingUrl: request.shipment.trackingUrl,
         labelUrl: request.shipment.labelUrl,
         status: request.shipment.status,
+        externalStatus: request.shipment.externalStatus,
+        statusLabel: describeStatus(request.shipment.externalStatus),
+        externalShipmentId: request.shipment.externalShipmentId,
+        pickupScheduledAt: request.shipment.pickupScheduledAt,
+        pickupToken: request.shipment.pickupToken,
+        etd: request.shipment.etd,
+        scans: normaliseScans(request.shipment.scans),
+        lastError: request.shipment.lastError,
+        lastTrackedAt: request.shipment.lastTrackedAt,
         shippedAt: request.shipment.shippedAt,
         deliveredAt: request.shipment.deliveredAt,
       }
