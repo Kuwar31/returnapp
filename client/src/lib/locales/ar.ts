@@ -3,7 +3,6 @@ import type { Dict } from "../i18n";
 /** Arabic. Any key missing here falls through to English. */
 export const ar: Dict = {
   "lookup.title": "ابحث عن طلبك",
-  "lookup.intro": "أدخل رقم طلبك والبريد الإلكتروني الذي استخدمته عند الدفع.",
   "lookup.orderPlaceholder": "مثال: 1001",
   "lookup.emailPlaceholder": "you@example.com",
   "lookup.busy": "جارٍ البحث عن طلبك…",
@@ -13,7 +12,6 @@ export const ar: Dict = {
   "lookup.criterion.email": "البريد الإلكتروني",
   "lookup.criterion.zip": "الرمز البريدي",
   "lookup.criterion.phone": "رقم الهاتف",
-  "lookup.introBy": "أدخل رقم طلبك و{field} المسجّل في طلبك.",
   "lookup.error.missingBy": "أدخل رقم الطلب و{field}.",
   "lookup.zipPlaceholder": "مثال: 11564",
   "lookup.phonePlaceholder": "مثال: +966 50 123 4567",

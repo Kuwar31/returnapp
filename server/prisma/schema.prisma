@@ -360,7 +360,6 @@ model PortalBranding {
   merchantId   String   @unique
   merchant     Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
   headline     String   @default("Returns & Exchanges")
-  subheadline  String   @default("Start a return or exchange in a few clicks")
   logoUrl      String?
   /// Full-bleed image behind the portal. Merchant-set; when null the app
   /// borrows a product photo from the store's own catalogue and caches it here.

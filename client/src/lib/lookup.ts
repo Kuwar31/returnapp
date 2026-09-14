@@ -68,21 +68,6 @@ const criterionList = (
     criteria.map((c) => t(CRITERION_KEY[c])),
   );
 
-/**
- * The sentence under the title. Email alone keeps the wording the portal has
- * always had — "the email you used at checkout" — since it says more than a
- * list of one would.
- */
-export const lookupIntro = (
-  b: LookupCopy,
-  locale: string,
-  t: TranslateFn,
-): string => {
-  const criteria = activeCriteria(b);
-  if (criteria.length === 1 && criteria[0] === "EMAIL") return t("lookup.intro");
-  return t("lookup.introBy", { field: criterionList(criteria, locale, t) });
-};
-
 /** What to say when the form was sent with a field empty. */
 export const lookupMissingMessage = (
   b: LookupCopy,

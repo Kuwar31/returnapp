@@ -3,7 +3,6 @@ import type { Dict } from "../i18n";
 /** Chinese (Simplified). Any key missing here falls through to English. */
 export const zh: Dict = {
   "lookup.title": "查找您的订单",
-  "lookup.intro": "请输入您的订单号和结账时使用的电子邮箱。",
   "lookup.orderPlaceholder": "例如 1001",
   "lookup.emailPlaceholder": "you@example.com",
   "lookup.busy": "正在查找您的订单…",
@@ -13,7 +12,6 @@ export const zh: Dict = {
   "lookup.criterion.email": "电子邮箱",
   "lookup.criterion.zip": "邮政编码",
   "lookup.criterion.phone": "电话号码",
-  "lookup.introBy": "请输入您的订单号和订单中的{field}。",
   "lookup.error.missingBy": "请输入订单号和{field}。",
   "lookup.zipPlaceholder": "例如 100000",
   "lookup.phonePlaceholder": "例如 138 0000 0000",

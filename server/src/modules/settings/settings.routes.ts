@@ -447,7 +447,6 @@ const optionalText = (max: number) =>
 
 const brandingSchema = z.object({
   headline: z.string().trim().min(1).max(120),
-  subheadline: z.string().trim().max(200),
   logoUrl: imageUrl,
   accentColor: hex("#111213"),
   supportEmail: z

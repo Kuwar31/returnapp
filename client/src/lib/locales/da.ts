@@ -3,7 +3,6 @@ import type { Dict } from "../i18n";
 /** Danish. Any key missing here falls through to English. */
 export const da: Dict = {
   "lookup.title": "Find din ordre",
-  "lookup.intro": "Indtast dit ordrenummer og den e-mail, du brugte ved betaling.",
   "lookup.orderPlaceholder": "f.eks. 1001",
   "lookup.emailPlaceholder": "dig@eksempel.dk",
   "lookup.busy": "Søger efter din ordre…",
@@ -13,7 +12,6 @@ export const da: Dict = {
   "lookup.criterion.email": "e-mailadressen",
   "lookup.criterion.zip": "postnummeret",
   "lookup.criterion.phone": "telefonnummeret",
-  "lookup.introBy": "Indtast dit ordrenummer og {field} fra din ordre.",
   "lookup.error.missingBy": "Indtast dit ordrenummer og {field}.",
   "lookup.zipPlaceholder": "f.eks. 1050",
   "lookup.phonePlaceholder": "f.eks. +45 20 12 34 56",

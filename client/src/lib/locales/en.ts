@@ -16,7 +16,6 @@
 export const en = {
   // --- lookup ------------------------------------------------------------
   "lookup.title": "Find your order",
-  "lookup.intro": "Enter your order number and the email you used at checkout.",
   "lookup.orderPlaceholder": "e.g. 1001",
   "lookup.emailPlaceholder": "you@example.com",
   "lookup.busy": "Finding your order…",
@@ -28,7 +27,6 @@ export const en = {
   "lookup.criterion.zip": "postal code",
   "lookup.criterion.phone": "phone number",
   // {field} is one criterion, or several joined as "A, B or C".
-  "lookup.introBy": "Enter your order number and the {field} on your order.",
   "lookup.error.missingBy": "Enter your order number and {field}.",
   "lookup.zipPlaceholder": "e.g. 94103",
   "lookup.phonePlaceholder": "e.g. +1 415 555 0100",

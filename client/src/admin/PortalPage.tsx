@@ -145,15 +145,6 @@ function Preview({ b, storeName }: { b: PortalBranding; storeName: string }) {
         >
           {b.headline}
         </div>
-        <div
-          className="pv__sub"
-          style={{
-            fontFamily: fontStack(b.bodyFont),
-            color: light ? "rgba(255,255,255,.85)" : b.bodyColor,
-          }}
-        >
-          {b.subheadline}
-        </div>
       </div>
 
       <div
@@ -634,14 +625,6 @@ export default function PortalPage() {
                 className="settings-input"
                 value={b.headline}
                 onChange={(e) => set("headline", e.target.value)}
-              />
-            </Row>
-            <Row label="Subheading">
-              <input
-                type="text"
-                className="settings-input"
-                value={b.subheadline}
-                onChange={(e) => set("subheadline", e.target.value)}
               />
             </Row>
             <Row label="Start button">

@@ -3,7 +3,6 @@ import type { Dict } from "../i18n";
 /** French. Any key missing here falls through to English. */
 export const fr: Dict = {
   "lookup.title": "Retrouvez votre commande",
-  "lookup.intro": "Saisissez votre numéro de commande et l'e-mail utilisé lors du paiement.",
   "lookup.orderPlaceholder": "ex. 1001",
   "lookup.emailPlaceholder": "vous@exemple.com",
   "lookup.busy": "Recherche de votre commande…",
@@ -13,7 +12,6 @@ export const fr: Dict = {
   "lookup.criterion.email": "l'adresse e-mail",
   "lookup.criterion.zip": "le code postal",
   "lookup.criterion.phone": "le numéro de téléphone",
-  "lookup.introBy": "Saisissez votre numéro de commande et {field} figurant sur votre commande.",
   "lookup.error.missingBy": "Saisissez votre numéro de commande et {field}.",
   "lookup.zipPlaceholder": "ex. 75001",
   "lookup.phonePlaceholder": "ex. +33 6 12 34 56 78",

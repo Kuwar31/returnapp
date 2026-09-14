@@ -3,7 +3,6 @@ import type { Dict } from "../i18n";
 /** Italian. Any key missing here falls through to English. */
 export const it: Dict = {
   "lookup.title": "Trova il tuo ordine",
-  "lookup.intro": "Inserisci il numero d'ordine e l'e-mail usata al momento dell'acquisto.",
   "lookup.orderPlaceholder": "es. 1001",
   "lookup.emailPlaceholder": "tu@esempio.com",
   "lookup.busy": "Ricerca del tuo ordine…",
@@ -13,7 +12,6 @@ export const it: Dict = {
   "lookup.criterion.email": "l'indirizzo e-mail",
   "lookup.criterion.zip": "il codice postale",
   "lookup.criterion.phone": "il numero di telefono",
-  "lookup.introBy": "Inserisci il numero d'ordine e {field} che compare nell'ordine.",
   "lookup.error.missingBy": "Inserisci il numero d'ordine e {field}.",
   "lookup.zipPlaceholder": "es. 00100",
   "lookup.phonePlaceholder": "es. +39 312 345 6789",

@@ -3192,3 +3192,64 @@
 .review__method-head + .methods {
   margin-top: 14px;
 }
+
+/* ---------- order lookup ----------
+   The first thing a shopper sees, so it gets the room the rest of the
+   portal doesn't need: one question, two answers, one button. Sized like
+   the returns centres shoppers already know from other stores — fields
+   tall enough to hit with a thumb, a title with air around it, and nothing
+   else on the card to read past. */
+
+.lookup {
+  max-width: 480px;
+  padding: 36px 36px 32px;
+}
+
+.lookup__title {
+  font-size: 26px;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 26px;
+}
+
+.lookup .portal__card-logo {
+  margin-bottom: 22px;
+}
+
+.lookup .field {
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.lookup .field label {
+  font-size: 14px;
+}
+
+/* 16px text also stops iOS zooming into the field on focus. */
+.lookup .field input {
+  padding: 15px 16px;
+  font-size: 16px;
+  border-radius: var(--radius);
+}
+
+.lookup .portal__help {
+  margin: -6px 0 18px;
+}
+
+.lookup .btn {
+  margin-top: 6px;
+  padding: 16px 20px;
+  font-size: 16px;
+  border-radius: var(--radius);
+}
+
+@media (max-width: 560px) {
+  .lookup {
+    padding: 28px 22px 26px;
+  }
+
+  .lookup__title {
+    font-size: 24px;
+    margin-bottom: 22px;
+  }
+}

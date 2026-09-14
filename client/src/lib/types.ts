@@ -58,7 +58,6 @@ export type LookupCriterion = "EMAIL" | "ZIP" | "PHONE";
 /** Everything a merchant can change about how their portal looks and reads. */
 export interface PortalBranding {
   headline: string;
-  subheadline: string;
   logoUrl: string | null;
   /** A second wordmark for white cards, where a pale logo would vanish. */
   lightLogoUrl: string | null;

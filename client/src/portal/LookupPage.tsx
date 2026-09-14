@@ -5,7 +5,6 @@ import { at } from "../lib/i18n";
 import {
   lookupFieldLabel,
   lookupInputProps,
-  lookupIntro,
   lookupMissingMessage,
 } from "../lib/lookup";
 import { usePortal, useT } from "./PortalLayout";
@@ -78,7 +77,7 @@ export default function LookupPage({ actionData }: Route.ComponentProps) {
 
   return (
     <>
-      <div className="card portal__card">
+      <div className="card portal__card lookup">
         {/*
           The lookup card carries the light logo when there is one: this sits
           on white, while the header's logo sits over the background image.
@@ -90,10 +89,7 @@ export default function LookupPage({ actionData }: Route.ComponentProps) {
             alt={merchant.name}
           />
         )}
-        <h2>{t("lookup.title")}</h2>
-        <p className="muted" style={{ margin: "6px 0 20px" }}>
-          {lookupIntro(branding, branding.locale, t)}
-        </p>
+        <h2 className="lookup__title">{t("lookup.title")}</h2>
 
         <ErrorAlert message={error} />
 

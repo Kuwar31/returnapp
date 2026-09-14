@@ -2594,11 +2594,6 @@ table.data tbody tr:hover {
   letter-spacing: -0.015em;
 }
 
-.pv__sub {
-  font-size: 12px;
-  margin-top: 3px;
-}
-
 .pv__card {
   background: #fff;
   padding: 16px;

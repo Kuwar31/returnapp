@@ -3,7 +3,6 @@ import type { Dict } from "../i18n";
 /** Japanese. Any key missing here falls through to English. */
 export const ja: Dict = {
   "lookup.title": "ご注文を検索",
-  "lookup.intro": "注文番号と、ご購入時に使用したメールアドレスを入力してください。",
   "lookup.orderPlaceholder": "例: 1001",
   "lookup.emailPlaceholder": "you@example.com",
   "lookup.busy": "ご注文を検索しています…",
@@ -13,7 +12,6 @@ export const ja: Dict = {
   "lookup.criterion.email": "メールアドレス",
   "lookup.criterion.zip": "郵便番号",
   "lookup.criterion.phone": "電話番号",
-  "lookup.introBy": "注文番号と、ご注文時の{field}を入力してください。",
   "lookup.error.missingBy": "注文番号と{field}を入力してください。",
   "lookup.zipPlaceholder": "例: 100-0001",
   "lookup.phonePlaceholder": "例: 090-1234-5678",

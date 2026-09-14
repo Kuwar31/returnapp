@@ -169,7 +169,6 @@ export default function PortalLayout({ loaderData }: Route.ComponentProps) {
             <div className="portal__store">{config.merchant.name}</div>
           )}
           <h1>{branding.headline}</h1>
-          <p className="muted">{branding.subheadline}</p>
         </header>
         )}
 

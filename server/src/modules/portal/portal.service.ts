@@ -215,7 +215,6 @@ export const resolveHeroImage = async (
  */
 const BRANDING_DEFAULTS = {
   headline: "Returns & Exchanges",
-  subheadline: "Start a return or exchange in a few clicks",
   logoUrl: null as string | null,
   lightLogoUrl: null as string | null,
   logoWidth: 180,

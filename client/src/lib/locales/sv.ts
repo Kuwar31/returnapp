@@ -3,7 +3,6 @@ import type { Dict } from "../i18n";
 /** Swedish. Any key missing here falls through to English. */
 export const sv: Dict = {
   "lookup.title": "Hitta din order",
-  "lookup.intro": "Ange ditt ordernummer och e-postadressen du använde i kassan.",
   "lookup.orderPlaceholder": "t.ex. 1001",
   "lookup.emailPlaceholder": "du@exempel.se",
   "lookup.busy": "Söker efter din order…",
@@ -13,7 +12,6 @@ export const sv: Dict = {
   "lookup.criterion.email": "e-postadressen",
   "lookup.criterion.zip": "postnumret",
   "lookup.criterion.phone": "telefonnumret",
-  "lookup.introBy": "Ange ditt ordernummer och {field} från din order.",
   "lookup.error.missingBy": "Ange ditt ordernummer och {field}.",
   "lookup.zipPlaceholder": "t.ex. 111 22",
   "lookup.phonePlaceholder": "t.ex. +46 70 123 45 67",
