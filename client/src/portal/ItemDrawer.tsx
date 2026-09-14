@@ -144,6 +144,8 @@ export function ItemDrawer({
   const [productsFailed, setProductsFailed] = useState(false);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
+  /** The choice screen stopped waiting for slow previews; see below. */
+  const [waitedEnough, setWaitedEnough] = useState(false);
   /**
    * The size step no longer commits on click.
    *
@@ -408,17 +410,19 @@ export function ItemDrawer({
       "REFUND") as ResolutionType;
 
   /**
-   * Prefetch both exchange sources as soon as the shopper reaches the choice.
+   * Prefetch every exchange source the moment the drawer opens, not when the
+   * shopper reaches the choice.
    *
    * The cards need to *show* what's behind them — sizes available, a few real
-   * products — because an option that looks empty doesn't get clicked. Failures
-   * are swallowed: a missing preview should degrade the card, never block the
-   * shopper from choosing a refund.
+   * products — because an option that looks empty doesn't get clicked. Asked
+   * for while the shopper is still picking a reason, the answers are usually
+   * in hand before the question is put; asked for on arrival, as before, the
+   * cards appeared one at a time as each reply landed, with "Return item"
+   * alone on screen first. Failures are swallowed: a missing preview should
+   * degrade the card, never block the shopper from choosing a refund.
    */
   useEffect(() => {
-    if (step !== "resolution" && step !== "size") return;
-    if (options || optionsFailed) return;
-    setLoading(step === "size");
+    if (!canExchange || options || optionsFailed) return;
     api
       .get<ExchangeOptions>("/portal/session/exchange/variants", {
         auth: "portal",
@@ -436,12 +440,11 @@ export function ItemDrawer({
          * options couldn't be loaded and offers a retry, which clears it.
          */
         setOptionsFailed(true);
-      })
-      .finally(() => setLoading(false));
-  }, [step, options, optionsFailed, item.id]);
+      });
+  }, [canExchange, options, optionsFailed, item.id]);
 
   useEffect(() => {
-    if (step !== "resolution" || advanced !== undefined) return;
+    if (!canExchange || advanced !== undefined) return;
     api
       .get<AdvancedExchange | null>("/portal/session/exchange/advanced", {
         auth: "portal",
@@ -450,10 +453,12 @@ export function ItemDrawer({
       .then((r) => setAdvanced(r ?? null))
       // No rule is the safe reading: offer the whole catalogue as before.
       .catch(() => setAdvanced(null));
-  }, [step, advanced, item.id]);
+  }, [canExchange, advanced, item.id]);
 
   useEffect(() => {
-    if (step !== "resolution" || products || productsFailed) return;
+    // The browse step fetches its own, filtered list; don't race it.
+    if (!canExchange || step === "browse" || step === "product") return;
+    if (products || productsFailed) return;
     api
       .get<{ products: ExchangeProduct[] }>("/portal/session/exchange/products", {
         auth: "portal",
@@ -461,7 +466,28 @@ export function ItemDrawer({
       .then((r) => setProducts(r.products))
       // Same reasoning as above: unknown is not the same as none.
       .catch(() => setProductsFailed(true));
-  }, [step, products, productsFailed]);
+  }, [canExchange, step, products, productsFailed]);
+
+  /** The size step is waiting on the item's own options. */
+  const optionsPending = canExchange && !options && !optionsFailed;
+
+  /**
+   * Whether every card on the choice screen knows what it's offering. They
+   * render together once they do, rather than each popping in as its own
+   * reply lands. A reply that never comes shouldn't hold a refund hostage,
+   * so after a few seconds the screen shows what it has.
+   */
+  const previewsReady =
+    !canExchange ||
+    ((options !== null || optionsFailed) &&
+      advanced !== undefined &&
+      (advanced !== null || products !== null || productsFailed));
+  useEffect(() => {
+    if (step !== "resolution" || previewsReady) return;
+    const timer = setTimeout(() => setWaitedEnough(true), 5000);
+    return () => clearTimeout(timer);
+  }, [step, previewsReady]);
+  const showChoices = previewsReady || waitedEnough;
 
   useEffect(() => {
     if (step !== "browse") return;
@@ -931,7 +957,11 @@ export function ItemDrawer({
             <>
               <h2>{t("drawer.howProceed")}</h2>
 
-              {canExchange && (swappableVariants.length > 0 || optionsFailed) && (
+              {!showChoices && (
+                <p className="muted">{t("drawer.loadingOptions")}</p>
+              )}
+
+              {showChoices && canExchange && (swappableVariants.length > 0 || optionsFailed) && (
                 <button
                   className="choice choice--feature"
                   onClick={() => setStep("size")}
@@ -965,7 +995,8 @@ export function ItemDrawer({
                 "Exchange for a new style" with nothing under it says nothing
                 about whether it's worth opening.
               */}
-              {canExchange &&
+              {showChoices &&
+                canExchange &&
                 advanced?.options.map((option) => (
                   <button
                     key={option.id}
@@ -1004,7 +1035,8 @@ export function ItemDrawer({
                 — a merchant who narrowed the choice didn't mean "and also
                 everything else".
               */}
-              {canExchange &&
+              {showChoices &&
+                canExchange &&
                 advanced === null &&
                 (products === null || products.length > 0 || productsFailed) && (
                 <button
@@ -1039,6 +1071,7 @@ export function ItemDrawer({
                 </button>
               )}
 
+              {showChoices && (
               <button className="choice" onClick={() => finish(defaultPayout)}>
                 <span className="choice__main">
                   <span className="choice__label">{t("drawer.returnItem")}</span>
@@ -1048,13 +1081,16 @@ export function ItemDrawer({
                 </span>
                 <span className="choice__chevron">›</span>
               </button>
+              )}
             </>
           )}
 
 
           {(step === "size" || step === "product") && (
             <>
-              {loading && <p className="muted">{t("drawer.loadingOptions")}</p>}
+              {(loading || (step === "size" && optionsPending)) && (
+                <p className="muted">{t("drawer.loadingOptions")}</p>
+              )}
               {/*
                 The preview couldn't be read — Shopify unreachable, store not
                 connected — which is not the same thing as "no other sizes".
