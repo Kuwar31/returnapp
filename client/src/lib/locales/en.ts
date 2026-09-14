@@ -232,6 +232,7 @@ export const en = {
   "status.label.status": "Parcel status",
   "status.label.download": "Download label",
   "status.label.track": "Track parcel",
+  "review.method.change": "Change",
   "status.questions": "Questions?",
   "status.questionsEmail": "Questions? Email",
   "status.orderNo": "Order #{number}",

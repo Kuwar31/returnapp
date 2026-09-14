@@ -26,6 +26,8 @@ export default [
     // Opened from a link a merchant made: signed in to one order already.
     route("start", "portal/StartPage.tsx"),
     route("items", "portal/SelectItemsPage.tsx"),
+    // How the items go back: one question on its own step before the review.
+    route("method", "portal/MethodPage.tsx"),
     route("shop", "portal/ShopPage.tsx"),
     route("shop-return", "portal/ShopReturnPage.tsx"),
     route("review", "portal/ReviewPage.tsx"),

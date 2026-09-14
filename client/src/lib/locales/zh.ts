@@ -183,6 +183,7 @@ export const zh: Dict = {
   "status.label.status": "包裹状态",
   "status.label.download": "下载标签",
   "status.label.track": "追踪包裹",
+  "review.method.change": "更改",
   "status.questions": "有疑问？",
   "status.questionsEmail": "有疑问？请发邮件至",
   "status.orderNo": "订单号 {number}",

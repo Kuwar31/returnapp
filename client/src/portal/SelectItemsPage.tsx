@@ -220,7 +220,8 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
       setOfferOpen(true);
       return;
     }
-    navigate(`/r/${slug}/review`);
+    // How the items go back is its own step, before the review.
+    navigate(`/r/${slug}/method`);
   };
 
   /**
@@ -604,7 +605,7 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
                 onClick={() => {
                   setOfferSeen(true);
                   setOfferOpen(false);
-                  navigate(`/r/${slug}/review`);
+                  navigate(`/r/${slug}/method`);
                 }}
               >
                 {quote

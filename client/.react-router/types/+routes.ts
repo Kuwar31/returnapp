@@ -29,6 +29,11 @@ type Pages = {
       "slug": string;
     };
   };
+  "/r/:slug/method": {
+    params: {
+      "slug": string;
+    };
+  };
   "/r/:slug/shop": {
     params: {
       "slug": string;
@@ -152,7 +157,7 @@ type Pages = {
 type RouteFiles = {
   "root.tsx": {
     id: "root";
-    page: "/" | "/r/:slug" | "/r/:slug/start" | "/r/:slug/items" | "/r/:slug/shop" | "/r/:slug/shop-return" | "/r/:slug/review" | "/r/:slug/status/:reference" | "/admin/login" | "/admin" | "/admin/:store" | "/admin/:store/returns" | "/admin/:store/returns/find" | "/admin/:store/returns/:id" | "/admin/:store/settings" | "/admin/:store/settings/policy" | "/admin/:store/settings/policies" | "/admin/:store/settings/policies/destinations" | "/admin/:store/settings/policies/locations" | "/admin/:store/settings/policies/routing" | "/admin/:store/settings/exchanges" | "/admin/:store/settings/shop-now" | "/admin/:store/settings/shipping" | "/admin/:store/settings/portal" | "/admin/:store/settings/notifications" | "/admin/:store/settings/reasons" | "/admin/:store/settings/rules" | "/*";
+    page: "/" | "/r/:slug" | "/r/:slug/start" | "/r/:slug/items" | "/r/:slug/method" | "/r/:slug/shop" | "/r/:slug/shop-return" | "/r/:slug/review" | "/r/:slug/status/:reference" | "/admin/login" | "/admin" | "/admin/:store" | "/admin/:store/returns" | "/admin/:store/returns/find" | "/admin/:store/returns/:id" | "/admin/:store/settings" | "/admin/:store/settings/policy" | "/admin/:store/settings/policies" | "/admin/:store/settings/policies/destinations" | "/admin/:store/settings/policies/locations" | "/admin/:store/settings/policies/routing" | "/admin/:store/settings/exchanges" | "/admin/:store/settings/shop-now" | "/admin/:store/settings/shipping" | "/admin/:store/settings/portal" | "/admin/:store/settings/notifications" | "/admin/:store/settings/reasons" | "/admin/:store/settings/rules" | "/*";
   };
   "Home.tsx": {
     id: "Home";
@@ -160,7 +165,7 @@ type RouteFiles = {
   };
   "portal/PortalLayout.tsx": {
     id: "portal/PortalLayout";
-    page: "/r/:slug" | "/r/:slug/start" | "/r/:slug/items" | "/r/:slug/shop" | "/r/:slug/shop-return" | "/r/:slug/review" | "/r/:slug/status/:reference";
+    page: "/r/:slug" | "/r/:slug/start" | "/r/:slug/items" | "/r/:slug/method" | "/r/:slug/shop" | "/r/:slug/shop-return" | "/r/:slug/review" | "/r/:slug/status/:reference";
   };
   "portal/LookupPage.tsx": {
     id: "portal/LookupPage";
@@ -173,6 +178,10 @@ type RouteFiles = {
   "portal/SelectItemsPage.tsx": {
     id: "portal/SelectItemsPage";
     page: "/r/:slug/items";
+  };
+  "portal/MethodPage.tsx": {
+    id: "portal/MethodPage";
+    page: "/r/:slug/method";
   };
   "portal/ShopPage.tsx": {
     id: "portal/ShopPage";
@@ -281,6 +290,7 @@ type RouteModules = {
   "portal/LookupPage": typeof import("./src/portal/LookupPage.tsx");
   "portal/StartPage": typeof import("./src/portal/StartPage.tsx");
   "portal/SelectItemsPage": typeof import("./src/portal/SelectItemsPage.tsx");
+  "portal/MethodPage": typeof import("./src/portal/MethodPage.tsx");
   "portal/ShopPage": typeof import("./src/portal/ShopPage.tsx");
   "portal/ShopReturnPage": typeof import("./src/portal/ShopReturnPage.tsx");
   "portal/ReviewPage": typeof import("./src/portal/ReviewPage.tsx");

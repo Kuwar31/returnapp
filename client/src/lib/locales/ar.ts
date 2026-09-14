@@ -196,6 +196,7 @@ export const ar: Dict = {
   "status.label.status": "حالة الطرد",
   "status.label.download": "تنزيل الملصق",
   "status.label.track": "تتبع الطرد",
+  "review.method.change": "تغيير",
   "status.questions": "هل لديك أسئلة؟",
   "status.questionsEmail": "هل لديك أسئلة؟ راسلنا على",
   "status.orderNo": "الطلب رقم {number}",

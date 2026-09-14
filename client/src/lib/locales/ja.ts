@@ -183,6 +183,7 @@ export const ja: Dict = {
   "status.label.status": "荷物の状況",
   "status.label.download": "ラベルをダウンロード",
   "status.label.track": "荷物を追跡",
+  "review.method.change": "変更",
   "status.questions": "ご不明な点はありますか？",
   "status.questionsEmail": "ご質問はこちらまで",
   "status.orderNo": "注文番号 {number}",

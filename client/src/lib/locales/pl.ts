@@ -192,6 +192,7 @@ export const pl: Dict = {
   "status.label.status": "Status paczki",
   "status.label.download": "Pobierz etykietę",
   "status.label.track": "Śledź paczkę",
+  "review.method.change": "Zmień",
   "status.questions": "Masz pytania?",
   "status.questionsEmail": "Masz pytania? Napisz na",
   "status.orderNo": "Zamówienie nr {number}",

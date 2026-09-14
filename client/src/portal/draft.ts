@@ -89,8 +89,35 @@ export const exchangePriceIn = (
 export const clearDraft = (orderId: string): void => {
   try {
     sessionStorage.removeItem(key(orderId));
+    sessionStorage.removeItem(methodKey(orderId));
   } catch {
     /* nothing to clean up */
+  }
+};
+
+/**
+ * How the shopper chose to send the items back, picked on its own step
+ * between the items and the review. Kept beside the draft, and cleared with
+ * it, so the review page can show the choice rather than ask again.
+ */
+const methodKey = (orderId: string) => `returns.method.${orderId}`;
+
+export type ReturnMethodChoice = "LABEL" | "CARRIER" | "STORE" | "KEEP";
+
+export const saveMethod = (orderId: string, method: ReturnMethodChoice): void => {
+  try {
+    sessionStorage.setItem(methodKey(orderId), method);
+  } catch {
+    /* the review page then asks again */
+  }
+};
+
+export const loadMethod = (orderId: string): ReturnMethodChoice | null => {
+  try {
+    const raw = sessionStorage.getItem(methodKey(orderId));
+    return raw === "LABEL" || raw === "CARRIER" || raw === "STORE" || raw === "KEEP" ? raw : null;
+  } catch {
+    return null;
   }
 };
 

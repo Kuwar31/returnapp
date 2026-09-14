@@ -3153,3 +3153,42 @@
 .confirm__label-actions .confirm__method-link {
   margin-top: 0;
 }
+
+/* ---------- the return-method step, between the items and the review ---------- */
+
+.method-page {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.method-page h1 {
+  margin-bottom: 18px;
+}
+
+.method-page__actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.method-page__actions .btn {
+  width: auto;
+  min-width: 140px;
+}
+
+/* The method already chosen, on the review: the card and a way back. */
+.review__method-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.review__method-head h2 {
+  margin-bottom: 0;
+}
+
+.review__method-head + .methods {
+  margin-top: 14px;
+}

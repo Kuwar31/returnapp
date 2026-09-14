@@ -29,9 +29,11 @@ import {
   lineIdOf,
   loadCart,
   loadDraft,
+  loadMethod,
   loadSubmitted,
   rememberSubmitted,
   saveDraft,
+  saveMethod,
   toSelections,
   toShopSelections,
   type CartLine,
@@ -103,11 +105,16 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
   /** Where a trade-down's leftover should go. Only used when there is one. */
   const [surplusMethod, setSurplusMethod] = useState<SurplusMethod>("REFUND");
   /**
-   * How the shopper wants to send the items back. Null until they choose,
-   * in which case the server's first offered method applies — the quote
-   * says which, so the card can show it selected.
+   * How the shopper wants to send the items back — chosen on the step
+   * before this one, and shown here with a way back to it. Null when they
+   * arrived without choosing (the shop-now path, or a direct visit), in
+   * which case this page asks, with the server's first offered method
+   * preselected — the quote says which.
    */
-  const [returnMethod, setReturnMethod] = useState<ReturnMethodKind | null>(null);
+  const [returnMethod, setReturnMethod] = useState<ReturnMethodKind | null>(() =>
+    loadMethod(order.id),
+  );
+  const [methodChosenBefore] = useState(() => loadMethod(order.id) !== null);
   /** The "checkout opens in a new page" confirmation, for an upsell exchange. */
   const [payPrompt, setPayPrompt] = useState(false);
 
@@ -330,38 +337,83 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
           */}
           <div className="card review__card">
             {quote?.returnMethods && quote.returnMethods.options.length > 0 ? (
-              <>
-                <h2>{t("review.method.title")}</h2>
-                <div className="methods" role="radiogroup" aria-label={t("review.method.title")}>
-                  {quote.returnMethods.options.map((m) => {
-                    const selected = (returnMethod ?? quote.returnMethods!.selected) === m.kind;
-                    return (
-                      <label key={m.kind} className={`method${selected ? " is-selected" : ""}`}>
-                        <input
-                          type="radio"
-                          name="return-method"
-                          checked={selected}
-                          onChange={() => setReturnMethod(m.kind)}
-                        />
-                        <span className="method__icon" aria-hidden="true">
-                          {METHOD_ICONS[m.kind]}
-                        </span>
-                        <span className="method__body">
-                          <span className="method__name">{m.name}</span>
-                          {m.description && <span className="muted">{m.description}</span>}
-                        </span>
-                        {m.costMode !== "HIDDEN" && (
-                          <span className="method__cost">
-                            {m.costMode === "FREE"
-                              ? t("review.method.free")
-                              : money(m.cost, m.currency)}
+              (() => {
+                const picked = methodChosenBefore
+                  ? quote.returnMethods.options.find((m) => m.kind === returnMethod)
+                  : undefined;
+                // Chosen a step ago: show it, with the way back to change it.
+                if (picked) {
+                  return (
+                    <>
+                      <div className="review__method-head">
+                        <h2>{t("status.returnMethod")}</h2>
+                        <button
+                          type="button"
+                          className="linkish"
+                          onClick={() => navigate(`/r/${slug}/method`)}
+                        >
+                          {t("review.method.change")}
+                        </button>
+                      </div>
+                      <div className="methods">
+                        <div className="method is-selected">
+                          <span className="method__icon" aria-hidden="true">
+                            {METHOD_ICONS[picked.kind]}
                           </span>
-                        )}
-                      </label>
-                    );
-                  })}
-                </div>
-              </>
+                          <span className="method__body">
+                            <span className="method__name">{picked.name}</span>
+                            {picked.description && <span className="muted">{picked.description}</span>}
+                          </span>
+                          {picked.costMode !== "HIDDEN" && (
+                            <span className="method__cost">
+                              {picked.costMode === "FREE"
+                                ? t("review.method.free")
+                                : money(picked.cost, picked.currency)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </>
+                  );
+                }
+                return (
+                  <>
+                    <h2>{t("review.method.title")}</h2>
+                    <div className="methods" role="radiogroup" aria-label={t("review.method.title")}>
+                      {quote.returnMethods.options.map((m) => {
+                        const selected = (returnMethod ?? quote.returnMethods!.selected) === m.kind;
+                        return (
+                          <label key={m.kind} className={`method${selected ? " is-selected" : ""}`}>
+                            <input
+                              type="radio"
+                              name="return-method"
+                              checked={selected}
+                              onChange={() => {
+                                setReturnMethod(m.kind);
+                                saveMethod(order.id, m.kind);
+                              }}
+                            />
+                            <span className="method__icon" aria-hidden="true">
+                              {METHOD_ICONS[m.kind]}
+                            </span>
+                            <span className="method__body">
+                              <span className="method__name">{m.name}</span>
+                              {m.description && <span className="muted">{m.description}</span>}
+                            </span>
+                            {m.costMode !== "HIDDEN" && (
+                              <span className="method__cost">
+                                {m.costMode === "FREE"
+                                  ? t("review.method.free")
+                                  : money(m.cost, m.currency)}
+                              </span>
+                            )}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </>
+                );
+              })()
             ) : (
               <>
                 <h2>{t("review.sendBack")}</h2>
