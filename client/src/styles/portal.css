@@ -3375,12 +3375,9 @@
     text-overflow: ellipsis;
   }
 
-  .drawer__body > h2:first-child,
-  .drawer__body > .alert:first-child {
-    margin-top: 18px;
-  }
-
-  .drawer__body .linkish:first-child {
+  /* Whatever a step starts with — a heading, a link back, the suggestion
+     screen's wrapper — clears the bar by the same margin. */
+  .drawer__body > :first-child {
     margin-top: 18px;
   }
 }
