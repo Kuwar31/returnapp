@@ -281,33 +281,48 @@ export function ItemDrawer({
       : (options?.variants[0]?.price ?? null));
 
   /**
-   * A line explaining why this screen is the one they landed on, taken from
-   * the reason they gave rather than from any modelling of other shoppers.
+   * The product's option axes — "Color", "Size" — each with its values, so
+   * the swap screen can show one row of chips per axis the way a product
+   * page does, rather than one chip per combination ("Blue / Small"). "Title"
+   * is Shopify's placeholder on products with no real options, never shown.
    */
-  const suggestion = (() => {
-    const label = `${reasonLabel} ${reason?.label ?? ""}`.toLowerCase();
-    if (/small|large|fit|size/.test(label)) {
-      return t("drawer.suggest.fit");
+  const swapAxisRows = (() => {
+    const axes = new Map<string, string[]>();
+    for (const v of swap?.variants ?? []) {
+      for (const o of v.options ?? []) {
+        if (o.name.toLowerCase() === "title") continue;
+        const values = axes.get(o.name) ?? [];
+        if (!values.includes(o.value)) values.push(o.value);
+        axes.set(o.name, values);
+      }
     }
-    if (/wrong item|not as described|different/.test(label)) {
-      return t("drawer.suggest.wrongItem");
-    }
-    return t("drawer.suggest.generic");
+    return [...axes.entries()];
   })();
+  const currentVariant =
+    swap?.variants.find((v) => v.id === swap.currentVariantId) ?? null;
+  /** A value can be picked when some other variant, in stock, carries it. */
+  const swapValuePossible = (axis: string, value: string) =>
+    swappableVariants.some((v) =>
+      v.options.some((o) => o.name === axis && o.value === value),
+    );
   /**
-   * Whatever the merchant actually calls this axis — "Size" for footwear,
-   * "Color" elsewhere. Falls back to a neutral word rather than assuming every
-   * product is sized.
-   *
-   * "Title" is Shopify's placeholder on products with no real options, not a
-   * name anyone chose, so it is never shown. Capitalised because merchants type
-   * these by hand and this store has one entered as "size".
+   * Pick a value on one axis and keep the others where they are if a variant
+   * allows it. Before anything is chosen the reference is the item being
+   * returned, so tapping "Blue" on a red small lands on the blue small.
    */
-  const rawOptionName = swap?.variants[0]?.options?.[0]?.name ?? "";
-  const optionName =
-    !rawOptionName || rawOptionName.toLowerCase() === "title"
-      ? t("drawer.options")
-      : rawOptionName[0].toUpperCase() + rawOptionName.slice(1);
+  const pickSwapAxis = (axis: string, value: string) => {
+    const reference = chosen?.options ?? currentVariant?.options ?? [];
+    const wanted = (v: ExchangeVariant) =>
+      v.options.some((o) => o.name === axis && o.value === value);
+    const keepsOthers = (v: ExchangeVariant) =>
+      reference.every(
+        (o) => o.name === axis || v.options.some((p) => p.name === o.name && p.value === o.value),
+      );
+    const next =
+      swappableVariants.find((v) => wanted(v) && keepsOthers(v)) ??
+      swappableVariants.find(wanted);
+    if (next) setChosenId(next.id);
+  };
 
   const canExchange = allowedResolutions.some((r) =>
     ["EXCHANGE", "INSTANT_EXCHANGE"].includes(r),
@@ -1168,33 +1183,7 @@ export function ItemDrawer({
 
               {swap && swap.variants.length > 0 && (
                 <div className="swapper__panel">
-                  {/* What they're giving up, so the swap reads as a comparison. */}
-                  <div className="swapper__current-heading">
-                    {t("drawer.returning")}
-                  </div>
-                  <div className="swapper__current">
-                    {item.imageUrl ? (
-                      <img src={item.imageUrl} alt="" />
-                    ) : (
-                      <span className="swapper__current-blank" />
-                    )}
-                    <span className="swapper__current-body">
-                      {/* Title and price share a row, so the money lines up with
-                          the name rather than floating beside a two-line block. */}
-                      <span className="swapper__current-top">
-                        <span className="swapper__current-title">
-                          {item.title}
-                        </span>
-                        <span className="swapper__current-price">
-                          {money(item.unitPrice, currency)}
-                        </span>
-                      </span>
-                      {variantLabel && (
-                        <span className="muted">{variantLabel}</span>
-                      )}
-                    </span>
-                  </div>
-
+                  {/* The item being given up is in the bar along the top. */}
                   <h2 className="swapper__title">{heading}</h2>
                   {/*
                     Priced before a size is picked. Sizes of one product almost
@@ -1205,18 +1194,6 @@ export function ItemDrawer({
                     <div className="swapper__price">
                       {money(displayPrice, swap.currency)}
                     </div>
-                  )}
-
-                  {/*
-                    Why they are looking at this screen. Drawn from the reason
-                    they gave a moment ago — deliberately not "what worked for
-                    similar shoppers", which we have no data for and would be
-                    inventing.
-                  */}
-                  {suggestion && (
-                    <p className="swapper__hint">
-                      <span aria-hidden="true">✦</span> {suggestion}
-                    </p>
                   )}
 
                   {/*
@@ -1246,34 +1223,80 @@ export function ItemDrawer({
                     </p>
                   )}
 
-                  <h3 className="swapper__label">{optionName}</h3>
-                  <div className="swapper__sizes">
-                    {swap.variants.map((v) => {
-                      const isCurrent = v.id === swap.currentVariantId;
-                      const isChosen = v.id === chosenId;
-                      return (
-                        <button
-                          key={v.id}
-                          type="button"
-                          className={`size${isChosen ? " is-selected" : ""}${
-                            v.available ? "" : " is-out"
-                          }`}
-                          disabled={!v.available || isCurrent}
-                          aria-pressed={isChosen}
-                          onClick={() => setChosenId(v.id)}
-                          title={
-                            isCurrent
-                              ? t("drawer.currentOption")
-                              : v.available
-                                ? money(v.price, swap.currency)
-                                : t("drawer.outOfStock")
-                          }
-                        >
-                          {v.title}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  {/*
+                    One row per axis. A chip is greyed when no other in-stock
+                    variant carries its value — including the value only the
+                    item they already have carries, which says so on hover.
+                  */}
+                  {swapAxisRows.length > 0 ? (
+                    swapAxisRows.map(([axis, values]) => (
+                      <div key={axis}>
+                        <h3 className="swapper__label">
+                          {axis[0].toUpperCase() + axis.slice(1)}
+                        </h3>
+                        <div className="swapper__sizes">
+                          {values.map((value) => {
+                            const has = (v: ExchangeVariant | null) =>
+                              v?.options.some((o) => o.name === axis && o.value === value) ?? false;
+                            const selected = has(chosen);
+                            const possible = swapValuePossible(axis, value);
+                            return (
+                              <button
+                                key={value}
+                                type="button"
+                                className={`size${selected ? " is-selected" : ""}${
+                                  possible ? "" : " is-out"
+                                }`}
+                                disabled={!possible}
+                                aria-pressed={selected}
+                                onClick={() => pickSwapAxis(axis, value)}
+                                title={
+                                  possible
+                                    ? undefined
+                                    : has(currentVariant)
+                                      ? t("drawer.currentOption")
+                                      : t("drawer.outOfStock")
+                                }
+                              >
+                                {value}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <>
+                      <h3 className="swapper__label">{t("drawer.options")}</h3>
+                      <div className="swapper__sizes">
+                        {swap.variants.map((v) => {
+                          const isCurrent = v.id === swap.currentVariantId;
+                          const isChosen = v.id === chosenId;
+                          return (
+                            <button
+                              key={v.id}
+                              type="button"
+                              className={`size${isChosen ? " is-selected" : ""}${
+                                v.available ? "" : " is-out"
+                              }`}
+                              disabled={!v.available || isCurrent}
+                              aria-pressed={isChosen}
+                              onClick={() => setChosenId(v.id)}
+                              title={
+                                isCurrent
+                                  ? t("drawer.currentOption")
+                                  : v.available
+                                    ? money(v.price, swap.currency)
+                                    : t("drawer.outOfStock")
+                              }
+                            >
+                              {v.title}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
 
                   {/*
                     A word from the shopper, where the group asked for one —
@@ -1304,11 +1327,7 @@ export function ItemDrawer({
                       finish("EXCHANGE", chosen, picked?.title, activeRule)
                     }
                   >
-                    {chosen
-                      ? t("drawer.confirmItem")
-                      : t("drawer.chooseOption", {
-                          option: optionName.toLowerCase(),
-                        })}
+                    {t("drawer.select")}
                   </button>
                 </div>
               )}

@@ -129,23 +129,16 @@ export const en = {
   "drawer.loadingOptions": "Loading options…",
   "drawer.searchProducts": "Search products",
   "drawer.noProducts": "No products match that search.",
-  "drawer.returning": "Returning",
   "drawer.options": "Options",
   "drawer.prevImage": "Previous image",
   "drawer.nextImage": "Next image",
   "drawer.currentOption": "This is the option you have",
   "drawer.outOfStock": "Out of stock",
-  "drawer.confirmItem": "Confirm item",
-  "drawer.chooseOption": "Choose a {option}",
+  "drawer.select": "Select",
   "drawer.absorbed": "No difference to pay — {store} covers it.",
   "drawer.youPay": "You'll pay {amount} more.",
   "drawer.youGetCredit": "You'll receive a credit of {amount}.",
   "drawer.evenSwap": "An even swap — nothing more to pay.",
-  "drawer.suggest.fit":
-    "You told us the fit was wrong, so we've kept the same item and opened its other sizes.",
-  "drawer.suggest.wrongItem":
-    "Same item, other options — swap to the one you meant to receive.",
-  "drawer.suggest.generic": "Swap this for another option of the same item.",
 
   // --- how a shopper is paid ---------------------------------------------
   "resolution.refund": "Refund to original payment method",
