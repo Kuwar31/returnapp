@@ -217,6 +217,8 @@ export const serializeReturn = (
         provider: request.shipment.provider,
         /** Booked in test mode: no courier exists, tracking is simulated. */
         isTest: request.shipment.isTest,
+        /** The service chosen, so a retry can offer it back. */
+        courierId: request.shipment.courierId,
         carrier: request.shipment.carrier,
         trackingNumber: request.shipment.trackingNumber,
         trackingUrl: request.shipment.trackingUrl,

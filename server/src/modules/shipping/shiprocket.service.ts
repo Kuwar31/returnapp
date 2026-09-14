@@ -704,6 +704,7 @@ const bookTestLabel = async (
     externalShipmentId: `TEST-${input.order_id}`,
     externalStatus: "PICKUP SCHEDULED",
     externalStatusId: 4,
+    courierId: options.courierId ?? null,
     carrier: courier,
     trackingNumber: awb,
     trackingUrl: null,
@@ -922,6 +923,9 @@ export const createReturnLabel = async (
   let shipmentId = resume?.externalShipmentId ?? null;
   let awb = resume?.trackingNumber ?? null;
   let courier = resume?.carrier ?? null;
+  // A retry without a new choice books the service chosen last time.
+  const courierId = options.courierId ?? existing?.courierId ?? null;
+  await saveShipment(returnId, { courierId });
 
   if (!shipmentId) {
     let input: api.ReturnOrderInput;
@@ -959,7 +963,7 @@ export const createReturnLabel = async (
 
   if (!awb) {
     try {
-      const reply = await api.assignAwb(merchantId, shipmentId, options.courierId ?? null);
+      const reply = await api.assignAwb(merchantId, shipmentId, courierId);
       const data = reply?.response?.data;
       if (reply?.awb_assign_status !== 1 || !data?.awb_code) {
         throw new ShiprocketError(

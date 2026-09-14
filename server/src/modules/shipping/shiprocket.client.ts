@@ -150,9 +150,27 @@ export const call = async <T>(
   try {
     return await request<T>(method, path, token, body);
   } catch (error) {
+    if (error instanceof ShiprocketError && error.status === 403) {
+      throw new ShiprocketError(
+        `Shiprocket refused this call for the API user (${error.message}). In Shiprocket, edit the API user and tick the Orders, Shipments and Courier modules.`,
+        403,
+        error.body,
+      );
+    }
     if (error instanceof ShiprocketError && error.status === 401) {
       logger.info({ merchantId }, "Shiprocket token rejected; logging in again");
-      const fresh = await tokenFor(merchantId, true);
+      let fresh: string;
+      try {
+        fresh = await tokenFor(merchantId, true);
+      } catch (again) {
+        // The saved password no longer works — changed in Shiprocket since
+        // the store connected. Say so, rather than the bare login error.
+        const why = again instanceof Error ? again.message : String(again);
+        throw new ShiprocketError(
+          `Shiprocket refused the saved login (${why}). Reconnect Shiprocket under Settings → Shipping with the API user's current password.`,
+          401,
+        );
+      }
       return request<T>(method, path, fresh, body);
     }
     throw error;

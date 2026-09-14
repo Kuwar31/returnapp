@@ -1274,6 +1274,8 @@ model ReturnShipment {
   /// simulated from the return page rather than fetched.
   isTest             Boolean           @default(false)
   carrier            String?
+  /// The courier service the merchant chose, so a retry books the same one.
+  courierId          Int?
   /// The courier's AWB.
   trackingNumber     String?
   trackingUrl        String?

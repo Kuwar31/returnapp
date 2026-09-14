@@ -328,6 +328,8 @@ export interface ReturnShipment {
   provider: "SHIPROCKET" | null;
   /** Booked in test mode: no courier exists, tracking is simulated. */
   isTest: boolean;
+  /** The courier service chosen when it was booked. */
+  courierId: number | null;
   carrier: string | null;
   /** The courier's AWB. */
   trackingNumber: string | null;

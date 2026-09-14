@@ -59,6 +59,8 @@ export function ShipmentPanel({
   const [quoting, setQuoting] = useState(false);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [courierId, setCourierId] = useState<number | null>(null);
+  /** After a failed booking the list is folded away: the choice was made already. */
+  const [choosing, setChoosing] = useState(false);
 
   const loadQuotes = async () => {
     setQuoting(true);
@@ -69,11 +71,18 @@ export function ShipmentPanel({
       });
       setQuotes(found);
       // Keep the merchant's pick if it's still offered; else the recommendation.
-      setCourierId((prev) =>
-        prev !== null && found.couriers.some((c) => c.courierId === prev)
-          ? prev
-          : (found.couriers.find((c) => c.recommended)?.courierId ?? found.couriers[0]?.courierId ?? null),
-      );
+      // The service chosen last time first, then the recommendation.
+      setCourierId((prev) => {
+        const offered = (id: number | null | undefined) =>
+          id !== null && id !== undefined && found.couriers.some((c) => c.courierId === id) ? id : null;
+        return (
+          offered(prev) ??
+          offered(shipment?.courierId) ??
+          found.couriers.find((c) => c.recommended)?.courierId ??
+          found.couriers[0]?.courierId ??
+          null
+        );
+      });
     } catch (e) {
       setQuotes(null);
       setQuoteError(e instanceof Error ? e.message : "Couldn't get courier rates.");
@@ -205,7 +214,17 @@ export function ShipmentPanel({
         in view. Shiprocket quotes in rupees; the store's own figure is shown
         beside it when the order's exchange rate makes one possible.
       */}
-      {wantsQuote && (
+      {wantsQuote && shipment && !choosing && (
+        <p className="settings-row__hint" style={{ marginTop: 12 }}>
+          Book again uses{" "}
+          {quotes?.couriers.find((c) => c.courierId === courierId)?.name ?? "Shiprocket's recommended courier"}.{" "}
+          <button type="button" className="link-btn" onClick={() => setChoosing(true)}>
+            Choose a different service
+          </button>
+        </p>
+      )}
+
+      {wantsQuote && (!shipment || choosing) && (
         <div className="svc">
           <div className="svc__head">
             <span className="field-label">Select service</span>
