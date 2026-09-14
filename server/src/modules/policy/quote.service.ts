@@ -497,15 +497,34 @@ export const quoteReturn = ({
       ? lineDue
       : extraCredit;
 
-  const leftover = shopping
+  const basketLeftover = shopping
     ? round2(
         pool.sub(shopNow.cartTotal).greaterThan(0)
           ? pool.sub(shopNow.cartTotal)
           : ZERO,
       )
+    : ZERO;
+  /**
+   * A basket's leftover pays down a swap's balance before anything is paid
+   * out, for the same reason the flat bonus does above. A return with one
+   * item upgraded for 400 more and the rest funding a basket that left 10
+   * unspent owes 390 — not 400 with 10 handed back separately, and the
+   * review page asking how they'd like to receive it beneath a total saying
+   * they owe money.
+   */
+  const leftoverOffset = shopping
+    ? lineDue.lessThan(basketLeftover)
+      ? lineDue
+      : basketLeftover
+    : ZERO;
+
+  const leftover = shopping
+    ? round2(basketLeftover.sub(leftoverOffset))
     : round2(creditedTotal.add(extraCredit.sub(dueOffset)));
 
-  const amountDue = round2(lineDue.sub(dueOffset).add(shortfall));
+  const amountDue = round2(
+    lineDue.sub(dueOffset).sub(leftoverOffset).add(shortfall),
+  );
   const absorbedDifference = sum((r) => r.absorbed);
   const estimatedTotal = leftover.lessThan(0) ? ZERO : round2(leftover);
 

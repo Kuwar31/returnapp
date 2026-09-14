@@ -300,7 +300,9 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
    * there is no non-exchange line whose resolution could carry the answer.
    */
   const surplus =
-    (shopping || (returning.length === 0 && exchanges.length > 0)) && quote
+    (shopping || (returning.length === 0 && exchanges.length > 0)) &&
+    quote &&
+    net > 0.005
       ? quote.estimatedTotal
       : 0;
   const choosingForSurplus = surplus > 0;
