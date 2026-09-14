@@ -10,6 +10,7 @@ import { resolveDisplayMode } from "../settings/merchant-settings.js";
 import {
   cancelLabel,
   createReturnLabel,
+  quoteCouriers,
   refreshTracking,
   simulateTracking,
 } from "../shipping/shiprocket.service.js";
@@ -474,12 +475,28 @@ const withLabel = async (req: Request, res: Response) => {
   res.json(serializeReturn(request, await resolveDisplayMode(req.admin!.merchantId)));
 };
 
+/** The courier services that can collect this return, with their rates. */
+returnsRouter.get(
+  "/:id/label/couriers",
+  asyncHandler(async (req, res) => {
+    res.json(await quoteCouriers(req.admin!.merchantId, req.params.id));
+  }),
+);
+
+const bookSchema = z.object({
+  /** A courier from the quote; absent means Shiprocket's recommendation. */
+  courierId: z.number().int().positive().nullable().optional(),
+});
+
 /** Makes the label now, or again after a failure. Costs money, so admins only. */
 returnsRouter.post(
   "/:id/label",
   requireRole("OWNER", "ADMIN"),
+  validate(bookSchema),
   asyncHandler(async (req, res) => {
-    await createReturnLabel(req.admin!.merchantId, req.params.id, req.admin!.sub);
+    await createReturnLabel(req.admin!.merchantId, req.params.id, req.admin!.sub, {
+      courierId: req.body.courierId ?? null,
+    });
     await withLabel(req, res);
   }),
 );

@@ -269,14 +269,72 @@ export interface TrackingReply {
   };
 }
 
+/** One courier that can do the job, as serviceability lists it. */
+export interface ServiceableCourier {
+  courier_company_id: number;
+  courier_name: string;
+  /** Rupees. `rate` is the all-in figure; `freight_charge` the base. */
+  rate?: number | string;
+  freight_charge?: number | string;
+  etd?: string;
+  estimated_delivery_days?: string | number;
+  is_surface?: boolean;
+  rating?: number;
+  min_weight?: number;
+  charge_weight?: number;
+}
+
+export interface ServiceabilityReply {
+  status?: number;
+  currency?: string;
+  data?: {
+    available_courier_companies?: ServiceableCourier[];
+    recommended_courier_company_id?: number | null;
+    shiprocket_recommended_courier_id?: number | null;
+  };
+}
+
+export interface ServiceabilityParams {
+  /** Where the parcel is collected: the shopper. */
+  pickupPostcode: string;
+  /** Where it's delivered: the store. */
+  deliveryPostcode: string;
+  weightKg: number;
+  /** Rupees; Shiprocket wants it for a return quote. */
+  declaredValue: number;
+  lengthCm: number;
+  breadthCm: number;
+  heightCm: number;
+}
+
+/** Which couriers will collect and deliver, and for how much. */
+export const checkServiceability = (merchantId: string, p: ServiceabilityParams) => {
+  const query = new URLSearchParams({
+    pickup_postcode: p.pickupPostcode,
+    delivery_postcode: p.deliveryPostcode,
+    weight: String(p.weightKg),
+    cod: "0",
+    is_return: "1",
+    declared_value: String(Math.max(1, Math.round(p.declaredValue))),
+    length: String(Math.round(p.lengthCm)),
+    breadth: String(Math.round(p.breadthCm)),
+    height: String(Math.round(p.heightCm)),
+  });
+  return call<ServiceabilityReply>(merchantId, "GET", `/courier/serviceability/?${query}`);
+};
+
 export const createReturnOrder = (merchantId: string, input: ReturnOrderInput) =>
   call<ReturnOrderReply>(merchantId, "POST", "/orders/create/return", input);
 
-/** Assigns a courier and AWB. `is_return` is what makes it a reverse pickup. */
-export const assignAwb = (merchantId: string, shipmentId: string) =>
+/**
+ * Assigns a courier and AWB. `is_return` is what makes it a reverse pickup;
+ * without a `courier_id`, Shiprocket picks its recommended courier.
+ */
+export const assignAwb = (merchantId: string, shipmentId: string, courierId?: number | null) =>
   call<AwbReply>(merchantId, "POST", "/courier/assign/awb", {
     shipment_id: shipmentId,
     is_return: 1,
+    ...(courierId ? { courier_id: courierId } : {}),
   });
 
 export const generateLabel = (merchantId: string, shipmentId: string) =>

@@ -1,11 +1,19 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router";
-import { dateTime } from "../lib/format";
-import type { ReturnDetail, ShipmentStatus } from "../lib/types";
+import { api } from "../lib/api";
+import { dateTime, money } from "../lib/format";
+import type { CourierQuotes, ReturnDetail, ShipmentStatus } from "../lib/types";
 
 /**
  * The return label on the return page: the courier booked to collect the
- * parcel, where it is, and the ways to intervene — book it, book it again
- * after a refusal, ask for fresh tracking, or call the courier off.
+ * parcel, where it is, and the ways to intervene — pick a service and book
+ * it, book it again after a refusal, ask for fresh tracking, or call the
+ * courier off.
+ *
+ * Before a booking, the panel quotes the courier services Shiprocket offers
+ * for this pickup, priced, so the merchant chooses with the cost in view —
+ * as CWILL's approval drawer does. Without a choice, Shiprocket's own
+ * recommendation is booked.
  */
 
 const STATUS_COPY: Record<ShipmentStatus, string> = {
@@ -35,18 +43,55 @@ export function ShipmentPanel({
   const open = OPEN.includes(detail.status);
   const askedForLabel = detail.returnMethod?.kind === "LABEL";
   const keeping = detail.returnMethod?.kind === "KEEP";
-
-  // Nothing to say for a closed return that never had a parcel, or a return
-  // that isn't sending one.
-  if (!shipment && (!open || keeping)) return null;
-
   const test = Boolean(shipment?.isTest);
+
+  // Still waiting for approval, but the merchant may want to see the cost.
+  const pending = detail.status === "SUBMITTED" && askedForLabel && !shipment;
   const canCreate = open && (!shipment || ["FAILED", "CANCELLED"].includes(shipment.status));
   const canCancel = Boolean(shipment && ["PENDING", "LABEL_CREATED", "IN_TRANSIT"].includes(shipment.status));
   const canRefresh = Boolean(shipment?.externalShipmentId && shipment.status !== "CANCELLED") && !test;
   // A test parcel only moves when told to.
   const canSimulatePickup = test && shipment?.status === "LABEL_CREATED";
   const canSimulateDelivery = test && ["LABEL_CREATED", "IN_TRANSIT"].includes(shipment?.status ?? "");
+  const wantsQuote = (canCreate || pending) && !keeping;
+
+  const [quotes, setQuotes] = useState<CourierQuotes | null>(null);
+  const [quoting, setQuoting] = useState(false);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [courierId, setCourierId] = useState<number | null>(null);
+
+  const loadQuotes = async () => {
+    setQuoting(true);
+    setQuoteError(null);
+    try {
+      const found = await api.get<CourierQuotes>(`/admin/returns/${detail.id}/label/couriers`, {
+        auth: "admin",
+      });
+      setQuotes(found);
+      // Keep the merchant's pick if it's still offered; else the recommendation.
+      setCourierId((prev) =>
+        prev !== null && found.couriers.some((c) => c.courierId === prev)
+          ? prev
+          : (found.couriers.find((c) => c.recommended)?.courierId ?? found.couriers[0]?.courierId ?? null),
+      );
+    } catch (e) {
+      setQuotes(null);
+      setQuoteError(e instanceof Error ? e.message : "Couldn't get courier rates.");
+    } finally {
+      setQuoting(false);
+    }
+  };
+
+  useEffect(() => {
+    if (wantsQuote) void loadQuotes();
+    // Quotes are for this return, in the states where a booking is possible.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detail.id, wantsQuote]);
+
+  // Nothing to say for a closed return that never had a parcel, or a return
+  // that isn't sending one.
+  if (!shipment && !open && !pending) return null;
+  if (!shipment && keeping) return null;
 
   return (
     <div className="panel">
@@ -155,6 +200,72 @@ export function ShipmentPanel({
         </>
       )}
 
+      {/*
+        The services and their prices, so the choice is made with the cost
+        in view. Shiprocket quotes in rupees; the store's own figure is shown
+        beside it when the order's exchange rate makes one possible.
+      */}
+      {wantsQuote && (
+        <div className="svc">
+          <div className="svc__head">
+            <span className="field-label">Select service</span>
+            <button type="button" className="link-btn" disabled={quoting} onClick={() => void loadQuotes()}>
+              {quoting ? "Getting rates…" : quotes ? "Refresh rates" : "Get rates"}
+            </button>
+          </div>
+          {quoteError && (
+            <div className="alert alert--error" style={{ marginBottom: 10 }}>
+              {quoteError}
+            </div>
+          )}
+          {quotes && quotes.couriers.length === 0 && (
+            <p className="muted">No courier serves this route at the moment.</p>
+          )}
+          {quotes?.couriers.map((c) => (
+            <label
+              key={c.courierId}
+              className={`svc__row${courierId === c.courierId ? " is-selected" : ""}`}
+            >
+              <input
+                type="radio"
+                name="courier"
+                checked={courierId === c.courierId}
+                onChange={() => setCourierId(c.courierId)}
+              />
+              <span className="svc__body">
+                <span className="svc__name">
+                  {c.name}
+                  {c.recommended && <span className="chip svc__chip">Recommended</span>}
+                </span>
+                <span className="svc__meta">
+                  {[
+                    c.days !== null ? `Est. ${c.days} day${c.days === 1 ? "" : "s"}` : null,
+                    c.etd ? `by ${c.etd}` : null,
+                    c.surface ? "Surface" : "Air",
+                    c.rating !== null ? `★ ${c.rating}` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
+              </span>
+              <span className="svc__price">
+                <strong>{money(c.rate, "INR")}</strong>
+                {c.shopRate !== null && quotes.shopCurrency !== "INR" && (
+                  <span className="muted">≈ {money(c.shopRate, quotes.shopCurrency)}</span>
+                )}
+              </span>
+            </label>
+          ))}
+          {pending && (
+            <p className="settings-row__hint" style={{ marginTop: 10 }}>
+              Approve the return to book the pickup. If labels are booked
+              automatically at approval, Shiprocket's recommended courier is
+              used; to choose one here, turn that off under Shipping.
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="actions" style={{ marginTop: 14 }}>
         {shipment?.labelUrl && shipment.status !== "CANCELLED" && (
           <a className="btn btn--sm" href={shipment.labelUrl} target="_blank" rel="noreferrer">
@@ -162,7 +273,12 @@ export function ShipmentPanel({
           </a>
         )}
         {canCreate && (
-          <button type="button" className="btn btn--sm" disabled={acting} onClick={() => onAct("label")}>
+          <button
+            type="button"
+            className="btn btn--sm"
+            disabled={acting}
+            onClick={() => onAct("label", { courierId })}
+          >
             {shipment ? "Book again" : "Create return label"}
           </button>
         )}

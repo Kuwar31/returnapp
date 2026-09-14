@@ -350,6 +350,27 @@ export interface ReturnShipment {
   deliveredAt: string | null;
 }
 
+/** One courier service that can collect a return, priced. */
+export interface CourierQuote {
+  courierId: number;
+  name: string;
+  /** Rupees, Shiprocket's own currency. */
+  rate: number;
+  /** The same in the store's currency, when the order's rate allows it. */
+  shopRate: number | null;
+  etd: string | null;
+  days: number | null;
+  surface: boolean;
+  rating: number | null;
+  /** Shiprocket's own pick; what a booking without a choice gets. */
+  recommended: boolean;
+}
+
+export interface CourierQuotes {
+  couriers: CourierQuote[];
+  shopCurrency: string;
+}
+
 /** A return destination, with whether a Shiprocket courier can deliver to it. */
 export type DeliveryDestination = ReturnDestination & { hasPhone: boolean; hasZip: boolean };
 

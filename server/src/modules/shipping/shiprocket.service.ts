@@ -545,6 +545,124 @@ const event = (
 const OPEN_FOR_LABEL: ReturnStatus[] = ["APPROVED", "IN_TRANSIT"];
 
 // ---------------------------------------------------------------------------
+// Courier quotes — who can collect this parcel, and for how much
+// ---------------------------------------------------------------------------
+
+/** One courier service the merchant can book, priced. */
+export interface CourierQuote {
+  courierId: number;
+  name: string;
+  /** Rupees — Shiprocket's own currency. */
+  rate: number;
+  /** The same in the store's currency, when the order's rate makes that possible. */
+  shopRate: number | null;
+  /** "Sep 18, 2026", as Shiprocket words it. */
+  etd: string | null;
+  days: number | null;
+  surface: boolean;
+  rating: number | null;
+  /** Shiprocket's own pick, which is what a booking without a choice gets. */
+  recommended: boolean;
+}
+
+/** The couriers test mode offers, so the choosing can be tried too. */
+const TEST_COURIERS: Array<Omit<CourierQuote, "shopRate" | "recommended">> = [
+  { courierId: 900001, name: "Test courier Surface", rate: 120, etd: null, days: 4, surface: true, rating: 4.5 },
+  { courierId: 900002, name: "Test courier Express", rate: 260, etd: null, days: 2, surface: false, rating: 4.8 },
+];
+
+/**
+ * Rupees into the store's currency, using the order's own exchange rate: an
+ * order billed in rupees knows what its shop-currency total was worth. Null
+ * when there's no such rate to lean on.
+ */
+const rupeesToShop = (order: {
+  currency: string;
+  total: Prisma.Decimal;
+  presentmentCurrency: string | null;
+  presentmentTotal: Prisma.Decimal | null;
+}): number | null => {
+  if (order.currency === "INR") return 1;
+  if (order.presentmentCurrency !== "INR" || !order.presentmentTotal) return null;
+  const inr = toDecimal(order.presentmentTotal).toNumber();
+  const shop = toDecimal(order.total).toNumber();
+  return inr > 0 && shop > 0 ? shop / inr : null;
+};
+
+const num = (value: unknown): number | null => {
+  const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  return Number.isFinite(n) ? n : null;
+};
+
+/**
+ * The courier services that can collect this return, cheapest first.
+ *
+ * Runs the same address checks a booking does, so a missing phone number
+ * shows here rather than at the moment of booking. Allowed before approval:
+ * the merchant may want to see the cost while deciding.
+ */
+export const quoteCouriers = async (
+  merchantId: string,
+  returnId: string,
+): Promise<{ couriers: CourierQuote[]; shopCurrency: string }> => {
+  const account = await getAccount(merchantId);
+  if (!account) throw unprocessable("Connect Shiprocket under Settings → Shipping first.");
+  const request = await loadForLabel(merchantId, returnId);
+  if (!["SUBMITTED", ...OPEN_FOR_LABEL].includes(request.status)) {
+    throw unprocessable("This return is no longer waiting for a parcel.");
+  }
+  if (request.returnMethod === "KEEP") throw unprocessable("A green return has nothing to ship.");
+  const input = await buildReturnOrder(request, account, request.reference);
+  const toShop = rupeesToShop(request.order);
+  const shopCurrency = request.order.currency;
+  const withShop = (rate: number) => (toShop === null ? null : Math.round(rate * toShop * 100) / 100);
+
+  if (account.testMode) {
+    return {
+      shopCurrency,
+      couriers: TEST_COURIERS.map((c, i) => ({ ...c, shopRate: withShop(c.rate), recommended: i === 0 })),
+    };
+  }
+
+  let reply: api.ServiceabilityReply;
+  try {
+    reply = await api.checkServiceability(merchantId, {
+      pickupPostcode: input.pickup_pincode,
+      deliveryPostcode: input.shipping_pincode,
+      weightKg: input.weight,
+      declaredValue: input.sub_total,
+      lengthCm: input.length,
+      breadthCm: input.breadth,
+      heightCm: input.height,
+    });
+  } catch (error) {
+    throw friendly(error, "Shiprocket couldn't quote this pickup.");
+  }
+  const recommended =
+    reply.data?.recommended_courier_company_id ?? reply.data?.shiprocket_recommended_courier_id ?? null;
+  const couriers = (reply.data?.available_courier_companies ?? [])
+    .flatMap((c): CourierQuote[] => {
+      const rate = num(c.rate) ?? num(c.freight_charge);
+      if (rate === null || !c.courier_company_id) return [];
+      return [
+        {
+          courierId: c.courier_company_id,
+          name: c.courier_name,
+          rate,
+          shopRate: withShop(rate),
+          etd: c.etd || null,
+          days: num(c.estimated_delivery_days),
+          surface: c.is_surface ?? true,
+          rating: num(c.rating),
+          recommended: c.courier_company_id === recommended,
+        },
+      ];
+    })
+    .sort((a, b) => a.rate - b.rate);
+  return { couriers, shopCurrency };
+};
+
+// ---------------------------------------------------------------------------
 // Test mode — pretend pickups, since Shiprocket has no sandbox
 // ---------------------------------------------------------------------------
 
@@ -570,9 +688,11 @@ const bookTestLabel = async (
   request: LabelRequest,
   input: api.ReturnOrderInput,
   actorId: string | null,
-  options: { email?: boolean },
+  options: { email?: boolean; courierId?: number | null },
 ): Promise<ReturnShipment> => {
   const awb = `TEST${String(Date.now()).slice(-8)}${String(Math.floor(Math.random() * 100)).padStart(2, "0")}`;
+  const courier =
+    TEST_COURIERS.find((c) => c.courierId === options.courierId)?.name ?? TEST_COURIERS[0].name;
   const pickup = new Date();
   pickup.setDate(pickup.getDate() + 1);
   pickup.setHours(14, 0, 0, 0);
@@ -584,7 +704,7 @@ const bookTestLabel = async (
     externalShipmentId: `TEST-${input.order_id}`,
     externalStatus: "PICKUP SCHEDULED",
     externalStatusId: 4,
-    carrier: "Test courier",
+    carrier: courier,
     trackingNumber: awb,
     trackingUrl: null,
     labelUrl: null,
@@ -611,8 +731,8 @@ const bookTestLabel = async (
     request.id,
     actorId,
     "LABEL_GENERATED",
-    `Test label made — test mode, nothing sent to Shiprocket — AWB ${awb}`,
-    { ok: true, test: true, awb },
+    `Test label made with ${courier} — test mode, nothing sent to Shiprocket — AWB ${awb}`,
+    { ok: true, test: true, awb, courier },
   );
   if (options.email !== false) await notify(request.id, "LABEL_READY");
   return shipment;
@@ -750,7 +870,11 @@ export const createReturnLabel = async (
   merchantId: string,
   returnId: string,
   actorId: string | null,
-  options: { email?: boolean } = {},
+  /**
+   * `courierId` is the merchant's pick from the quote; without one,
+   * Shiprocket books its recommended courier.
+   */
+  options: { email?: boolean; courierId?: number | null } = {},
 ): Promise<ReturnShipment> => {
   const account = await getAccount(merchantId);
   if (!account) throw unprocessable("Connect Shiprocket under Settings → Shipping first.");
@@ -835,7 +959,7 @@ export const createReturnLabel = async (
 
   if (!awb) {
     try {
-      const reply = await api.assignAwb(merchantId, shipmentId);
+      const reply = await api.assignAwb(merchantId, shipmentId, options.courierId ?? null);
       const data = reply?.response?.data;
       if (reply?.awb_assign_status !== 1 || !data?.awb_code) {
         throw new ShiprocketError(
