@@ -10,7 +10,6 @@ import type {
 } from "../lib/types";
 import { ErrorAlert } from "../components/Feedback";
 import { ItemDrawer, type ItemDecision } from "./ItemDrawer";
-import type { TranslateFn } from "../lib/i18n";
 import { usePortal, useT } from "./PortalLayout";
 import {
   articleKey,
@@ -52,24 +51,6 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
  * payment method". Naming it here pre-empted a decision they hadn't made.
  */
 const EXCHANGE_RESOLUTIONS = ["EXCHANGE", "INSTANT_EXCHANGE"];
-
-/**
- * How a chosen outcome reads back on the picker, in the shopper's language.
- *
- * "Return" rather than "Refund" for the plain case: at this point the shopper
- * has said what they're sending back, not how they want paying — that choice
- * comes on the review step. A function rather than a constant for the same
- * reason as elsewhere: a constant is built before any store's language is
- * known.
- */
-const resolutionWord = (t: TranslateFn, r: string): string =>
-  ({
-    REFUND: t("picker.returnWord"),
-    STORE_CREDIT: t("resolution.storeCredit"),
-    GIFT_CARD: t("resolution.giftCard"),
-    EXCHANGE: t("resolution.exchange"),
-    INSTANT_EXCHANGE: t("resolution.instantExchange"),
-  })[r] ?? r;
 
 export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
   const { order, policy, reasonGroups, eligibility, shopNow } = loaderData;
@@ -377,16 +358,16 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
 
                   {decision ? (
                     <div className="line-item__decision">
-                      <strong>{resolutionWord(t, decision.resolution)}</strong>
-                      {decision.reasonLabel && (
-                        <div className="muted">{decision.reasonLabel}</div>
-                      )}
                       {/*
-                        The replacement, shown the way the returned item above
-                        is shown. It used to be a run-on line of text, which
-                        made the one thing the shopper is choosing harder to
-                        read than the thing they already own.
+                        What was decided, and nothing else: the reason they
+                        gave is theirs to edit inside the drawer, not a line
+                        to reread on every card. An exchange shows the
+                        replacement the way the returned item above is shown;
+                        a return says so in a word.
                       */}
+                      {!decision.exchangeLabel && (
+                        <strong>{t("picker.returning")}</strong>
+                      )}
                       {decision.exchangeLabel && (
                         <div className="swap">
                           <div className="swap__caption">
@@ -403,9 +384,21 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
                               <div className="swap__thumb" />
                             )}
                             <div className="swap__body">
-                              <div className="swap__title">
-                                {decision.exchangeProductTitle ??
-                                  decision.exchangeLabel}
+                              {/* Name and price on one line, the option under
+                                  them: three facts in two rows. */}
+                              <div className="swap__top">
+                                <div className="swap__title">
+                                  {decision.exchangeProductTitle ??
+                                    decision.exchangeLabel}
+                                </div>
+                                {exchangePriceIn(decision, currency) !== null && (
+                                  <span className="swap__price">
+                                    {money(
+                                      exchangePriceIn(decision, currency)!,
+                                      currency,
+                                    )}
+                                  </span>
+                                )}
                               </div>
                               {decision.exchangeVariantTitle && (
                                 <div className="swap__variant">
@@ -413,14 +406,6 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
                                 </div>
                               )}
                             </div>
-                            {exchangePriceIn(decision, currency) !== null && (
-                              <span className="swap__price">
-                                {money(
-                                  exchangePriceIn(decision, currency)!,
-                                  currency,
-                                )}
-                              </span>
-                            )}
                           </div>
                         </div>
                       )}

@@ -85,13 +85,13 @@ export const en = {
   "picker.started": "started {date}",
   "picker.windowClosed": "This order is outside the {days}-day return window.",
   "picker.exchangingFor": "Exchanging for",
+  "picker.returning": "Returning",
   "picker.remove": "Remove",
   "picker.unavailable": "Unavailable for return",
   "picker.shopFailed": "Couldn't open the store just now.",
   "picker.selected_one": "{count} item selected",
   "picker.selected_other": "{count} items selected",
   "picker.continue": "Continue with return",
-  "picker.returnWord": "Return",
 
   // --- totals ------------------------------------------------------------
   "totals.items": "Item total",

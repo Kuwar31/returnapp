@@ -1832,28 +1832,25 @@
   margin-top: 8px;
 }
 
+/* Says plainly what the row under it is; the shopper's eye should land on
+   it before the replacement, since that's the decision. */
 .swap__caption {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  color: var(--text-subtle, #6b7280);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
   margin-bottom: 6px;
 }
 
+/* A plain row, not a box in a box: the card already has a border. */
 .swap__item {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface, #fff);
 }
 
 .swap__thumb {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: 6px;
   object-fit: cover;
   background: #f0f0f1;
@@ -1863,6 +1860,13 @@
 .swap__body {
   flex: 1;
   min-width: 0;
+}
+
+.swap__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .swap__title {
@@ -1886,34 +1890,21 @@
 }
 
 /*
- * The same row on a phone.
- *
- * Thumbnail, name and price side by side leaves the name about 45px once the
- * card has given up its own padding — so the ellipsis ate the whole title and
- * the shopper was shown "The …" as the thing they had chosen. Letting the row
- * wrap puts the price on its own line, right-aligned, and gives the name the
- * full width to wrap into.
+ * On a phone the name wraps rather than ellipsising: the row is narrower and
+ * "The …" is no use as the thing they chose. The price keeps its place at
+ * the end of the first line.
  *
  * Below the rules it overrides, not above them: at equal specificity the last
  * one wins, and a media query placed earlier in the file simply loses.
  */
 @media (max-width: 560px) {
   .swap__item {
-    flex-wrap: wrap;
     align-items: flex-start;
-  }
-
-  .swap__body {
-    flex: 1 1 130px;
   }
 
   .swap__title {
     white-space: normal;
     overflow: visible;
-  }
-
-  .swap__price {
-    margin-left: auto;
   }
 }
 
