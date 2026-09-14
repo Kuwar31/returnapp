@@ -6,11 +6,14 @@ export function Modal({
   onClose,
   children,
   footer,
+  wide = false,
 }: {
   title: string;
   onClose: () => void;
   children: React.ReactNode;
   footer: React.ReactNode;
+  /** A wider dialog, for lists with a price column. */
+  wide?: boolean;
 }) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -23,7 +26,7 @@ export function Modal({
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div
-        className="modal"
+        className={`modal${wide ? " modal--wide" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-label={title}

@@ -261,6 +261,8 @@ export const approveReturn = async (
   merchantId: string,
   id: string,
   actorId: string,
+  /** The approval dialog's say on the courier: whether to book, and which. */
+  label: { book?: boolean; courierId?: number | null } = {},
 ) => {
   await changeStatus({
     merchantId,
@@ -300,7 +302,7 @@ export const approveReturn = async (
    * Non-fatal, like the two above: a courier's refusal lands on the timeline
    * to be retried from the return.
    */
-  await createLabelOnApproval(merchantId, id, actorId);
+  await createLabelOnApproval(merchantId, id, actorId, label);
 
   notifyInBackground(id, "APPROVED");
   return getReturn(merchantId, id);

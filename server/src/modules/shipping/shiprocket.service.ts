@@ -1034,16 +1034,28 @@ export const createLabelOnApproval = async (
   merchantId: string,
   returnId: string,
   actorId: string | null,
+  /**
+   * From the approval dialog: `book` says outright whether to book (and
+   * overrides the store's automatic setting either way), `courierId` which
+   * service. Absent, the store's setting decides and Shiprocket picks.
+   */
+  choice: { book?: boolean; courierId?: number | null } = {},
 ): Promise<void> => {
   try {
+    if (choice.book === false) return;
     const account = await getAccount(merchantId);
-    if (!account?.autoCreate) return;
+    if (!account) return;
+    if (!account.autoCreate && choice.book !== true) return;
     const request = await prisma.returnRequest.findFirst({
       where: { id: returnId, merchantId },
       select: { returnMethod: true, shipment: { select: { labelUrl: true } } },
     });
-    if (request?.returnMethod !== "LABEL" || request.shipment?.labelUrl) return;
-    await createReturnLabel(merchantId, returnId, actorId, { email: false });
+    if (request?.shipment?.labelUrl) return;
+    if (request?.returnMethod !== "LABEL" && choice.book !== true) return;
+    await createReturnLabel(merchantId, returnId, actorId, {
+      email: false,
+      courierId: choice.courierId ?? null,
+    });
   } catch (error) {
     logger.warn({ merchantId, returnId, err: error }, "Automatic return label failed");
   }

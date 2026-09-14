@@ -14,6 +14,7 @@ import type {
 import { ErrorAlert, Loading } from "../components/Feedback";
 import { StatusBadge } from "../components/StatusBadge";
 import { ShipmentPanel } from "./ShipmentPanel";
+import { ApproveDialog } from "./ApproveDialog";
 
 /**
  * The customer's phone number on the return: shown when known, entered when
@@ -462,6 +463,8 @@ export default function ReturnDetailPage() {
   const [acting, setActing] = useState(false);
   const [note, setNote] = useState("");
   const [preview, setPreview] = useState<RefundPreview | null>(null);
+  /** The approval dialog, for a return that asked for a courier pickup. */
+  const [approving, setApproving] = useState(false);
   const [diagnosis, setDiagnosis] = useState<ExchangeDiagnosis | null>(null);
 
   useEffect(() => {
@@ -762,7 +765,10 @@ export default function ReturnDetailPage() {
             <button
               className="btn btn--sm"
               disabled={acting}
-              onClick={() => void act("approve")}
+              onClick={() =>
+                // A label to book goes through the dialog; anything else just approves.
+                detail.returnMethod?.kind === "LABEL" ? setApproving(true) : void act("approve")
+              }
             >
               Approve return
             </button>
@@ -1191,6 +1197,17 @@ export default function ReturnDetailPage() {
             onAct={(path, body) => void act(path, body)}
             settingsPath={`${base}/settings/shipping`}
           />
+          {approving && (
+            <ApproveDialog
+              detail={detail}
+              busy={acting}
+              onClose={() => setApproving(false)}
+              onApprove={(choice) => {
+                setApproving(false);
+                void act("approve", choice);
+              }}
+            />
+          )}
 
 
           {detail.exchangeDraft ? (

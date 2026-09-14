@@ -45,8 +45,8 @@ export function ShipmentPanel({
   const keeping = detail.returnMethod?.kind === "KEEP";
   const test = Boolean(shipment?.isTest);
 
-  // Still waiting for approval, but the merchant may want to see the cost.
-  const pending = detail.status === "SUBMITTED" && askedForLabel && !shipment;
+  // Before approval the choosing happens in the approval dialog instead.
+  const pending = false;
   const canCreate = open && (!shipment || ["FAILED", "CANCELLED"].includes(shipment.status));
   const canCancel = Boolean(shipment && ["PENDING", "LABEL_CREATED", "IN_TRANSIT"].includes(shipment.status));
   const canRefresh = Boolean(shipment?.externalShipmentId && shipment.status !== "CANCELLED") && !test;

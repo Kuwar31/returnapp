@@ -4000,3 +4000,105 @@ table.data tbody tr:hover {
 .svc__price .muted {
   font-size: 12px;
 }
+
+/* ---------- the approval dialog for a return that asked for a label ---------- */
+
+.appr__label {
+  margin: 12px 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.appr__method {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.appr__method > span:last-child {
+  display: grid;
+  gap: 2px;
+}
+
+.appr__method-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--surface-muted);
+  font-size: 20px;
+}
+
+.appr__method-name {
+  font-weight: 600;
+}
+
+.appr__chip {
+  margin-left: 8px;
+  vertical-align: 1px;
+  background: #e8f1fb;
+  color: #1d4f91;
+}
+
+.appr__services {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.appr__services-head {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.appr__note {
+  padding: 14px;
+  margin: 0;
+}
+
+.appr__row {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 0;
+  border-top: 1px solid var(--border);
+}
+
+.appr__row:nth-of-type(1) {
+  border-top: none;
+}
+
+.appr__row input {
+  margin-left: 6px;
+}
+
+.appr__logo {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #4b3fb8;
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.appr__logo--none {
+  background: var(--surface-muted);
+  color: var(--text-muted);
+}
+
+.modal--wide {
+  max-width: 680px;
+}

@@ -197,11 +197,19 @@ returnsRouter.get(
 
 returnsRouter.post(
   "/:id/approve",
+  validate(
+    z.object({
+      /** Book the courier now (true), don't (false), or as the store's setting says. */
+      bookLabel: z.boolean().optional(),
+      courierId: z.number().int().positive().nullable().optional(),
+    }),
+  ),
   asyncHandler(async (req, res) => {
     const updated = await returnsService.approveReturn(
       req.admin!.merchantId,
       req.params.id,
       req.admin!.sub,
+      { book: req.body.bookLabel, courierId: req.body.courierId ?? null },
     );
     res.json(serializeReturn(updated, await resolveDisplayMode(req.admin!.merchantId)));
   }),
