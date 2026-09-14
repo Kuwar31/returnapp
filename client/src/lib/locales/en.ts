@@ -112,8 +112,7 @@ export const en = {
   "drawer.whyReturning": "Why are you returning this item?",
   "drawer.closest": "Which of these is closest?",
   "drawer.allReasons": "All reasons",
-  "drawer.detailsHelp":
-    "Specific details help us prevent similar issues in future.",
+  "drawer.detailsHelp": "This helps us put things right.",
   "drawer.noteLabel": "Tell us what happened",
   "drawer.notePlaceholder": "A short description helps us put it right",
   "drawer.howProceed": "How would you like to proceed?",

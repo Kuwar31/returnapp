@@ -537,6 +537,59 @@ export function ItemDrawer({
       <div className="drawer__backdrop" onClick={onCancel} />
       <div className={`drawer__panel${step === "ai" ? " drawer__panel--ai" : ""}`}>
         {/*
+          The bar along the top: a way back, a way out, and — on a phone,
+          where the image pane below is hidden — the item being returned, as
+          a thumbnail with its name and price. On the first step the back
+          arrow leaves the drawer the way the cross does, so the bar reads
+          the same on every step; desktop keeps only the cross there.
+        */}
+        <div className="drawer__head">
+          <button
+            className={`drawer__back${step === "reason" ? " drawer__back--leave" : ""}`}
+            onClick={() =>
+              step === "reason"
+                ? reasonParent
+                  ? setReasonParent(null)
+                  : onCancel()
+                : /* One step back, not one screen back to the start: confirming
+                     a catalogue product belongs to the grid it was opened from. */
+                  step === "product"
+                  ? (setPicked(null), setChosenId(null), setStep("browse"))
+                  : setStep(
+                      step === "resolution" || step === "ai"
+                        ? "reason"
+                        : "resolution",
+                    )
+            }
+            aria-label={t("common.back")}
+          >
+            ←
+          </button>
+          <div className="drawer__head-item">
+            {item.imageUrl ? (
+              <img src={item.imageUrl} alt="" />
+            ) : (
+              <div className="drawer__head-blank" />
+            )}
+            <div className="drawer__head-text">
+              <div className="drawer__head-title">{item.title}</div>
+              <div className="muted">
+                {[variantLabel, money(item.unitPrice, currency)]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </div>
+            </div>
+          </div>
+          <button
+            className="drawer__close"
+            onClick={onCancel}
+            aria-label={t("common.close")}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/*
           One image pane, shared by every step.
           On the swap step it becomes the replacement's gallery — the drawer is
           already two columns, so giving the swap screen its own second column
@@ -612,34 +665,6 @@ export function ItemDrawer({
         </div>
 
         <div className="drawer__body">
-          <button
-            className="drawer__close"
-            onClick={onCancel}
-            aria-label={t("common.close")}
-          >
-            ✕
-          </button>
-
-          {step !== "reason" && (
-            <button
-              className="drawer__back"
-              onClick={() =>
-                /* One step back, not one screen back to the start: confirming a
-                   catalogue product belongs to the grid it was opened from. */
-                step === "product"
-                  ? (setPicked(null), setChosenId(null), setStep("browse"))
-                  : setStep(
-                      step === "resolution" || step === "ai"
-                        ? "reason"
-                        : "resolution",
-                    )
-              }
-              aria-label={t("common.back")}
-            >
-              ←
-            </button>
-          )}
-
           {error && <div className="alert alert--error">{error}</div>}
 
           {step === "reason" && (
@@ -661,9 +686,7 @@ export function ItemDrawer({
               ) : (
                 <>
                   <h2>{t("drawer.whyReturning")}</h2>
-                  <p className="muted" style={{ margin: "6px 0 20px" }}>
-                    {t("drawer.detailsHelp")}
-                  </p>
+                  <p className="muted drawer__hint">{t("drawer.detailsHelp")}</p>
                 </>
               )}
 
