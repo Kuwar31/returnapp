@@ -89,6 +89,8 @@ export const da: Dict = {
   "drawer.howProceed": "Hvordan vil du fortsætte?",
   "drawer.bestMatch": "Bedst for dig",
   "drawer.exchangeSize": "Byt til en anden størrelse",
+  "drawer.exchangeColour": "Byt til en anden farve",
+  "drawer.exchangeVariant": "Byt til en anden størrelse eller farve",
   "drawer.exchangeProduct": "Byt til et andet produkt",
   "drawer.returnItem": "Returner varen",
   "drawer.paidNextStep": "Du vælger, hvordan du får pengene, i næste trin",

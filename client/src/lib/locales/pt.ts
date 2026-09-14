@@ -89,6 +89,8 @@ export const pt: Dict = {
   "drawer.howProceed": "Como pretende continuar?",
   "drawer.bestMatch": "A melhor opção para si",
   "drawer.exchangeSize": "Trocar por outro tamanho",
+  "drawer.exchangeColour": "Trocar por outra cor",
+  "drawer.exchangeVariant": "Trocar por outro tamanho ou cor",
   "drawer.exchangeProduct": "Trocar por outro produto",
   "drawer.returnItem": "Devolver o artigo",
   "drawer.paidNextStep": "Escolha como quer ser reembolsado no passo seguinte",

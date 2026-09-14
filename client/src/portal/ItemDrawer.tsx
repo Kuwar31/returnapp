@@ -73,6 +73,13 @@ export interface ItemDecision {
  */
 type Step = "reason" | "ai" | "resolution" | "size" | "browse" | "product";
 
+/** Option axes that are a size, in the languages the portal speaks. */
+const SIZE_AXIS =
+  /size|taille|größe|grösse|talla|taglia|maat|storlek|størrelse|rozmiar|tamanho|サイズ|尺码|尺寸|مقاس/i;
+/** …and ones that are a colour. Anything else widens the card's promise. */
+const COLOUR_AXIS =
+  /colou?r|couleur|farbe|colore|kleur|färg|farve|kolor|\bcor\b|カラー|色|لون/i;
+
 /**
  * The per-item decision flow: why it's coming back, then how to make it right.
  *
@@ -188,6 +195,36 @@ export function ItemDrawer({
   const swappableVariants = (swap?.variants ?? []).filter(
     (v) => v.available && v.id !== swap?.currentVariantId,
   );
+  /**
+   * What the swap card promises, read off the product's own option axes:
+   * "size" when that is all there is to choose, "size or colour" when there
+   * is more — a shirt in three colours is not a size swap. The wider wording
+   * also stands in when the preview didn't load and the axes are unknown.
+   */
+  const swapAxes = [
+    ...new Set(
+      swappableVariants
+        .flatMap((v) => (v.options ?? []).map((o) => o.name))
+        .filter((name) => name.toLowerCase() !== "title"),
+    ),
+  ];
+  const swapLabelKey: Key =
+    swapAxes.length > 0 && swapAxes.every((a) => SIZE_AXIS.test(a))
+      ? "drawer.exchangeSize"
+      : swapAxes.length > 0 && swapAxes.every((a) => COLOUR_AXIS.test(a))
+        ? "drawer.exchangeColour"
+        : "drawer.exchangeVariant";
+  /**
+   * One picture per look on offer — the colours, not the sizes — so the card
+   * shows what "or colour" means rather than one thumbnail and a count.
+   */
+  const swapImages = [
+    ...new Set(
+      swappableVariants
+        .map((v) => v.imageUrl)
+        .filter((url): url is string => Boolean(url)),
+    ),
+  ];
   /**
    * A swap within the item's own product, which is the only kind the store
    * offers to cover.
@@ -968,22 +1005,35 @@ export function ItemDrawer({
                 >
                   <span className="choice__main">
                     <span className="choice__flag">✦ {t("drawer.bestMatch")}</span>
-                    <span className="choice__label">{t("drawer.exchangeSize")}</span>
-                    <span className="choice__preview">
-                      {item.imageUrl && (
-                        <img src={item.imageUrl} alt="" className="choice__thumb" />
-                      )}
-                      <span className="choice__desc">
-                        {/* Never "0 size options": the count is unknown when
-                            the preview didn't load, not zero. */}
-                        {optionsFailed && swappableVariants.length === 0
-                          ? t("drawer.seeAvailable")
-                          : t.plural(
-                              "drawer.sizeOptions",
-                              swappableVariants.length,
-                            )}
+                    <span className="choice__label">{t(swapLabelKey)}</span>
+                    {swapImages.length >= 2 ? (
+                      <span className="choice__strip">
+                        {swapImages.slice(0, 3).map((url) => (
+                          <img key={url} src={url} alt="" />
+                        ))}
+                        {swapImages.length > 3 && (
+                          <span className="choice__strip-more">
+                            +{swapImages.length - 3} more
+                          </span>
+                        )}
                       </span>
-                    </span>
+                    ) : (
+                      <span className="choice__preview">
+                        {item.imageUrl && (
+                          <img src={item.imageUrl} alt="" className="choice__thumb" />
+                        )}
+                        <span className="choice__desc">
+                          {/* Never "0 size options": the count is unknown when
+                              the preview didn't load, not zero. */}
+                          {optionsFailed && swappableVariants.length === 0
+                            ? t("drawer.seeAvailable")
+                            : t.plural(
+                                "drawer.sizeOptions",
+                                swappableVariants.length,
+                              )}
+                        </span>
+                      </span>
+                    )}
                   </span>
                   <span className="choice__chevron">›</span>
                 </button>

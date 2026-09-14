@@ -118,6 +118,8 @@ export const en = {
   "drawer.howProceed": "How would you like to proceed?",
   "drawer.bestMatch": "Best match for you",
   "drawer.exchangeSize": "Exchange for new size",
+  "drawer.exchangeColour": "Exchange for new colour",
+  "drawer.exchangeVariant": "Exchange for new size or colour",
   "drawer.exchangeProduct": "Exchange for another product",
   "drawer.returnItem": "Return item",
   "drawer.paidNextStep": "Choose how you're paid on the next step",

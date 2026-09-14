@@ -89,6 +89,8 @@ export const nl: Dict = {
   "drawer.howProceed": "Hoe wil je verdergaan?",
   "drawer.bestMatch": "Het beste voor jou",
   "drawer.exchangeSize": "Ruilen voor een andere maat",
+  "drawer.exchangeColour": "Ruilen voor een andere kleur",
+  "drawer.exchangeVariant": "Ruilen voor een andere maat of kleur",
   "drawer.exchangeProduct": "Ruilen voor een ander product",
   "drawer.returnItem": "Artikel retourneren",
   "drawer.paidNextStep": "Je kiest in de volgende stap hoe je wordt terugbetaald",

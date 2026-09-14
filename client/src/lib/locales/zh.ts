@@ -87,6 +87,8 @@ export const zh: Dict = {
   "drawer.howProceed": "您希望如何处理？",
   "drawer.bestMatch": "最适合您",
   "drawer.exchangeSize": "更换其他尺码",
+  "drawer.exchangeColour": "更换其他颜色",
+  "drawer.exchangeVariant": "更换其他尺码或颜色",
   "drawer.exchangeProduct": "更换其他商品",
   "drawer.returnItem": "退货",
   "drawer.paidNextStep": "下一步可选择退款方式",

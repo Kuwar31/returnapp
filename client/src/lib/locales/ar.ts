@@ -96,6 +96,8 @@ export const ar: Dict = {
   "drawer.howProceed": "كيف تودّ المتابعة؟",
   "drawer.bestMatch": "الأنسب لك",
   "drawer.exchangeSize": "استبدال بمقاس آخر",
+  "drawer.exchangeColour": "استبدال بلون آخر",
+  "drawer.exchangeVariant": "استبدال بمقاس أو لون آخر",
   "drawer.exchangeProduct": "استبدال بمنتج آخر",
   "drawer.returnItem": "إرجاع المنتج",
   "drawer.paidNextStep": "ستختار طريقة استرداد المبلغ في الخطوة التالية",

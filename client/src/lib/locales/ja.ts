@@ -87,6 +87,8 @@ export const ja: Dict = {
   "drawer.howProceed": "どのようになさいますか？",
   "drawer.bestMatch": "おすすめ",
   "drawer.exchangeSize": "別のサイズに交換",
+  "drawer.exchangeColour": "別のカラーに交換",
+  "drawer.exchangeVariant": "別のサイズまたはカラーに交換",
   "drawer.exchangeProduct": "別の商品に交換",
   "drawer.returnItem": "商品を返品する",
   "drawer.paidNextStep": "返金方法は次のステップで選択できます",

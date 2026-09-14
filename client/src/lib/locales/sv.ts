@@ -89,6 +89,8 @@ export const sv: Dict = {
   "drawer.howProceed": "Hur vill du gå vidare?",
   "drawer.bestMatch": "Bäst för dig",
   "drawer.exchangeSize": "Byt till en annan storlek",
+  "drawer.exchangeColour": "Byt till en annan färg",
+  "drawer.exchangeVariant": "Byt till en annan storlek eller färg",
   "drawer.exchangeProduct": "Byt mot en annan produkt",
   "drawer.returnItem": "Returnera varan",
   "drawer.paidNextStep": "Du väljer hur du får pengarna i nästa steg",
