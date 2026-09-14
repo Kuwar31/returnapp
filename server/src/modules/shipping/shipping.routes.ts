@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { logger } from "../../lib/logger.js";
 import { asyncHandler } from "../../middleware/asyncHandler.js";
-import { handleWebhook, testLabelHtml } from "./shiprocket.service.js";
+import { handleWebhook, testLabelHtml } from "./shipping.service.js";
 
 export const shippingRouter = Router();
 

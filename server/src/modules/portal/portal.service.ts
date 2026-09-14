@@ -24,7 +24,7 @@ import {
   pickGroup,
   requirementsOf,
 } from "../settings/reasons.service.js";
-import { createLabelOnApproval } from "../shipping/shiprocket.service.js";
+import { createLabelOnApproval } from "../shipping/shipping.service.js";
 import {
   resolveDisplayMode,
   resolveShopNowBonus,

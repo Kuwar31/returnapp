@@ -4102,3 +4102,51 @@ table.data tbody tr:hover {
 .modal--wide {
   max-width: 680px;
 }
+
+/* ---------- shipping: the carrier cards ---------- */
+
+.carriers {
+  display: grid;
+  gap: 16px;
+}
+
+.carrier.is-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.carrier__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 6px;
+}
+
+.carrier__head h2 {
+  margin-bottom: 2px;
+}
+
+.carrier__use {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.carrier__use input {
+  accent-color: var(--accent);
+}
+
+.carrier__use.is-disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.badge--warn {
+  background: #fff3cd;
+  color: #7a5a00;
+}

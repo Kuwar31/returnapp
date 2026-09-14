@@ -150,7 +150,7 @@ export const deleteDestination = async (merchantId: string, id: string) => {
  */
 const shippingDestination = async (merchantId: string) =>
   (
-    await prisma.shiprocketAccount.findUnique({
+    await prisma.shippingSettings.findUnique({
       where: { merchantId },
       select: { destination: true },
     })

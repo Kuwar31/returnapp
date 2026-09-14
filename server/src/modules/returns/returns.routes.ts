@@ -13,7 +13,7 @@ import {
   quoteCouriers,
   refreshTracking,
   simulateTracking,
-} from "../shipping/shiprocket.service.js";
+} from "../shipping/shipping.service.js";
 import {
   diagnoseExchange,
   runExchangeRepair,

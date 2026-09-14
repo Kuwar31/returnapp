@@ -2,6 +2,7 @@ import { env } from "../../config/env.js";
 import { decrypt } from "../../lib/crypto.js";
 import { logger } from "../../lib/logger.js";
 import { prisma } from "../../lib/prisma.js";
+import { CarrierError } from "./shipments.js";
 
 /**
  * The thinnest useful wrapper over Shiprocket's REST API.
@@ -12,14 +13,9 @@ import { prisma } from "../../lib/prisma.js";
  */
 
 /** A Shiprocket refusal, with what it said. */
-export class ShiprocketError extends Error {
-  constructor(
-    message: string,
-    /** HTTP status, or 0 when the request never got an answer. */
-    readonly status: number,
-    readonly body: unknown = null,
-  ) {
-    super(message);
+export class ShiprocketError extends CarrierError {
+  constructor(message: string, status: number, body: unknown = null) {
+    super(message, status, body);
     this.name = "ShiprocketError";
   }
 }

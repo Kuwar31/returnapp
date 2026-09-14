@@ -8,7 +8,7 @@ import { notifyInBackground } from "../email/notifications.js";
 import {
   cancelLabelQuietly,
   createLabelOnApproval,
-} from "../shipping/shiprocket.service.js";
+} from "../shipping/shipping.service.js";
 import {
   issueShopifyGiftCard,
   issueShopifyStoreCredit,

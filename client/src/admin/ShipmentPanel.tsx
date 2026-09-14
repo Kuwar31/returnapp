@@ -116,8 +116,8 @@ export function ShipmentPanel({
 
       {test && (
         <p className="muted" style={{ marginBottom: 12 }}>
-          Booked in test mode: nothing was sent to Shiprocket and no courier is
-          coming. The customer got the usual email and sees the usual page.
+          Booked in test mode: no real courier is coming and nothing was
+          charged. The customer got the usual email and sees the usual page.
           Move the parcel along with the buttons below.
         </p>
       )}
@@ -125,9 +125,9 @@ export function ShipmentPanel({
       {!shipment && (
         <p className="muted" style={{ marginBottom: 12 }}>
           {askedForLabel
-            ? "The customer asked for a return label. Book a Shiprocket courier to collect the parcel from their address."
-            : "Book a Shiprocket courier to collect the parcel from the customer's address instead of leaving the shipping to them."}{" "}
-          Needs Shiprocket connected under <Link to={settingsPath}>Shipping</Link>.
+            ? "The customer asked for a return label. Book a courier to collect the parcel from their address."
+            : "Book a courier to collect the parcel from the customer's address instead of leaving the shipping to them."}{" "}
+          Needs a carrier connected under <Link to={settingsPath}>Shipping</Link>.
         </p>
       )}
 
@@ -170,7 +170,7 @@ export function ShipmentPanel({
             )}
             {shipment.statusLabel && (
               <div className="kv">
-                <dt>Shiprocket says</dt>
+                <dt>Courier says</dt>
                 <dd>
                   {shipment.statusLabel}
                   {shipment.lastTrackedAt && (
@@ -217,7 +217,7 @@ export function ShipmentPanel({
       {wantsQuote && shipment && !choosing && (
         <p className="settings-row__hint" style={{ marginTop: 12 }}>
           Book again uses{" "}
-          {quotes?.couriers.find((c) => c.courierId === courierId)?.name ?? "Shiprocket's recommended courier"}.{" "}
+          {quotes?.couriers.find((c) => c.courierId === courierId)?.name ?? "the carrier's recommended service"}.{" "}
           <button type="button" className="link-btn" onClick={() => setChoosing(true)}>
             Choose a different service
           </button>
@@ -229,7 +229,7 @@ export function ShipmentPanel({
           <div className="svc__head">
             <span className="field-label">Select service</span>
             <button type="button" className="link-btn" disabled={quoting} onClick={() => void loadQuotes()}>
-              {quoting ? "Getting rates…" : quotes ? "Refresh rates" : "Get rates"}
+              {quoting ? "Checking…" : quotes ? "Refresh" : "Check services"}
             </button>
           </div>
           {quoteError && (
@@ -268,7 +268,7 @@ export function ShipmentPanel({
                 </span>
               </span>
               <span className="svc__price">
-                <strong>{money(c.rate, "INR")}</strong>
+                <strong>{c.rate === null ? "Contract rate" : money(c.rate, "INR")}</strong>
                 {c.shopRate !== null && quotes.shopCurrency !== "INR" && (
                   <span className="muted">≈ {money(c.shopRate, quotes.shopCurrency)}</span>
                 )}

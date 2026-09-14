@@ -88,14 +88,14 @@ export function ApproveDialog({
               {detail.returnMethod?.name ?? "Ship with a return label"}
               <span className="chip appr__chip">Customer selected</span>
             </span>
-            <span className="muted">A Shiprocket courier collects the parcel from the customer.</span>
+            <span className="muted">A courier collects the parcel from the customer.</span>
           </span>
         </div>
 
         <div className="appr__label">Return label</div>
         <div className="appr__services">
           <div className="appr__services-head">Select service</div>
-          {loading && <p className="muted appr__note">Getting rates from Shiprocket…</p>}
+          {loading && <p className="muted appr__note">Checking which services can collect it…</p>}
           {error && (
             <div className="alert alert--error" style={{ margin: "10px 14px" }}>
               {error} You can still approve and book the pickup later from the return.
@@ -122,7 +122,7 @@ export function ApproveDialog({
                 </span>
               </span>
               <span className="svc__price">
-                <strong>{money(c.rate, "INR")}</strong>
+                <strong>{c.rate === null ? "Contract rate" : money(c.rate, "INR")}</strong>
                 {c.shopRate !== null && quotes.shopCurrency !== "INR" && (
                   <span className="muted">≈ {money(c.shopRate, quotes.shopCurrency)}</span>
                 )}

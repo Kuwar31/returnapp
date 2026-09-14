@@ -70,6 +70,10 @@ const schema = z.object({
     .string()
     .url()
     .default("https://apiv2.shiprocket.in/v1/external"),
+  // Delhivery's API, and its staging environment — the test mode for that
+  // carrier. Overridden only to point a probe at a stand-in.
+  DELHIVERY_API_URL: z.string().url().default("https://track.delhivery.com"),
+  DELHIVERY_STAGING_URL: z.string().url().default("https://staging-express.delhivery.com"),
   // How often open shipments are asked for tracking, for stores without the
   // webhook set up. Zero turns it off, as on a second instance.
   TRACKING_SWEEP_MINUTES: z.coerce.number().int().min(0).max(1440).default(30),

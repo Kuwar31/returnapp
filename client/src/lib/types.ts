@@ -325,7 +325,7 @@ export interface ShipmentScan {
 }
 
 export interface ReturnShipment {
-  provider: "SHIPROCKET" | null;
+  provider: "SHIPROCKET" | "DELHIVERY" | null;
   /** Booked in test mode: no courier exists, tracking is simulated. */
   isTest: boolean;
   /** The courier service chosen when it was booked. */
@@ -356,8 +356,8 @@ export interface ReturnShipment {
 export interface CourierQuote {
   courierId: number;
   name: string;
-  /** Rupees, Shiprocket's own currency. */
-  rate: number;
+  /** Rupees. Null when the carrier bills at contract rates it doesn't quote. */
+  rate: number | null;
   /** The same in the store's currency, when the order's rate allows it. */
   shopRate: number | null;
   etd: string | null;
@@ -369,6 +369,7 @@ export interface CourierQuote {
 }
 
 export interface CourierQuotes {
+  provider: "SHIPROCKET" | "DELHIVERY";
   couriers: CourierQuote[];
   shopCurrency: string;
 }
@@ -376,30 +377,38 @@ export interface CourierQuotes {
 /** A return destination, with whether a Shiprocket courier can deliver to it. */
 export type DeliveryDestination = ReturnDestination & { hasPhone: boolean; hasZip: boolean };
 
-/** The store's Shiprocket connection, as the settings page shows it. */
-export type ShiprocketSettings = (
-  | {
-      connected: true;
-      email: string;
-      connectedAt: string;
-      tokenExpiresAt: string | null;
-      webhookSecret: string;
-      autoCreate: boolean;
-      receiveOnDelivery: boolean;
-      qcEnabled: boolean;
-      parcel: { lengthCm: number; breadthCm: number; heightCm: number; weightKg: number };
-      /** The destination parcels go to; null means the store's default. */
-      destinationId: string | null;
-      /** Pretend pickups: nothing sent to Shiprocket, nothing charged. */
-      testMode: boolean;
-    }
-  | { connected: false }
-) & {
+/** The store's carriers and label settings, as the Shipping page shows them. */
+export interface ShippingView {
+  settings: {
+    /** Which carrier books labels; null until one is chosen. */
+    provider: "SHIPROCKET" | "DELHIVERY" | null;
+    autoCreate: boolean;
+    receiveOnDelivery: boolean;
+    /** The destination parcels go to; null means the store's default. */
+    destinationId: string | null;
+    parcel: { lengthCm: number; breadthCm: number; heightCm: number; weightKg: number };
+  };
+  shiprocket: {
+    email: string;
+    connectedAt: string;
+    tokenExpiresAt: string | null;
+    webhookUrl: string;
+    webhookSecret: string;
+    /** Pretend pickups: nothing sent to Shiprocket, nothing charged. */
+    testMode: boolean;
+    qcEnabled: boolean;
+  } | null;
+  delhivery: {
+    connectedAt: string;
+    /** Delhivery's staging environment — its test mode. */
+    staging: boolean;
+    warehouseName: string;
+  } | null;
   webhookUrl: string;
   destinations: DeliveryDestination[];
   /** Where parcels go today: the chosen destination, else the default. */
   destination: { id: string; name: string; hasPhone: boolean; hasZip: boolean } | null;
-};
+}
 
 /** A postal address flattened server-side into printable lines. */
 export interface PostalAddress {

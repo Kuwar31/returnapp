@@ -20,6 +20,9 @@ import * as regionalPolicies from "./regional-policies.service.js";
 import * as destinationsService from "./destinations.service.js";
 import * as routing from "./routing.service.js";
 import * as shiprocket from "../shipping/shiprocket.service.js";
+import * as delhivery from "../shipping/delhivery.service.js";
+import * as shippingSettings from "../shipping/shipping.settings.js";
+import { indianMobile } from "../shipping/addresses.js";
 import { inventoryAccessProblem } from "../shopify/locations.service.js";
 import { browseCollections } from "../shopify/catalogue.service.js";
 import { listLocationsIfConnected } from "../shopify/locations.service.js";
@@ -1123,97 +1126,118 @@ settingsRouter.post(
 );
 
 // ---------------------------------------------------------------------------
-// Shiprocket — return labels
+// Shipping — carriers and return labels
 // ---------------------------------------------------------------------------
 
-const shiprocketConnectSchema = z.object({
-  email: z.string().trim().email().max(200),
-  password: z.string().min(1).max(200),
-});
-
 const cm = z.number().min(1).max(500);
-const shiprocketSettingsSchema = z
+const shippingSettingsSchema = z
   .object({
+    provider: z.enum(["SHIPROCKET", "DELHIVERY"]).nullable(),
     autoCreate: z.boolean(),
     receiveOnDelivery: z.boolean(),
-    qcEnabled: z.boolean(),
+    destinationId: z.string().min(1).max(60).nullable(),
     lengthCm: cm,
     breadthCm: cm,
     heightCm: cm,
     weightKg: z.number().min(0.05).max(500),
-    destinationId: z.string().min(1).max(60).nullable(),
-    testMode: z.boolean(),
   })
   .partial();
 
+/** Whether the courier can deliver to a destination: it wants a phone and a postcode. */
+const readiness = (d: { phone: string | null; zip: string | null }) => ({
+  hasPhone: indianMobile(d.phone) !== null,
+  hasZip: Boolean(d.zip),
+});
+
 /**
- * The store's Shiprocket connection and label settings, plus every return
- * destination with whether the courier can deliver to it — Shiprocket wants
- * a phone number and a postcode, and it's better to say so here than at the
- * first approval.
+ * Everything the Shipping page shows: the shared settings, each carrier's
+ * connection, and every return destination with whether a courier can
+ * deliver to it — it wants a phone number and a postcode, and it's better
+ * to say so here than at the first approval.
  */
+const shippingView = async (merchantId: string) => {
+  const [settings, sr, dl, destinations, destination] = await Promise.all([
+    shippingSettings.getSettings(merchantId),
+    shiprocket.getAccount(merchantId),
+    delhivery.getAccount(merchantId),
+    destinationsService.listDestinations(merchantId),
+    shippingSettings.deliveryDestination(merchantId),
+  ]);
+  return {
+    settings: shippingSettings.serializeSettings(settings),
+    shiprocket: sr ? shiprocket.serializeAccount(sr) : null,
+    delhivery: dl ? delhivery.serializeAccount(dl) : null,
+    webhookUrl: shiprocket.webhookUrl(),
+    destinations: destinations.map((d) => ({ ...destinationsService.serializeDestination(d), ...readiness(d) })),
+    /** Where parcels go today: the chosen destination, else the default. */
+    destination: destination ? { id: destination.id, name: destination.name, ...readiness(destination) } : null,
+  };
+};
+
 settingsRouter.get(
-  "/shiprocket",
+  "/shipping",
   asyncHandler(async (req, res) => {
-    const merchantId = req.admin!.merchantId;
-    const [account, destinations, destination] = await Promise.all([
-      shiprocket.getAccount(merchantId),
-      destinationsService.listDestinations(merchantId),
-      shiprocket.deliveryDestination(merchantId),
-    ]);
-    const readiness = (d: { phone: string | null; zip: string | null }) => ({
-      hasPhone: shiprocket.indianMobile(d.phone) !== null,
-      hasZip: Boolean(d.zip),
-    });
-    res.json({
-      ...shiprocket.serializeAccount(account),
-      destinations: destinations.map((d) => ({
-        ...destinationsService.serializeDestination(d),
-        ...readiness(d),
-      })),
-      /** Where parcels go today: the chosen destination, else the default. */
-      destination: destination
-        ? { id: destination.id, name: destination.name, ...readiness(destination) }
-        : null,
-    });
+    res.json(await shippingView(req.admin!.merchantId));
   }),
 );
 
+/** The shared settings. Choosing a carrier needs that carrier connected. */
+settingsRouter.patch(
+  "/shipping",
+  validate(shippingSettingsSchema),
+  asyncHandler(async (req, res) => {
+    const merchantId = req.admin!.merchantId;
+    if (req.body.provider === "SHIPROCKET" && !(await shiprocket.getAccount(merchantId))) {
+      throw unprocessable("Connect Shiprocket before choosing it.");
+    }
+    if (req.body.provider === "DELHIVERY" && !(await delhivery.getAccount(merchantId))) {
+      throw unprocessable("Connect Delhivery before choosing it.");
+    }
+    await shippingSettings.updateSettings(merchantId, req.body);
+    res.json(await shippingView(merchantId));
+  }),
+);
+
+// --- Shiprocket ---
+
 settingsRouter.post(
   "/shiprocket/connect",
-  validate(shiprocketConnectSchema),
+  validate(z.object({ email: z.string().trim().email().max(200), password: z.string().min(1).max(200) })),
   asyncHandler(async (req, res) => {
-    const account = await shiprocket.connectAccount(
-      req.admin!.merchantId,
-      req.body.email,
-      req.body.password,
-    );
-    res.json(shiprocket.serializeAccount(account));
+    const merchantId = req.admin!.merchantId;
+    await shiprocket.connectAccount(merchantId, req.body.email, req.body.password);
+    // The first carrier connected becomes the one that books.
+    const settings = await shippingSettings.getSettings(merchantId);
+    if (!settings.provider) await shippingSettings.updateSettings(merchantId, { provider: "SHIPROCKET" });
+    res.json(await shippingView(merchantId));
   }),
 );
 
 settingsRouter.delete(
   "/shiprocket",
   asyncHandler(async (req, res) => {
-    await shiprocket.disconnectAccount(req.admin!.merchantId);
-    res.status(204).end();
+    const merchantId = req.admin!.merchantId;
+    await shiprocket.disconnectAccount(merchantId);
+    const settings = await shippingSettings.getSettings(merchantId);
+    if (settings.provider === "SHIPROCKET") await shippingSettings.updateSettings(merchantId, { provider: null });
+    res.json(await shippingView(merchantId));
   }),
 );
 
 settingsRouter.patch(
   "/shiprocket",
-  validate(shiprocketSettingsSchema),
+  validate(z.object({ testMode: z.boolean(), qcEnabled: z.boolean() }).partial()),
   asyncHandler(async (req, res) => {
-    const account = await shiprocket.updateAccount(req.admin!.merchantId, req.body);
-    res.json(shiprocket.serializeAccount(account));
+    await shiprocket.updateAccount(req.admin!.merchantId, req.body);
+    res.json(await shippingView(req.admin!.merchantId));
   }),
 );
 
 settingsRouter.post(
   "/shiprocket/webhook-secret",
   asyncHandler(async (req, res) => {
-    const account = await shiprocket.rotateWebhookSecret(req.admin!.merchantId);
-    res.json(shiprocket.serializeAccount(account));
+    await shiprocket.rotateWebhookSecret(req.admin!.merchantId);
+    res.json(await shippingView(req.admin!.merchantId));
   }),
 );
 
@@ -1221,5 +1245,52 @@ settingsRouter.post(
   "/shiprocket/test",
   asyncHandler(async (req, res) => {
     res.json(await shiprocket.testConnection(req.admin!.merchantId));
+  }),
+);
+
+// --- Delhivery ---
+
+settingsRouter.post(
+  "/delhivery/connect",
+  validate(
+    z.object({
+      token: z.string().trim().min(8).max(200),
+      staging: z.boolean().default(true),
+      warehouseName: z.string().trim().min(1).max(120),
+    }),
+  ),
+  asyncHandler(async (req, res) => {
+    const merchantId = req.admin!.merchantId;
+    await delhivery.connectAccount(merchantId, req.body.token, req.body.staging, req.body.warehouseName);
+    const settings = await shippingSettings.getSettings(merchantId);
+    if (!settings.provider) await shippingSettings.updateSettings(merchantId, { provider: "DELHIVERY" });
+    res.json(await shippingView(merchantId));
+  }),
+);
+
+settingsRouter.delete(
+  "/delhivery",
+  asyncHandler(async (req, res) => {
+    const merchantId = req.admin!.merchantId;
+    await delhivery.disconnectAccount(merchantId);
+    const settings = await shippingSettings.getSettings(merchantId);
+    if (settings.provider === "DELHIVERY") await shippingSettings.updateSettings(merchantId, { provider: null });
+    res.json(await shippingView(merchantId));
+  }),
+);
+
+settingsRouter.patch(
+  "/delhivery",
+  validate(z.object({ staging: z.boolean(), warehouseName: z.string().trim().min(1).max(120) }).partial()),
+  asyncHandler(async (req, res) => {
+    await delhivery.updateAccount(req.admin!.merchantId, req.body);
+    res.json(await shippingView(req.admin!.merchantId));
+  }),
+);
+
+settingsRouter.post(
+  "/delhivery/test",
+  asyncHandler(async (req, res) => {
+    res.json(await delhivery.testConnection(req.admin!.merchantId));
   }),
 );

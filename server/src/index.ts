@@ -3,7 +3,7 @@ import { env } from "./config/env.js";
 import { logger } from "./lib/logger.js";
 import { prisma } from "./lib/prisma.js";
 import { runReminderSweepSafely } from "./modules/returns/reminders.service.js";
-import { runTrackingSweepSafely } from "./modules/shipping/shiprocket.service.js";
+import { runTrackingSweepSafely } from "./modules/shipping/shipping.service.js";
 
 const app = createApp();
 const server = app.listen(env.PORT, () => {
