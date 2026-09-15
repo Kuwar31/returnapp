@@ -168,19 +168,31 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
    * the percentage bonus and the flat sweetener only apply to money kept in
    * the store, so the two figures genuinely differ.
    */
+  /**
+   * Priced as the decisions change rather than when the offer opens, so the
+   * moment of "Continue" already knows whether there is anything to offer.
+   * Debounced like the quote above, for the same reason.
+   */
   useEffect(() => {
-    if (!offerOpen || shopCredit !== null) return;
+    setShopCredit(null);
+    if (!canOfferShopping) return;
     const items = toShopSelections(decisions as Draft);
-    api
-      .post<Quote>(
-        "/portal/session/quote",
-        { items, shopItems: [] },
-        { auth: "portal" },
-      )
-      .then((q) => setShopCredit(q.estimatedTotal))
-      // Without a figure there is no offer to make; let the shopper carry on.
-      .catch(() => setOfferOpen(false));
+    const timer = setTimeout(() => {
+      api
+        .post<Quote>(
+          "/portal/session/quote",
+          { items, shopItems: [] },
+          { auth: "portal" },
+        )
+        .then((q) => setShopCredit(q.estimatedTotal))
+        // Without a figure there is no offer to make.
+        .catch(() => setShopCredit(0));
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [canOfferShopping, decisions]);
 
+  useEffect(() => {
+    if (!offerOpen) return;
     api
       .get<{ products: ExchangeProduct[] }>(
         "/portal/session/exchange/products",
@@ -188,7 +200,21 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
       )
       .then((r) => setOfferProducts(r.products.slice(0, 4)))
       .catch(() => setOfferProducts([]));
-  }, [offerOpen, shopCredit, decisions]);
+  }, [offerOpen]);
+
+  /**
+   * Nothing to spend, nothing to offer. A return whose credit is swallowed
+   * by an upgrade on the same order — one item swapped for something dearer,
+   * another sent back — leaves no pool for a basket, and "Shop now with
+   * ₹0.00" was the popup saying so. It closes itself and carries on.
+   */
+  const nothingToSpend = shopCredit !== null && shopCredit <= 0.005;
+  useEffect(() => {
+    if (!offerOpen || !nothingToSpend) return;
+    setOfferSeen(true);
+    setOfferOpen(false);
+    navigate(`/r/${slug}/method`);
+  }, [offerOpen, nothingToSpend, navigate, slug]);
 
   const goToReview = () => {
     saveDraft(order.id, decisions);
@@ -197,7 +223,7 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
      * bar: it is a choice between two ways of being paid, which only becomes a
      * real question at the moment the shopper says they're finished.
      */
-    if (canOfferShopping && !offerSeen) {
+    if (canOfferShopping && !offerSeen && !nothingToSpend) {
       setOfferOpen(true);
       return;
     }
