@@ -148,7 +148,6 @@ export function ItemDrawer({
   const [exchangeNote, setExchangeNote] = useState("");
   /** Preview lookups that failed. Distinct from "loaded, and empty". */
   const [optionsFailed, setOptionsFailed] = useState(false);
-  const [productsFailed, setProductsFailed] = useState(false);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   /** The choice screen stopped waiting for slow previews; see below. */
@@ -507,19 +506,6 @@ export function ItemDrawer({
       .catch(() => setAdvanced(null));
   }, [canExchange, advanced, item.id]);
 
-  useEffect(() => {
-    // The browse step fetches its own, filtered list; don't race it.
-    if (!canExchange || step === "browse" || step === "product") return;
-    if (products || productsFailed) return;
-    api
-      .get<{ products: ExchangeProduct[] }>("/portal/session/exchange/products", {
-        auth: "portal",
-      })
-      .then((r) => setProducts(r.products))
-      // Same reasoning as above: unknown is not the same as none.
-      .catch(() => setProductsFailed(true));
-  }, [canExchange, step, products, productsFailed]);
-
   /** The size step is waiting on the item's own options. */
   const optionsPending = canExchange && !options && !optionsFailed;
 
@@ -530,10 +516,7 @@ export function ItemDrawer({
    * so after a few seconds the screen shows what it has.
    */
   const previewsReady =
-    !canExchange ||
-    ((options !== null || optionsFailed) &&
-      advanced !== undefined &&
-      (advanced !== null || products !== null || productsFailed));
+    !canExchange || ((options !== null || optionsFailed) && advanced !== undefined);
   useEffect(() => {
     if (step !== "resolution" || previewsReady) return;
     const timer = setTimeout(() => setWaitedEnough(true), 5000);
@@ -1096,46 +1079,10 @@ export function ItemDrawer({
                 ))}
 
               {/*
-                The open catalogue, offered only when no rule governs this item
-                — a merchant who narrowed the choice didn't mean "and also
-                everything else".
+                No open-catalogue card: "anything in the store" is what the
+                shop-now basket already offers, so the choice here is the
+                merchant's own exchange groups, when they've set some.
               */}
-              {showChoices &&
-                canExchange &&
-                advanced === null &&
-                (products === null || products.length > 0 || productsFailed) && (
-                <button
-                  className="choice"
-                  onClick={() => {
-                    setRuleId(null);
-                    setStep("browse");
-                  }}
-                >
-                  <span className="choice__main">
-                    <span className="choice__label">
-                      {t("drawer.exchangeProduct")}
-                    </span>
-                    {/* A strip of real products, so the option reads as a
-                        catalogue rather than an empty promise. */}
-                    <span className="choice__strip">
-                      {(products ?? []).slice(0, 3).map((p) =>
-                        p.imageUrl ? (
-                          <img key={p.id} src={p.imageUrl} alt="" />
-                        ) : (
-                          <span key={p.id} className="choice__strip-blank" />
-                        ),
-                      )}
-                      {products && products.length > 3 && (
-                        <span className="choice__strip-more">
-                          +{products.length - 3} more
-                        </span>
-                      )}
-                    </span>
-                  </span>
-                  <span className="choice__chevron">›</span>
-                </button>
-              )}
-
               {showChoices && (
               <button className="choice" onClick={() => finish(defaultPayout)}>
                 <span className="choice__main">
