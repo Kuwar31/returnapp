@@ -99,14 +99,12 @@ export const en = {
   "totals.restocking": "Restocking fee",
 
   // --- the shop-now offer ------------------------------------------------
-  "offer.leadIn": "Shop now and get",
-  "offer.percentExtra": "{percent}% extra",
-  "offer.plus": "plus {amount}",
-  "offer.moreToSpend": "— {amount} more to spend.",
-  "offer.fallback": "Spend your return with us instead?",
-  "offer.takeMoney": "Get {amount}",
   "offer.opening": "Opening the store…",
-  "offer.shopWith": "Shop now with {amount}",
+  "offer.creditWaiting": "You have {amount} in credit waiting",
+  "offer.includesBonus": "That includes a {amount} bonus on us!",
+  "offer.afterCredit": "after credit",
+  "offer.useCredit": "Use my {amount} credit",
+  "offer.refundMe": "Refund me {amount}",
 
   // --- the per-item drawer -----------------------------------------------
   "drawer.whyReturning": "Why are you returning this item?",

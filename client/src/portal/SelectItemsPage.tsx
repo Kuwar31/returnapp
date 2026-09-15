@@ -53,7 +53,7 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
 const EXCHANGE_RESOLUTIONS = ["EXCHANGE", "INSTANT_EXCHANGE"];
 
 export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
-  const { order, policy, reasonGroups, eligibility, shopNow } = loaderData;
+  const { order, reasonGroups, eligibility, shopNow } = loaderData;
   const { merchant } = usePortal();
   const t = useT();
   const { slug } = useParams();
@@ -150,8 +150,6 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
   );
   const canOfferShopping =
     Boolean(shopNow?.enabled) && returningLines.length > 0;
-  /** The flat sweetener, already converted for this order. */
-  const flatBonus = shopNow?.enabled ? shopNow.bonus : 0;
   /**
    * What shopping is worth over taking the money, from the server's own two
    * quotes rather than by re-deriving the bonus rules in the browser.
@@ -543,39 +541,31 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
             onClick={() => setOfferOpen(false)}
           />
           <div className="card offer">
+            <button
+              type="button"
+              className="offer__close"
+              aria-label={t("common.close")}
+              onClick={() => setOfferOpen(false)}
+            >
+              ✕
+            </button>
+            {/*
+              The credit named as a sum waiting for them, the bonus inside it
+              called out, and a few products priced as they'd be after the
+              credit — Loop's shape, because it makes the deal concrete.
+            */}
             <h2 className="offer__title">
-              {/*
-                Named for what it is, not just totalled.
-                "get ₹1,105.49" tells the shopper a number; "get 10% extra"
-                tells them the deal, which is the thing they can weigh against
-                taking the cash. Both bonuses can be running at once, so the
-                sentence is built from whichever are actually set.
-              */}
-              {offerUplift > 0.005 ? (
-                <>
-                  {t("offer.leadIn")}{" "}
-                  <strong>
-                    {policy.bonusCreditPercent > 0
-                      ? t("offer.percentExtra", {
-                          percent: policy.bonusCreditPercent,
-                        })
-                      : money(offerUplift, currency)}
-                    {policy.bonusCreditPercent > 0 && flatBonus > 0.005
-                      ? ` ${t("offer.plus", {
-                          amount: money(flatBonus, currency),
-                        })}`
-                      : ""}
-                  </strong>{" "}
-                  {t("offer.moreToSpend", {
-                    amount: money(offerUplift, currency),
-                  })}
-                </>
-              ) : (
-                t("offer.fallback")
-              )}
+              {shopCredit === null
+                ? t("common.loading")
+                : t("offer.creditWaiting", { amount: money(shopCredit, currency) })}
             </h2>
+            {offerUplift > 0.005 && (
+              <p className="offer__sub">
+                {t("offer.includesBonus", { amount: money(offerUplift, currency) })}
+              </p>
+            )}
 
-            {offerProducts.length > 0 && (
+            {offerProducts.length > 0 && shopCredit !== null && (
               <div className="offer__products">
                 {offerProducts.map((p) => (
                   <div key={p.id} className="offer__product">
@@ -584,13 +574,16 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
                     ) : (
                       <span className="offer__product-blank" />
                     )}
+                    <div className="offer__price">
+                      {money(Math.max(0, p.minPrice - shopCredit), p.currency || currency)}
+                    </div>
+                    <div className="offer__after">{t("offer.afterCredit")}</div>
                   </div>
                 ))}
               </div>
             )}
 
             <div className="offer__actions">
-              {/* The offer's own answer first, the money second. */}
               <button
                 type="button"
                 className="btn offer__shop"
@@ -604,9 +597,7 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
                   ? t("common.loading")
                   : leaving
                     ? t("offer.opening")
-                    : t("offer.shopWith", {
-                        amount: money(shopCredit, currency),
-                      })}
+                    : t("offer.useCredit", { amount: money(shopCredit, currency) })}
               </button>
               <button
                 type="button"
@@ -618,20 +609,10 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
                 }}
               >
                 {quote
-                  ? t("offer.takeMoney", {
-                      amount: money(quote.estimatedTotal, currency),
-                    })
+                  ? t("offer.refundMe", { amount: money(quote.estimatedTotal, currency) })
                   : t("common.continue")}
               </button>
             </div>
-
-            <button
-              type="button"
-              className="linkish offer__back"
-              onClick={() => setOfferOpen(false)}
-            >
-              {t("common.goBack")}
-            </button>
           </div>
         </div>
       )}
