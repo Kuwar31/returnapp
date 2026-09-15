@@ -3316,7 +3316,9 @@
     display: block;
   }
 
-  .drawer__head-item {
+  /* Outranks the desktop rule that shows the item beside the gallery,
+     which would otherwise win here and lay the label out inline. */
+  .drawer .drawer__panel .drawer__head-item {
     display: grid;
     grid-template-columns: 72px minmax(0, 1fr) auto;
     column-gap: 14px;

@@ -306,10 +306,19 @@ export function ItemDrawer({
   const currentVariant =
     swap?.variants.find((v) => v.id === swap.currentVariantId) ?? null;
   /** A value can be picked when some other variant, in stock, carries it. */
+  /**
+   * The chips can land on the item they already have: tapping "Red" on a
+   * red small should keep it small and show red — not jump to a red medium
+   * because the red small is theirs. Landing there just can't be confirmed.
+   */
+  const pickableVariants = currentVariant
+    ? [...swappableVariants, currentVariant]
+    : swappableVariants;
   const swapValuePossible = (axis: string, value: string) =>
-    swappableVariants.some((v) =>
+    pickableVariants.some((v) =>
       v.options.some((o) => o.name === axis && o.value === value),
     );
+  const chosenIsCurrent = chosen !== null && chosen.id === currentVariant?.id;
   /**
    * Pick a value on one axis and keep the others where they are if a variant
    * allows it. Before anything is chosen the reference is the item being
@@ -324,8 +333,9 @@ export function ItemDrawer({
         (o) => o.name === axis || v.options.some((p) => p.name === o.name && p.value === o.value),
       );
     const next =
-      swappableVariants.find((v) => wanted(v) && keepsOthers(v)) ??
-      swappableVariants.find(wanted);
+      pickableVariants.find((v) => wanted(v) && keepsOthers(v)) ??
+      swappableVariants.find(wanted) ??
+      pickableVariants.find(wanted);
     if (next) setChosenId(next.id);
   };
 
@@ -1203,7 +1213,10 @@ export function ItemDrawer({
                     The money consequence, stated before they commit rather
                     than discovered on the summary screen.
                   */}
-                  {chosen && (
+                  {chosenIsCurrent && (
+                    <p className="swapper__delta muted">{t("drawer.currentOption")}</p>
+                  )}
+                  {chosen && !chosenIsCurrent && (
                     <p className="swapper__delta">
                       {/*
                         When the store absorbs the gap there is nothing to pay
@@ -1328,9 +1341,10 @@ export function ItemDrawer({
 
                   <button
                     className="btn btn--block swapper__confirm"
-                    disabled={!chosen}
+                    disabled={!chosen || chosenIsCurrent}
                     onClick={() =>
                       chosen &&
+                      !chosenIsCurrent &&
                       finish("EXCHANGE", chosen, picked?.title, activeRule)
                     }
                   >
