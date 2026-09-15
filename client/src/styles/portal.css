@@ -383,6 +383,19 @@
   font-size: 14px;
 }
 
+/* On a picker card the decision is a full-width row under the item, indented
+   past the picture's column so its words line up with the item's words. */
+.pick-card .line-item__decision {
+  flex-basis: 100%;
+  margin-top: 0;
+}
+
+.pick-card .line-item__decision > strong,
+.pick-card .swap__caption {
+  display: block;
+  margin-left: calc(var(--thumb) + var(--gap));
+}
+
 .linkish {
   background: none;
   border: none;
@@ -1263,7 +1276,10 @@
  * one obvious action per row.
  */
 .pick-card {
+  --thumb: 72px;
+  --gap: 16px;
   display: flex;
+  flex-wrap: wrap;
   gap: 16px;
   align-items: flex-start;
   padding: 18px;
@@ -1329,7 +1345,8 @@
  */
 @media (max-width: 560px) {
   .pick-card {
-    flex-wrap: wrap;
+    --thumb: 64px;
+    --gap: 12px;
     gap: 12px;
     padding: 14px;
   }
@@ -1862,20 +1879,21 @@
   margin-bottom: 6px;
 }
 
-/* A plain row, not a box in a box: the card already has a border. */
+/* The replacement's picture takes the item's picture column, so the two
+   sit one under the other and the words share a left edge. */
 .swap__item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: var(--thumb, 36px) minmax(0, 1fr);
+  column-gap: var(--gap, 10px);
+  align-items: start;
 }
 
 .swap__thumb {
-  width: 36px;
-  height: 36px;
-  border-radius: 6px;
+  width: var(--thumb, 36px);
+  height: var(--thumb, 36px);
+  border-radius: var(--radius-sm);
   object-fit: cover;
   background: #f0f0f1;
-  flex-shrink: 0;
 }
 
 .swap__body {
@@ -1891,8 +1909,8 @@
 }
 
 .swap__title {
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 400;
   /* Product names run long; keep the row one line tall. */
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1901,6 +1919,7 @@
 
 .swap__variant {
   font-size: 13px;
+  line-height: 1.5;
   color: var(--text-muted);
 }
 

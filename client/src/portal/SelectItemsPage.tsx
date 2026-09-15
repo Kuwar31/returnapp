@@ -389,6 +389,33 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
                       ))}
                   </div>
 
+                </div>
+
+                <div className="pick-card__side">
+                  <span className="pick-card__price">
+                    {money(item.unitPrice, currency)}
+                  </span>
+                  {decision && (
+                    <button
+                      className="linkish"
+                      // Stop the click reaching the card, which would reopen it.
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDecisions((prev) => {
+                          const next = { ...prev };
+                          delete next[key];
+                          return next;
+                        });
+                      }}
+                    >
+                      {t("picker.remove")}
+                    </button>
+                  )}
+                </div>
+
+                {/* A row of its own under the item, so the replacement's
+                    picture sits under the item's and its words under the
+                    item's words. */}
                   {decision ? (
                     <div className="line-item__decision">
                       {/*
@@ -435,7 +462,11 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
                               </div>
                               {decision.exchangeVariantTitle && (
                                 <div className="swap__variant">
-                                  {decision.exchangeVariantTitle}
+                                  {decision.exchangeVariantTitle
+                                    .split(" · ")
+                                    .map((part) => (
+                                      <div key={part}>{part}</div>
+                                    ))}
                                 </div>
                               )}
                             </div>
@@ -444,29 +475,6 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
                       )}
                     </div>
                   ) : null}
-                </div>
-
-                <div className="pick-card__side">
-                  <span className="pick-card__price">
-                    {money(item.unitPrice, currency)}
-                  </span>
-                  {decision && (
-                    <button
-                      className="linkish"
-                      // Stop the click reaching the card, which would reopen it.
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDecisions((prev) => {
-                          const next = { ...prev };
-                          delete next[key];
-                          return next;
-                        });
-                      }}
-                    >
-                      {t("picker.remove")}
-                    </button>
-                  )}
-                </div>
               </div>
             );
           }),
