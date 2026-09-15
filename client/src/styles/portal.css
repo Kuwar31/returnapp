@@ -564,14 +564,18 @@
 .drawer__close,
 .drawer__back {
   flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
   background: none;
   border: none;
   border-radius: var(--radius-sm);
-  font-size: 18px;
+  font-size: 22px;
   line-height: 1;
   cursor: pointer;
-  color: var(--text-muted);
-  padding: 8px 10px;
+  color: var(--text);
+  padding: 0;
 }
 
 .drawer__close:hover,
@@ -619,6 +623,13 @@
   min-width: 0;
   font-size: 13px;
   line-height: 1.35;
+}
+
+/* "Returning" and the price are the phone's two-row bar; the desktop row
+   has the image pane's caption for that. */
+.drawer__head-label,
+.drawer__head-price {
+  display: none;
 }
 
 .drawer__head-title {
@@ -3267,13 +3278,21 @@
   }
 
   /* The panel is the one scroll surface here, so the bar pins to its top. */
+  /*
+   * Two rows, as Loop and AfterShip lay it out: the way back and the way
+   * out on the first, then "Returning" over the item — a larger picture,
+   * the name in bold at full width, the price at the end of the line and
+   * the option under the name — on a pale band the body sits beneath.
+   */
   .drawer__head {
     grid-column: 1;
     grid-row: auto;
     position: sticky;
     top: 0;
     z-index: 2;
-    padding: 10px 10px;
+    flex-wrap: wrap;
+    padding: 8px 8px 14px;
+    background: #f7f7f8;
     border-bottom: 1px solid var(--border);
   }
 
@@ -3295,7 +3314,52 @@
   }
 
   .drawer__head-item {
-    display: flex;
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr) auto;
+    column-gap: 14px;
+    row-gap: 10px;
+    align-items: start;
+    order: 3;
+    flex-basis: 100%;
+    padding: 4px 8px 0;
+  }
+
+  .drawer__head-label,
+  .drawer__head-price {
+    display: block;
+  }
+
+  .drawer__head-label {
+    grid-column: 1 / -1;
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  .drawer__head-item img,
+  .drawer__head-blank {
+    width: 72px;
+    height: 72px;
+    border-radius: 8px;
+    background: #fff;
+    object-fit: contain;
+  }
+
+  .drawer__head-text {
+    font-size: 14px;
+    line-height: 1.4;
+  }
+
+  .drawer__head-title {
+    font-size: 15px;
+    white-space: normal;
+    overflow: visible;
+    margin-bottom: 4px;
+  }
+
+  .drawer__head-price {
+    font-size: 15px;
+    font-weight: 600;
+    white-space: nowrap;
   }
 
   /* Whatever a step starts with — a heading, a link back, the suggestion

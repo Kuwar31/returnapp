@@ -651,6 +651,7 @@ export function ItemDrawer({
             ←
           </button>
           <div className="drawer__head-item">
+            <span className="drawer__head-label">{t("picker.returning")}</span>
             {item.imageUrl ? (
               <img src={item.imageUrl} alt="" />
             ) : (
@@ -658,12 +659,11 @@ export function ItemDrawer({
             )}
             <div className="drawer__head-text">
               <div className="drawer__head-title">{item.title}</div>
-              <div className="muted">
-                {[variantLabel, money(item.unitPrice, currency)]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </div>
+              {variantLabel && <div className="muted">{variantLabel}</div>}
             </div>
+            <span className="drawer__head-price">
+              {money(item.unitPrice, currency)}
+            </span>
           </div>
           <button
             className="drawer__close"
