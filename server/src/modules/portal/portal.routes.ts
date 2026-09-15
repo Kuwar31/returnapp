@@ -44,6 +44,8 @@ portalRouter.get(
         currency: merchant.currency,
         // Whether the recommendation screen runs after a reason is given.
         aiExchange: merchant.aiExchangeEnabled,
+        // Whether "Exchange for another product" is offered on the choice screen.
+        similarExchange: merchant.similarExchangeEnabled,
       },
       branding: portalService.resolvePortalBranding(
         merchant.branding,
@@ -237,6 +239,8 @@ portalRouter.get(
       /** An exchange group's own list, for the item it applies to. */
       ruleId: z.string().trim().max(60).optional(),
       orderLineItemId: z.string().trim().max(60).optional(),
+      /** Products whose names resemble this returned item's. */
+      similarTo: z.string().trim().max(60).optional(),
     }),
     "query",
   ),
@@ -248,6 +252,7 @@ portalRouter.get(
       collectionId?: string;
       ruleId?: string;
       orderLineItemId?: string;
+      similarTo?: string;
     };
     // Scoped to the order, not just the merchant: catalogue prices convert at
     // that order's own rate, so the browse needs to know which one.

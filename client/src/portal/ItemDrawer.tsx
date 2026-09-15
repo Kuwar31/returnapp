@@ -121,6 +121,12 @@ export function ItemDrawer({
 
   const [options, setOptions] = useState<ExchangeOptions | null>(null);
   const [products, setProducts] = useState<ExchangeProduct[] | null>(null);
+  /**
+   * The returned item's name-family in the catalogue, when the store offers
+   * "Exchange for another product". Undefined until asked; empty when the
+   * item has no family, which hides the card.
+   */
+  const [similar, setSimilar] = useState<ExchangeProduct[] | undefined>(undefined);
   /** The catalogue product being confirmed, once one is opened from the grid. */
   const [picked, setPicked] = useState<ExchangeProduct | null>(null);
   /**
@@ -506,6 +512,19 @@ export function ItemDrawer({
       .catch(() => setAdvanced(null));
   }, [canExchange, advanced, item.id]);
 
+  const similarOn = Boolean(portalMerchant.similarExchange);
+  useEffect(() => {
+    if (!canExchange || !similarOn || similar !== undefined) return;
+    api
+      .get<{ products: ExchangeProduct[] }>("/portal/session/exchange/products", {
+        auth: "portal",
+        query: { similarTo: item.id },
+      })
+      .then((r) => setSimilar(r.products))
+      // Nothing to show is the safe reading; the shop-now basket still exists.
+      .catch(() => setSimilar([]));
+  }, [canExchange, similarOn, similar, item.id]);
+
   /** The size step is waiting on the item's own options. */
   const optionsPending = canExchange && !options && !optionsFailed;
 
@@ -516,7 +535,10 @@ export function ItemDrawer({
    * so after a few seconds the screen shows what it has.
    */
   const previewsReady =
-    !canExchange || ((options !== null || optionsFailed) && advanced !== undefined);
+    !canExchange ||
+    ((options !== null || optionsFailed) &&
+      advanced !== undefined &&
+      (!similarOn || similar !== undefined));
   useEffect(() => {
     if (step !== "resolution" || previewsReady) return;
     const timer = setTimeout(() => setWaitedEnough(true), 5000);
@@ -538,6 +560,8 @@ export function ItemDrawer({
               // The group's own list, for the item it applies to.
               ruleId: ruleId ?? undefined,
               orderLineItemId: ruleId ? item.id : undefined,
+              // No group: the item's name-family, never the whole catalogue.
+              similarTo: ruleId ? undefined : item.id,
             },
           },
         )
@@ -1079,10 +1103,42 @@ export function ItemDrawer({
                 ))}
 
               {/*
-                No open-catalogue card: "anything in the store" is what the
-                shop-now basket already offers, so the choice here is the
-                merchant's own exchange groups, when they've set some.
+                "Exchange for another product", when the store has it on:
+                not the whole catalogue — the shop-now basket already offers
+                that — but the products named like this one, and only when
+                there are some.
               */}
+              {showChoices && canExchange && similarOn && (similar?.length ?? 0) > 0 && (
+                <button
+                  className="choice"
+                  onClick={() => {
+                    setRuleId(null);
+                    setProducts(null);
+                    setStep("browse");
+                  }}
+                >
+                  <span className="choice__main">
+                    <span className="choice__label">
+                      {t("drawer.exchangeProduct")}
+                    </span>
+                    <span className="choice__strip">
+                      {(similar ?? []).slice(0, 3).map((p) =>
+                        p.imageUrl ? (
+                          <img key={p.id} src={p.imageUrl} alt="" />
+                        ) : (
+                          <span key={p.id} className="choice__strip-blank" />
+                        ),
+                      )}
+                      {similar && similar.length > 3 && (
+                        <span className="choice__strip-more">
+                          +{similar.length - 3} more
+                        </span>
+                      )}
+                    </span>
+                  </span>
+                  <span className="choice__chevron">›</span>
+                </button>
+              )}
               {showChoices && (
               <button className="choice" onClick={() => finish(defaultPayout)}>
                 <span className="choice__main">

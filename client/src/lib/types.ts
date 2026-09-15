@@ -24,6 +24,8 @@ export interface PortalConfig {
     currency: string;
     /** Whether the recommendation screen runs before the resolution choice. */
     aiExchange: boolean;
+    /** Whether "Exchange for another product" is offered, by name similarity. */
+    similarExchange: boolean;
   };
   branding: PortalBranding;
 }
@@ -731,6 +733,8 @@ export interface StoreSettings {
   restockLocationId: string | null;
   /** The recommendation screen after a shopper gives their reason. */
   aiExchangeEnabled: boolean;
+  /** "Exchange for another product", narrowed to similar names. */
+  similarExchangeEnabled: boolean;
   /** Shopify Locations whose stock counts for exchanges; empty means all. */
   inventoryLocationIds?: string[];
 }

@@ -36,6 +36,71 @@ const AI_COPY: Array<{
 ];
 
 /**
+ * "Exchange for another product": one switch. On, the choice screen offers
+ * the products named like the returned one — the family it belongs to —
+ * rather than the whole catalogue, which the shop-now basket already covers.
+ */
+function SimilarExchangePanel() {
+  const [store, setStore] = useState<StoreSettings | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    api
+      .get<StoreSettings>("/admin/settings/store", { auth: "admin" })
+      .then((s) => active && setStore(s))
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const toggle = async () => {
+    if (!store || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const next = !store.similarExchangeEnabled;
+      await api.patch("/admin/settings/store", { similarExchangeEnabled: next }, { auth: "admin" });
+      setStore({ ...store, similarExchangeEnabled: next });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't change that.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!store) return null;
+  return (
+    <div className="panel">
+      <div className="panel__head">
+        <h2>Exchange for another product</h2>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={store.similarExchangeEnabled}
+          aria-label="Exchange for another product"
+          className={`switch${store.similarExchangeEnabled ? " is-on" : ""}`}
+          disabled={busy}
+          onClick={() => void toggle()}
+        >
+          <span className="switch__knob" />
+        </button>
+      </div>
+      <p className="settings-row__hint" style={{ marginTop: 6 }}>
+        A simpler alternative to exchange groups. On, the choice screen offers
+        the products named like the one being returned — "TEST PRODUCT - Red"
+        brings up the other "TEST PRODUCT" colours, "The Collection Snowboard:
+        Liquid" the other Collection Snowboards — and nothing else. Off, the
+        whole catalogue is left to Shop now.
+      </p>
+      <ErrorAlert message={error} />
+    </div>
+  );
+}
+
+/**
  * "AI exchange": the switch, and the words on the screen it turns on.
  *
  * Lives under the groups because it draws on them — a matching group's
@@ -633,6 +698,7 @@ export default function ExchangeRulesPage() {
               </div>
             ))
           )}
+          <SimilarExchangePanel />
           <AiExchangePanel />
         </div>
       )}

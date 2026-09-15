@@ -101,6 +101,12 @@ model Merchant {
    */
   aiExchangeEnabled         Boolean                   @default(false)
   /**
+   * "Exchange for another product" on the choice screen: the catalogue
+   * narrowed to products whose names resemble the returned item's. Off, the
+   * shop-now basket is the only route into the whole catalogue.
+   */
+  similarExchangeEnabled    Boolean                   @default(false)
+  /**
    * The Shopify Locations whose stock decides whether a product can be
    * offered as an exchange. Empty means every location, which is what
    * Shopify's own `availableForSale` already answers. A regional policy may

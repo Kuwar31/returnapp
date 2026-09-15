@@ -164,6 +164,7 @@ settingsRouter.get(
         exchangeBonusValue: true,
         restockLocationId: true,
         aiExchangeEnabled: true,
+        similarExchangeEnabled: true,
         inventoryLocationIds: true,
       },
     });
@@ -236,6 +237,7 @@ settingsRouter.patch(
           .nullable()
           .optional(),
         aiExchangeEnabled: z.boolean().optional(),
+        similarExchangeEnabled: z.boolean().optional(),
         /** Empty means every location counts for exchange availability. */
         inventoryLocationIds: z
           .array(z.string().regex(/^gid:\/\/shopify\/Location\/\d+$/))
@@ -284,6 +286,9 @@ settingsRouter.patch(
         ...(req.body.aiExchangeEnabled === undefined
           ? {}
           : { aiExchangeEnabled: req.body.aiExchangeEnabled }),
+        ...(req.body.similarExchangeEnabled === undefined
+          ? {}
+          : { similarExchangeEnabled: req.body.similarExchangeEnabled }),
         ...(req.body.inventoryLocationIds === undefined
           ? {}
           : { inventoryLocationIds: req.body.inventoryLocationIds }),

@@ -964,6 +964,45 @@ export const describeExchangeVariants = async (
   };
 };
 
+/**
+ * Name similarity, for "Exchange for another product".
+ *
+ * A catalogue tends to name its family members alike — "TEST PRODUCT - RED",
+ * "TEST PRODUCT - Baby Pink"; "The Collection Snowboard: Liquid", "…: Oxygen"
+ * — so the part before a separator is the family, and that is what the
+ * shopper is offered. A name with no separator falls back to the words it
+ * shares with the candidate, ignoring the small ones.
+ */
+const NAME_STOPWORDS = new Set([
+  "the", "a", "an", "and", "of", "for", "with", "in", "by", "to", "on",
+  "de", "la", "le", "el", "les", "los", "las", "und", "der", "die", "das",
+]);
+const nameTokens = (title: string): string[] =>
+  title
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((w) => w.length > 1 && !NAME_STOPWORDS.has(w));
+/** The family name: everything before " - ", ": ", " | " and the like. */
+const nameStem = (title: string): string | null => {
+  const m = /^(.+?)(?:\s+[-–—|/]\s+|:\s+)/.exec(title);
+  return m ? m[1].trim() : null;
+};
+export const similarName = (returned: string, candidate: string): boolean => {
+  const stem = nameStem(returned);
+  if (stem && candidate.toLowerCase().startsWith(stem.toLowerCase())) return true;
+  const mine = new Set(nameTokens(returned));
+  if (mine.size === 0) return false;
+  const shared = nameTokens(candidate).filter((w) => mine.has(w)).length;
+  return shared >= Math.min(2, mine.size);
+};
+/** What to ask Shopify's title search for, to find a name's family. */
+const similarSearchTerm = (title: string): string => {
+  const stem = nameStem(title);
+  if (stem) return stem;
+  const words = nameTokens(title);
+  return words.sort((a, b) => b.length - a.length)[0] ?? title;
+};
+
 export const browseExchangeProducts = async (
   merchantId: string,
   orderId: string,
@@ -973,6 +1012,7 @@ export const browseExchangeProducts = async (
     collectionId,
     ruleId,
     orderLineItemId,
+    similarTo,
   }: {
     search?: string;
     cursor?: string;
@@ -980,8 +1020,31 @@ export const browseExchangeProducts = async (
     /** Browse within an exchange group's offer, for the item it applies to. */
     ruleId?: string;
     orderLineItemId?: string;
+    /** Only products whose names resemble this returned item's. */
+    similarTo?: string;
   },
 ) => {
+  /**
+   * "Exchange for another product": the family the returned item belongs to,
+   * by name, and never the item itself. Shopify does the coarse search on
+   * the family name; the fine sieve is applied to what comes back.
+   */
+  let similar: { title: string; productId: string | null } | null = null;
+  if (similarTo && !ruleId) {
+    const merchant = await prisma.merchant.findUniqueOrThrow({
+      where: { id: merchantId },
+      select: { similarExchangeEnabled: true },
+    });
+    if (!merchant.similarExchangeEnabled) {
+      throw badRequest("This store doesn't offer exchanges for other products.");
+    }
+    const line = await prisma.orderLineItem.findFirst({
+      where: { id: similarTo, order: { id: orderId, merchantId } },
+      select: { title: true, productId: true },
+    });
+    if (!line) throw notFound("That item isn't part of this order.");
+    similar = line;
+  }
   /**
    * A group narrows the catalogue to its offer condition, and only for an
    * item it governs: the group is looked up against the line rather than
@@ -1002,14 +1065,16 @@ export const browseExchangeProducts = async (
     includeSoldOut = !rule.inStockOnly;
   }
 
-  const [result, collections, fx] = await Promise.all([
+  const [found, collections, fx] = await Promise.all([
     browseProducts(merchantId, {
-      search,
+      search: similar ? similarSearchTerm(similar.title) : search,
       cursor,
-      // A group defines its own list; the free browse's rail doesn't apply.
-      collectionId: ruleId ? undefined : collectionId,
+      // A group or a family defines its own list; the rail doesn't apply.
+      collectionId: ruleId || similar ? undefined : collectionId,
       filter,
       includeSoldOut,
+      // A family is small; fetch enough of it to sieve in one go.
+      ...(similar ? { limit: 50 } : {}),
       locationIds: await inventoryScopeFor(merchantId, orderId),
     }),
     // Sent alongside the products so the rail and the grid can't disagree
@@ -1017,6 +1082,18 @@ export const browseExchangeProducts = async (
     browseCollections(merchantId),
     catalogueConverter(merchantId, orderId),
   ]);
+  const result = similar
+    ? {
+        ...found,
+        nextCursor: null,
+        products: found.products.filter(
+          (p) =>
+            p.id !== similar.productId &&
+            similarName(similar.title, p.title) &&
+            (!search || p.title.toLowerCase().includes(search.toLowerCase())),
+        ),
+      }
+    : found;
   return {
     ...result,
     collections,
