@@ -590,21 +590,7 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
             )}
 
             <div className="offer__actions">
-              <button
-                type="button"
-                className="btn btn--secondary"
-                onClick={() => {
-                  setOfferSeen(true);
-                  setOfferOpen(false);
-                  navigate(`/r/${slug}/method`);
-                }}
-              >
-                {quote
-                  ? t("offer.takeMoney", {
-                      amount: money(quote.estimatedTotal, currency),
-                    })
-                  : t("common.continue")}
-              </button>
+              {/* The offer's own answer first, the money second. */}
               <button
                 type="button"
                 className="btn offer__shop"
@@ -621,6 +607,21 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
                     : t("offer.shopWith", {
                         amount: money(shopCredit, currency),
                       })}
+              </button>
+              <button
+                type="button"
+                className="btn btn--secondary"
+                onClick={() => {
+                  setOfferSeen(true);
+                  setOfferOpen(false);
+                  navigate(`/r/${slug}/method`);
+                }}
+              >
+                {quote
+                  ? t("offer.takeMoney", {
+                      amount: money(quote.estimatedTotal, currency),
+                    })
+                  : t("common.continue")}
               </button>
             </div>
 
