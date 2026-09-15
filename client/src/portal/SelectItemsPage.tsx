@@ -378,8 +378,15 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
                       </span>
                     )}
                   </div>
-                  <div className="line-item__meta">
-                    {item.variantLabel ?? item.variantTitle}
+                  {/* One option per line — "Color: Blue" over "Size: 6" —
+                      as Loop lays them out, rather than one dotted run. */}
+                  <div className="line-item__meta pick-card__options">
+                    {(item.variantLabel ?? item.variantTitle ?? "")
+                      .split(" · ")
+                      .filter(Boolean)
+                      .map((part) => (
+                        <div key={part}>{part}</div>
+                      ))}
                   </div>
 
                   {decision ? (

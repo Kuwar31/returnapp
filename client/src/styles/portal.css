@@ -173,6 +173,11 @@
   margin-top: 2px;
 }
 
+.pick-card__options {
+  margin-top: 4px;
+  line-height: 1.5;
+}
+
 .line-item__controls {
   display: flex;
   gap: 10px;
@@ -1323,17 +1328,15 @@
   }
 
   .pick-card .line-item__thumb {
-    width: 56px;
-    height: 56px;
+    width: 64px;
+    height: 64px;
   }
 
+  /* The price stays top right beside the name, as Loop has it; the name
+     wraps into the room that's left rather than the price dropping to a
+     ruled-off row of its own. */
   .pick-card__side {
-    flex-basis: 100%;
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    padding-top: 2px;
-    border-top: 1px solid var(--border);
+    gap: 8px;
   }
 
   /* The counter is two words and a number; breaking it in half reads as two
