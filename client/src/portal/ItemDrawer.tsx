@@ -1241,8 +1241,12 @@ export function ItemDrawer({
                           {values.map((value) => {
                             const has = (v: ExchangeVariant | null) =>
                               v?.options.some((o) => o.name === axis && o.value === value) ?? false;
-                            const selected = has(chosen);
                             const possible = swapValuePossible(axis, value);
+                            /* An axis with one value is no choice at all —
+                               a shoe that only comes in blue — so it reads
+                               as already picked and only the size is left. */
+                            const selected =
+                              has(chosen) || (values.length === 1 && possible);
                             return (
                               <button
                                 key={value}
