@@ -507,41 +507,6 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
           </>
         )}
 
-        {quote && (
-          <div className="totals">
-            <div className="totals__row">
-              <span>{t("totals.items")}</span>
-              <span>{money(quote.itemsSubtotal, currency)}</span>
-            </div>
-            {quote.bonusCredit > 0 && (
-              <div className="totals__row totals__row--credit">
-                <span>{t("totals.bonus")}</span>
-                <span>+{money(quote.bonusCredit, currency)}</span>
-              </div>
-            )}
-            {quote.restockingFee > 0 && (
-              <div className="totals__row">
-                <span>{t("totals.restocking")}</span>
-                <span>−{money(quote.restockingFee, currency)}</span>
-              </div>
-            )}
-            {quote.returnShippingFee > 0 && (
-              <div className="totals__row">
-                <span>{t("totals.returnShipping")}</span>
-                <span>−{money(quote.returnShippingFee, currency)}</span>
-              </div>
-            )}
-            {/*
-              No payout figure here on purpose.
-
-              This step is for choosing what comes back; what it settles to is
-              the review step's job, and it changes with the credit option
-              picked there. A running "You'll receive" alongside a per-item list
-              invited the shopper to read it as final before they had chosen how
-              they wanted paying.
-            */}
-          </div>
-        )}
       </div>
 
       {/* Sticky bar mirrors Loop's: the running count and the way forward stay

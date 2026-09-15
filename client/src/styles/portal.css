@@ -178,6 +178,13 @@
   line-height: 1.5;
 }
 
+/* Regular weight for the name and the decision word: the price is the
+   one thing on the card that needs to stand out. */
+.pick-card .line-item__title,
+.pick-card .line-item__decision strong {
+  font-weight: 400;
+}
+
 .line-item__controls {
   display: flex;
   gap: 10px;
