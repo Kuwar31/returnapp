@@ -623,7 +623,7 @@ export default function ExchangeRulesPage() {
           <p className="muted" style={{ marginTop: 4 }}>
             {editing
               ? "Pair the items a customer returns with the products they can exchange them for."
-              : "Decide what a returned item can be exchanged for. Without a group, customers can exchange into anything in your catalogue. Every group that matches an item is offered, in the order below."}
+              : "Decide what a returned item can be exchanged for. Without a group, customers can swap within the item's own sizes and colours, or — with the switch below — into products named like it. Every group that matches an item is offered, in the order below."}
           </p>
         </div>
         {!editing && (
@@ -641,7 +641,7 @@ export default function ExchangeRulesPage() {
           {groups.length === 0 ? (
             <div className="panel">
               <p className="muted">
-                No exchange groups yet. Every exchange offers the whole catalogue.
+                No exchange groups yet. Customers can swap sizes and colours, and spend their return with Shop now.
               </p>
             </div>
           ) : (
