@@ -52,10 +52,14 @@ export const PROVIDER_NAMES: Record<ShipmentProvider, string> = {
   SHIPPO: "Shippo",
   SHIPSTATION: "ShipStation",
   SENDCLOUD: "Sendcloud",
+  DHL_EXPRESS: "DHL Express",
+  FEDEX: "FedEx",
+  AUSPOST: "Australia Post",
+  DEUTSCHE_POST: "DHL Paket",
 };
 
 /** Carriers whose label the shopper prints and drops off, rather than a courier collecting. */
-export const DROP_OFF_PROVIDERS: ShipmentProvider[] = ["EASYPOST", "SHIPPO", "SHIPSTATION", "SENDCLOUD"];
+export const DROP_OFF_PROVIDERS: ShipmentProvider[] = ["EASYPOST", "SHIPPO", "SHIPSTATION", "SENDCLOUD", "DHL_EXPRESS", "FEDEX", "AUSPOST", "DEUTSCHE_POST"];
 
 /** What each carrier needs of a phone number; see `PhoneRule`. */
 export const PHONE_RULES: Record<ShipmentProvider, PhoneRule> = {
@@ -65,6 +69,10 @@ export const PHONE_RULES: Record<ShipmentProvider, PhoneRule> = {
   SHIPPO: "ANY",
   SHIPSTATION: "ANY",
   SENDCLOUD: "ANY",
+  DHL_EXPRESS: "ANY",
+  FEDEX: "ANY",
+  AUSPOST: "ANY",
+  DEUTSCHE_POST: "ANY",
 };
 
 // ---------------------------------------------------------------------------

@@ -139,6 +139,10 @@ model Merchant {
   shippo               ShippoAccount?
   shipstation          ShipStationAccount?
   sendcloud            SendcloudAccount?
+  dhlExpress           DhlExpressAccount?
+  fedex                FedexAccount?
+  ausPost              AusPostAccount?
+  dhlParcelDe          DhlParcelDeAccount?
   shipping             ShippingSettings?
 
   @@map("merchants")
@@ -1328,6 +1332,10 @@ enum ShipmentProvider {
   SHIPPO
   SHIPSTATION
   SENDCLOUD
+  DHL_EXPRESS
+  FEDEX
+  AUSPOST
+  DEUTSCHE_POST
 }
 
 enum ShipmentStatus {
@@ -1490,6 +1498,70 @@ model SendcloudAccount {
   updatedAt       DateTime @updatedAt
 
   @@map("sendcloud_accounts")
+}
+
+/// DHL Express through the MyDHL API: key, secret and the DHL account number.
+model DhlExpressAccount {
+  id            String   @id @default(cuid())
+  merchantId    String   @unique
+  merchant      Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  apiKey        String
+  apiSecret     String
+  accountNumber String
+  /// DHL's test environment.
+  testMode      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("dhl_express_accounts")
+}
+
+/// FedEx REST: a project's client id and secret, the account number, and the hour's token.
+model FedexAccount {
+  id             String    @id @default(cuid())
+  merchantId     String    @unique
+  merchant       Merchant  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  clientId       String
+  clientSecret   String
+  accountNumber  String
+  sandbox        Boolean   @default(true)
+  token          String?
+  tokenExpiresAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@map("fedex_accounts")
+}
+
+/// Australia Post Shipping and Tracking API: key, password and account number.
+model AusPostAccount {
+  id            String   @id @default(cuid())
+  merchantId    String   @unique
+  merchant      Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  apiKey        String
+  password      String
+  accountNumber String
+  testMode      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("auspost_accounts")
+}
+
+/// DHL Parcel DE (Deutsche Post / DHL Paket): API key, portal login, billing number.
+model DhlParcelDeAccount {
+  id            String   @id @default(cuid())
+  merchantId    String   @unique
+  merchant      Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  apiKey        String
+  username      String
+  password      String
+  billingNumber String
+  sandbox       Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("dhl_parcel_de_accounts")
 }
 
 model StoreCredit {

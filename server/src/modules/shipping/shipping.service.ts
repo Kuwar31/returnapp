@@ -4,6 +4,10 @@ import { logger } from "../../lib/logger.js";
 import { prisma } from "../../lib/prisma.js";
 import * as delhivery from "./delhivery.service.js";
 import * as easypost from "./easypost.service.js";
+import * as auspost from "./auspost.service.js";
+import * as dhlexpress from "./dhlexpress.service.js";
+import * as dhlparcelde from "./dhlparcelde.service.js";
+import * as fedex from "./fedex.service.js";
 import * as sendcloud from "./sendcloud.service.js";
 import * as shippo from "./shippo.service.js";
 import * as shipstation from "./shipstation.service.js";
@@ -74,6 +78,26 @@ const carrierFor = async (settings: ShippingSettingsRow) => {
     if (!account) throw unprocessable("Connect Sendcloud under Settings → Shipping first.");
     return { provider: "SENDCLOUD" as const, account };
   }
+  if (settings.provider === "DHL_EXPRESS") {
+    const account = await dhlexpress.getAccount(merchantId);
+    if (!account) throw unprocessable("Connect DHL Express under Settings → Shipping first.");
+    return { provider: "DHL_EXPRESS" as const, account };
+  }
+  if (settings.provider === "FEDEX") {
+    const account = await fedex.getAccount(merchantId);
+    if (!account) throw unprocessable("Connect FedEx under Settings → Shipping first.");
+    return { provider: "FEDEX" as const, account };
+  }
+  if (settings.provider === "AUSPOST") {
+    const account = await auspost.getAccount(merchantId);
+    if (!account) throw unprocessable("Connect Australia Post under Settings → Shipping first.");
+    return { provider: "AUSPOST" as const, account };
+  }
+  if (settings.provider === "DEUTSCHE_POST") {
+    const account = await dhlparcelde.getAccount(merchantId);
+    if (!account) throw unprocessable("Connect DHL Paket under Settings → Shipping first.");
+    return { provider: "DEUTSCHE_POST" as const, account };
+  }
   const account = await delhivery.getAccount(merchantId);
   if (!account) throw unprocessable("Connect Delhivery under Settings → Shipping first.");
   return { provider: "DELHIVERY" as const, account };
@@ -124,6 +148,14 @@ export const quoteCouriers = async (
     couriers = await shipstation.quote(carrier.account, parcel);
   } else if (carrier.provider === "SENDCLOUD") {
     couriers = await sendcloud.quote(carrier.account, parcel);
+  } else if (carrier.provider === "DHL_EXPRESS") {
+    couriers = await dhlexpress.quote(carrier.account, parcel);
+  } else if (carrier.provider === "FEDEX") {
+    couriers = await fedex.quote(carrier.account, parcel);
+  } else if (carrier.provider === "AUSPOST") {
+    couriers = await auspost.quote(carrier.account, parcel);
+  } else if (carrier.provider === "DEUTSCHE_POST") {
+    couriers = await dhlparcelde.quote(carrier.account, parcel);
   } else {
     couriers = await delhivery.quote(carrier.account, parcel);
   }
@@ -183,6 +215,18 @@ export const createReturnLabel = async (
   }
   if (carrier.provider === "SENDCLOUD") {
     return sendcloud.book(request, carrier.account, parcel, orderId, actorId, { email, courierId });
+  }
+  if (carrier.provider === "DHL_EXPRESS") {
+    return dhlexpress.book(request, carrier.account, parcel, orderId, actorId, { email, courierId });
+  }
+  if (carrier.provider === "FEDEX") {
+    return fedex.book(request, carrier.account, parcel, orderId, actorId, { email, courierId });
+  }
+  if (carrier.provider === "AUSPOST") {
+    return auspost.book(request, carrier.account, parcel, orderId, actorId, { email, courierId });
+  }
+  if (carrier.provider === "DEUTSCHE_POST") {
+    return dhlparcelde.book(request, carrier.account, parcel, orderId, actorId, { email });
   }
   return delhivery.book(request, carrier.account, parcel, orderId, actorId, { email });
 };
@@ -253,6 +297,22 @@ export const refreshTracking = async (merchantId: string, returnId: string): Pro
     if (!account) throw unprocessable("Sendcloud is no longer connected, so this parcel can't be tracked.");
     if (shipment.isTest) return prisma.returnShipment.update({ where: { id: shipment.id }, data: { lastTrackedAt: new Date() } });
     await sendcloud.refresh(account, shipment);
+  } else if (shipment.provider === "DHL_EXPRESS") {
+    const account = await dhlexpress.getAccount(merchantId);
+    if (!account) throw unprocessable("DHL Express is no longer connected, so this parcel can't be tracked.");
+    await dhlexpress.refresh(account, shipment);
+  } else if (shipment.provider === "FEDEX") {
+    const account = await fedex.getAccount(merchantId);
+    if (!account) throw unprocessable("FedEx is no longer connected, so this parcel can't be tracked.");
+    await fedex.refresh(account, shipment);
+  } else if (shipment.provider === "AUSPOST") {
+    const account = await auspost.getAccount(merchantId);
+    if (!account) throw unprocessable("Australia Post is no longer connected, so this parcel can't be tracked.");
+    await auspost.refresh(account, shipment);
+  } else if (shipment.provider === "DEUTSCHE_POST") {
+    const account = await dhlparcelde.getAccount(merchantId);
+    if (!account) throw unprocessable("DHL Paket is no longer connected, so this parcel can't be tracked.");
+    await dhlparcelde.refresh(account, shipment);
   } else {
     const account = await delhivery.getAccount(merchantId);
     if (!account) throw unprocessable("Delhivery is no longer connected, so this parcel can't be tracked.");
@@ -338,6 +398,18 @@ export const cancelLabel = async (
   } else if (shipment.provider === "SENDCLOUD") {
     const account = await sendcloud.getAccount(merchantId);
     problems = account ? await sendcloud.cancelCalls(account, shipment) : ["Sendcloud is no longer connected."];
+  } else if (shipment.provider === "DHL_EXPRESS") {
+    const account = await dhlexpress.getAccount(merchantId);
+    problems = account ? await dhlexpress.cancelCalls(account, shipment) : [];
+  } else if (shipment.provider === "FEDEX") {
+    const account = await fedex.getAccount(merchantId);
+    problems = account ? await fedex.cancelCalls(account, shipment) : ["FedEx is no longer connected."];
+  } else if (shipment.provider === "AUSPOST") {
+    const account = await auspost.getAccount(merchantId);
+    problems = account ? await auspost.cancelCalls(account, shipment) : ["Australia Post is no longer connected."];
+  } else if (shipment.provider === "DEUTSCHE_POST") {
+    const account = await dhlparcelde.getAccount(merchantId);
+    problems = account ? await dhlparcelde.cancelCalls(account, shipment) : ["DHL Paket is no longer connected."];
   } else {
     const account = await delhivery.getAccount(merchantId);
     problems = account ? await delhivery.cancelCalls(account, shipment) : ["Delhivery is no longer connected."];

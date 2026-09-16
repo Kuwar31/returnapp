@@ -25,6 +25,10 @@ import * as easypost from "../shipping/easypost.service.js";
 import * as shippo from "../shipping/shippo.service.js";
 import * as shipstation from "../shipping/shipstation.service.js";
 import * as sendcloud from "../shipping/sendcloud.service.js";
+import * as dhlexpress from "../shipping/dhlexpress.service.js";
+import * as fedex from "../shipping/fedex.service.js";
+import * as auspost from "../shipping/auspost.service.js";
+import * as dhlparcelde from "../shipping/dhlparcelde.service.js";
 import * as shippingSettings from "../shipping/shipping.settings.js";
 import { indianMobile } from "../shipping/addresses.js";
 import { inventoryAccessProblem } from "../shopify/locations.service.js";
@@ -1140,7 +1144,9 @@ settingsRouter.post(
 const cm = z.number().min(1).max(500);
 const shippingSettingsSchema = z
   .object({
-    provider: z.enum(["SHIPROCKET", "DELHIVERY", "EASYPOST", "SHIPPO", "SHIPSTATION", "SENDCLOUD"]).nullable(),
+    provider: z
+      .enum(["SHIPROCKET", "DELHIVERY", "EASYPOST", "SHIPPO", "SHIPSTATION", "SENDCLOUD", "DHL_EXPRESS", "FEDEX", "AUSPOST", "DEUTSCHE_POST"])
+      .nullable(),
     autoCreate: z.boolean(),
     receiveOnDelivery: z.boolean(),
     destinationId: z.string().min(1).max(60).nullable(),
@@ -1167,7 +1173,7 @@ const readiness = (d: { phone: string | null; zip: string | null }) => ({
  * to say so here than at the first approval.
  */
 const shippingView = async (merchantId: string) => {
-  const [settings, sr, dl, ep, sp, ss, sc, destinations, destination] = await Promise.all([
+  const [settings, sr, dl, ep, sp, ss, sc, dx, fx, ap, dp, destinations, destination] = await Promise.all([
     shippingSettings.getSettings(merchantId),
     shiprocket.getAccount(merchantId),
     delhivery.getAccount(merchantId),
@@ -1175,6 +1181,10 @@ const shippingView = async (merchantId: string) => {
     shippo.getAccount(merchantId),
     shipstation.getAccount(merchantId),
     sendcloud.getAccount(merchantId),
+    dhlexpress.getAccount(merchantId),
+    fedex.getAccount(merchantId),
+    auspost.getAccount(merchantId),
+    dhlparcelde.getAccount(merchantId),
     destinationsService.listDestinations(merchantId),
     shippingSettings.deliveryDestination(merchantId),
   ]);
@@ -1186,6 +1196,10 @@ const shippingView = async (merchantId: string) => {
     shippo: sp ? shippo.serializeAccount(sp) : null,
     shipstation: ss ? shipstation.serializeAccount(ss) : null,
     sendcloud: sc ? sendcloud.serializeAccount(sc) : null,
+    dhlExpress: dx ? dhlexpress.serializeAccount(dx) : null,
+    fedex: fx ? fedex.serializeAccount(fx) : null,
+    ausPost: ap ? auspost.serializeAccount(ap) : null,
+    deutschePost: dp ? dhlparcelde.serializeAccount(dp) : null,
     webhookUrl: shiprocket.webhookUrl(),
     destinations: destinations.map((d) => ({ ...destinationsService.serializeDestination(d), ...readiness(d) })),
     /** Where parcels go today: the chosen destination, else the default. */
@@ -1223,6 +1237,18 @@ settingsRouter.patch(
     }
     if (req.body.provider === "SENDCLOUD" && !(await sendcloud.getAccount(merchantId))) {
       throw unprocessable("Connect Sendcloud before choosing it.");
+    }
+    if (req.body.provider === "DHL_EXPRESS" && !(await dhlexpress.getAccount(merchantId))) {
+      throw unprocessable("Connect DHL Express before choosing it.");
+    }
+    if (req.body.provider === "FEDEX" && !(await fedex.getAccount(merchantId))) {
+      throw unprocessable("Connect FedEx before choosing it.");
+    }
+    if (req.body.provider === "AUSPOST" && !(await auspost.getAccount(merchantId))) {
+      throw unprocessable("Connect Australia Post before choosing it.");
+    }
+    if (req.body.provider === "DEUTSCHE_POST" && !(await dhlparcelde.getAccount(merchantId))) {
+      throw unprocessable("Connect DHL Paket before choosing it.");
     }
     await shippingSettings.updateSettings(merchantId, req.body);
     res.json(await shippingView(merchantId));
@@ -1481,6 +1507,170 @@ settingsRouter.post(
   "/sendcloud/test",
   asyncHandler(async (req, res) => {
     res.json(await sendcloud.testConnection(req.admin!.merchantId));
+  }),
+);
+
+// --- DHL_EXPRESS ---
+
+settingsRouter.post(
+  "/dhl-express/connect",
+  validate(z.object({ apiKey: z.string().trim().min(4).max(200), apiSecret: z.string().trim().min(4).max(200), accountNumber: z.string().trim().min(4).max(40), testMode: z.boolean().default(true) })),
+  asyncHandler(async (req, res) => {
+    const merchantId = req.admin!.merchantId;
+    await dhlexpress.connectAccount(merchantId, req.body.apiKey, req.body.apiSecret, req.body.accountNumber, req.body.testMode);
+    const settings = await shippingSettings.getSettings(merchantId);
+    if (!settings.provider) await shippingSettings.updateSettings(merchantId, { provider: "DHL_EXPRESS" });
+    res.json(await shippingView(merchantId));
+  }),
+);
+
+settingsRouter.delete(
+  "/dhl-express",
+  asyncHandler(async (req, res) => {
+    const merchantId = req.admin!.merchantId;
+    await dhlexpress.disconnectAccount(merchantId);
+    const settings = await shippingSettings.getSettings(merchantId);
+    if (settings.provider === "DHL_EXPRESS") await shippingSettings.updateSettings(merchantId, { provider: null });
+    res.json(await shippingView(merchantId));
+  }),
+);
+
+settingsRouter.patch(
+  "/dhl-express",
+  validate(z.object({ testMode: z.boolean().optional() })),
+  asyncHandler(async (req, res) => {
+    await dhlexpress.updateAccount(req.admin!.merchantId, req.body);
+    res.json(await shippingView(req.admin!.merchantId));
+  }),
+);
+
+settingsRouter.post(
+  "/dhl-express/test",
+  asyncHandler(async (req, res) => {
+    res.json(await dhlexpress.testConnection(req.admin!.merchantId));
+  }),
+);
+
+// --- FEDEX ---
+
+settingsRouter.post(
+  "/fedex/connect",
+  validate(z.object({ clientId: z.string().trim().min(4).max(200), clientSecret: z.string().trim().min(4).max(200), accountNumber: z.string().trim().min(4).max(40), testMode: z.boolean().default(true) })),
+  asyncHandler(async (req, res) => {
+    const merchantId = req.admin!.merchantId;
+    await fedex.connectAccount(merchantId, req.body.clientId, req.body.clientSecret, req.body.accountNumber, req.body.testMode);
+    const settings = await shippingSettings.getSettings(merchantId);
+    if (!settings.provider) await shippingSettings.updateSettings(merchantId, { provider: "FEDEX" });
+    res.json(await shippingView(merchantId));
+  }),
+);
+
+settingsRouter.delete(
+  "/fedex",
+  asyncHandler(async (req, res) => {
+    const merchantId = req.admin!.merchantId;
+    await fedex.disconnectAccount(merchantId);
+    const settings = await shippingSettings.getSettings(merchantId);
+    if (settings.provider === "FEDEX") await shippingSettings.updateSettings(merchantId, { provider: null });
+    res.json(await shippingView(merchantId));
+  }),
+);
+
+settingsRouter.patch(
+  "/fedex",
+  validate(z.object({ testMode: z.boolean().optional() })),
+  asyncHandler(async (req, res) => {
+    await fedex.updateAccount(req.admin!.merchantId, req.body);
+    res.json(await shippingView(req.admin!.merchantId));
+  }),
+);
+
+settingsRouter.post(
+  "/fedex/test",
+  asyncHandler(async (req, res) => {
+    res.json(await fedex.testConnection(req.admin!.merchantId));
+  }),
+);
+
+// --- AUSPOST ---
+
+settingsRouter.post(
+  "/auspost/connect",
+  validate(z.object({ apiKey: z.string().trim().min(4).max(200), password: z.string().trim().min(4).max(200), accountNumber: z.string().trim().min(4).max(40), testMode: z.boolean().default(true) })),
+  asyncHandler(async (req, res) => {
+    const merchantId = req.admin!.merchantId;
+    await auspost.connectAccount(merchantId, req.body.apiKey, req.body.password, req.body.accountNumber, req.body.testMode);
+    const settings = await shippingSettings.getSettings(merchantId);
+    if (!settings.provider) await shippingSettings.updateSettings(merchantId, { provider: "AUSPOST" });
+    res.json(await shippingView(merchantId));
+  }),
+);
+
+settingsRouter.delete(
+  "/auspost",
+  asyncHandler(async (req, res) => {
+    const merchantId = req.admin!.merchantId;
+    await auspost.disconnectAccount(merchantId);
+    const settings = await shippingSettings.getSettings(merchantId);
+    if (settings.provider === "AUSPOST") await shippingSettings.updateSettings(merchantId, { provider: null });
+    res.json(await shippingView(merchantId));
+  }),
+);
+
+settingsRouter.patch(
+  "/auspost",
+  validate(z.object({ testMode: z.boolean().optional() })),
+  asyncHandler(async (req, res) => {
+    await auspost.updateAccount(req.admin!.merchantId, req.body);
+    res.json(await shippingView(req.admin!.merchantId));
+  }),
+);
+
+settingsRouter.post(
+  "/auspost/test",
+  asyncHandler(async (req, res) => {
+    res.json(await auspost.testConnection(req.admin!.merchantId));
+  }),
+);
+
+// --- DEUTSCHE_POST ---
+
+settingsRouter.post(
+  "/deutsche-post/connect",
+  validate(z.object({ apiKey: z.string().trim().min(4).max(200), username: z.string().trim().min(2).max(200), password: z.string().trim().min(4).max(200), billingNumber: z.string().trim().min(14).max(14), testMode: z.boolean().default(true) })),
+  asyncHandler(async (req, res) => {
+    const merchantId = req.admin!.merchantId;
+    await dhlparcelde.connectAccount(merchantId, req.body.apiKey, req.body.username, req.body.password, req.body.billingNumber, req.body.testMode);
+    const settings = await shippingSettings.getSettings(merchantId);
+    if (!settings.provider) await shippingSettings.updateSettings(merchantId, { provider: "DEUTSCHE_POST" });
+    res.json(await shippingView(merchantId));
+  }),
+);
+
+settingsRouter.delete(
+  "/deutsche-post",
+  asyncHandler(async (req, res) => {
+    const merchantId = req.admin!.merchantId;
+    await dhlparcelde.disconnectAccount(merchantId);
+    const settings = await shippingSettings.getSettings(merchantId);
+    if (settings.provider === "DEUTSCHE_POST") await shippingSettings.updateSettings(merchantId, { provider: null });
+    res.json(await shippingView(merchantId));
+  }),
+);
+
+settingsRouter.patch(
+  "/deutsche-post",
+  validate(z.object({ testMode: z.boolean().optional() })),
+  asyncHandler(async (req, res) => {
+    await dhlparcelde.updateAccount(req.admin!.merchantId, req.body);
+    res.json(await shippingView(req.admin!.merchantId));
+  }),
+);
+
+settingsRouter.post(
+  "/deutsche-post/test",
+  asyncHandler(async (req, res) => {
+    res.json(await dhlparcelde.testConnection(req.admin!.merchantId));
   }),
 );
   }),

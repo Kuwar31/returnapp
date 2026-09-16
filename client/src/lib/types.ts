@@ -371,9 +371,28 @@ export interface CourierQuote {
   recommended: boolean;
 }
 
-export type ShipmentProvider = "SHIPROCKET" | "DELHIVERY" | "EASYPOST" | "SHIPPO" | "SHIPSTATION" | "SENDCLOUD";
+export type ShipmentProvider =
+  | "SHIPROCKET"
+  | "DELHIVERY"
+  | "EASYPOST"
+  | "SHIPPO"
+  | "SHIPSTATION"
+  | "SENDCLOUD"
+  | "DHL_EXPRESS"
+  | "FEDEX"
+  | "AUSPOST"
+  | "DEUTSCHE_POST";
 /** Carriers whose label the shopper prints and drops off, rather than a courier collecting. */
-export const DROP_OFF_PROVIDERS: ShipmentProvider[] = ["EASYPOST", "SHIPPO", "SHIPSTATION", "SENDCLOUD"];
+export const DROP_OFF_PROVIDERS: ShipmentProvider[] = [
+  "EASYPOST",
+  "SHIPPO",
+  "SHIPSTATION",
+  "SENDCLOUD",
+  "DHL_EXPRESS",
+  "FEDEX",
+  "AUSPOST",
+  "DEUTSCHE_POST",
+];
 
 export interface CourierQuotes {
   provider: ShipmentProvider;
@@ -440,6 +459,10 @@ export interface ShippingView {
     senderAddress: string;
     webhookUrl: string;
   } | null;
+  dhlExpress: { connectedAt: string; testMode: boolean; accountNumber: string } | null;
+  fedex: { connectedAt: string; testMode: boolean; accountNumber: string } | null;
+  ausPost: { connectedAt: string; testMode: boolean; accountNumber: string } | null;
+  deutschePost: { connectedAt: string; testMode: boolean; billingNumber: string } | null;
   webhookUrl: string;
   destinations: DeliveryDestination[];
   /** Where parcels go today: the chosen destination, else the default. */

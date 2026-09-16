@@ -80,6 +80,15 @@ const schema = z.object({
   SHIPPO_API_URL: z.string().url().default("https://api.goshippo.com"),
   SHIPSTATION_API_URL: z.string().url().default("https://ssapi.shipstation.com"),
   SENDCLOUD_API_URL: z.string().url().default("https://panel.sendcloud.sc/api/v2"),
+  DHL_EXPRESS_API_URL: z.string().url().default("https://express.api.dhl.com/mydhlapi"),
+  DHL_EXPRESS_TEST_URL: z.string().url().default("https://express.api.dhl.com/mydhlapi/test"),
+  FEDEX_API_URL: z.string().url().default("https://apis.fedex.com"),
+  FEDEX_SANDBOX_URL: z.string().url().default("https://apis-sandbox.fedex.com"),
+  AUSPOST_API_URL: z.string().url().default("https://digitalapi.auspost.com.au/shipping/v1"),
+  AUSPOST_TEST_URL: z.string().url().default("https://digitalapi.auspost.com.au/test/shipping/v1"),
+  DHL_PARCEL_DE_API_URL: z.string().url().default("https://api-eu.dhl.com/parcel/de/shipping/v2"),
+  DHL_PARCEL_DE_SANDBOX_URL: z.string().url().default("https://api-sandbox.dhl.com/parcel/de/shipping/v2"),
+  DHL_TRACKING_API_URL: z.string().url().default("https://api-eu.dhl.com/track"),
   // How often open shipments are asked for tracking, for stores without the
   // webhook set up. Zero turns it off, as on a second instance.
   TRACKING_SWEEP_MINUTES: z.coerce.number().int().min(0).max(1440).default(30),

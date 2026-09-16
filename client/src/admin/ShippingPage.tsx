@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { api } from "../lib/api";
 import { dateTime } from "../lib/format";
-import type { ShippingView } from "../lib/types";
+import type { ShipmentProvider, ShippingView } from "../lib/types";
 import { CopyLink } from "../components/CopyLink";
 import { ErrorAlert, Loading } from "../components/Feedback";
 import { useAuth } from "./AuthContext";
@@ -24,7 +24,7 @@ import { storePath } from "./store-path";
  * environment; EasyPost has test keys.
  */
 
-type Provider = "SHIPROCKET" | "DELHIVERY" | "EASYPOST" | "SHIPPO" | "SHIPSTATION" | "SENDCLOUD";
+type Provider = ShipmentProvider;
 type Parcel = ShippingView["settings"]["parcel"];
 
 const SERVICES: Array<{ id: Provider; name: string; initials: string; blurb: string }> = [
@@ -64,6 +64,10 @@ const SERVICES: Array<{ id: Provider; name: string; initials: string; blurb: str
     initials: "SC",
     blurb: "European carriers contracted through Sendcloud, with return methods priced per country.",
   },
+  { id: "DHL_EXPRESS", name: "DHL Express", initials: "DX", blurb: "Your DHL Express account through the MyDHL API, rated per product, worldwide." },
+  { id: "FEDEX", name: "FedEx", initials: "FX", blurb: "Your FedEx account through its REST APIs, rated per service, with return labels." },
+  { id: "AUSPOST", name: "Australia Post", initials: "AP", blurb: "Your MyPost Business or eParcel account, priced per product within Australia." },
+  { id: "DEUTSCHE_POST", name: "DHL Paket", initials: "DP", blurb: "Deutsche Post / DHL Paket for Germany, at your contract rates." },
 ];
 
 /**
@@ -80,15 +84,15 @@ const CATALOGUE: Array<{
   beta?: boolean;
 }> = [
   { id: "SHIPPO", name: "shippo", brand: "shippo", region: "US", learnMore: "https://goshippo.com" },
-  { name: "FedEx", brand: "fedex", region: "International", learnMore: "https://developer.fedex.com" },
+  { id: "FEDEX", name: "FedEx", brand: "fedex", region: "International", learnMore: "https://developer.fedex.com" },
   { id: "EASYPOST", name: "easypost", brand: "easypost", region: "US, CA, MX, GB, AU, EU", learnMore: "https://www.easypost.com" },
   { id: "SHIPSTATION", name: "ShipStation", brand: "shipstation", region: "US", learnMore: "https://www.shipstation.com" },
   { id: "SENDCLOUD", name: "sendcloud", brand: "sendcloud", region: "EU", learnMore: "https://www.sendcloud.com" },
   { id: "SHIPROCKET", name: "Shiprocket", brand: "shiprocket", region: "IN", learnMore: "https://www.shiprocket.in", beta: true },
   { id: "DELHIVERY", name: "Delhivery", brand: "delhivery", region: "IN", learnMore: "https://www.delhivery.com", beta: true },
-  { name: "Deutsche Post", brand: "deutschepost", region: "DE", learnMore: "https://developer.dhl.com", beta: true },
-  { name: "Australia Post", brand: "auspost", region: "AU", learnMore: "https://developer.auspost.com.au", beta: true },
-  { name: "DHL Express", brand: "dhl", region: "International", learnMore: "https://developer.dhl.com", beta: true },
+  { id: "DEUTSCHE_POST", name: "Deutsche Post", brand: "deutschepost", region: "DE", learnMore: "https://developer.dhl.com", beta: true },
+  { id: "AUSPOST", name: "Australia Post", brand: "auspost", region: "AU", learnMore: "https://developer.auspost.com.au", beta: true },
+  { id: "DHL_EXPRESS", name: "DHL Express", brand: "dhl", region: "International", learnMore: "https://developer.dhl.com", beta: true },
 ];
 
 const NAMES: Record<Provider, string> = {
@@ -98,6 +102,24 @@ const NAMES: Record<Provider, string> = {
   SHIPPO: "Shippo",
   SHIPSTATION: "ShipStation",
   SENDCLOUD: "Sendcloud",
+  DHL_EXPRESS: "DHL Express",
+  FEDEX: "FedEx",
+  AUSPOST: "Australia Post",
+  DEUTSCHE_POST: "DHL Paket",
+};
+
+/** The API path segment for a service's admin routes. */
+const PATHS: Record<Provider, string> = {
+  SHIPROCKET: "shiprocket",
+  DELHIVERY: "delhivery",
+  EASYPOST: "easypost",
+  SHIPPO: "shippo",
+  SHIPSTATION: "shipstation",
+  SENDCLOUD: "sendcloud",
+  DHL_EXPRESS: "dhl-express",
+  FEDEX: "fedex",
+  AUSPOST: "auspost",
+  DEUTSCHE_POST: "deutsche-post",
 };
 
 /** Whether a service is connected, and whether it's in a test mode, from the view. */
@@ -112,7 +134,15 @@ const accountOf = (data: ShippingView, id: Provider): { testMode: boolean } | nu
           ? data.shippo
           : id === "SHIPSTATION"
             ? data.shipstation
-            : data.sendcloud;
+            : id === "SENDCLOUD"
+              ? data.sendcloud
+              : id === "DHL_EXPRESS"
+                ? data.dhlExpress
+                : id === "FEDEX"
+                  ? data.fedex
+                  : id === "AUSPOST"
+                    ? data.ausPost
+                    : data.deutschePost;
 
 export default function ShippingPage() {
   const { session } = useAuth();
@@ -242,6 +272,10 @@ export default function ShippingPage() {
     SHIPPO: "Shippo is connected with a test token: labels are test labels and no postage is bought. Reconnect with a live token before real returns come in.",
     SHIPSTATION: "ShipStation is making test labels, which it voids and never charges for. Turn that off under Manage before real returns come in.",
     SENDCLOUD: "Sendcloud is in test mode: parcels are announced without a label and nothing is charged. Turn that off under Manage before real returns come in.",
+    DHL_EXPRESS: "DHL Express is on its test environment: labels are test labels and nothing is charged. Switch to production under Manage before real returns come in.",
+    FEDEX: "FedEx is on its sandbox: labels are test labels and nothing is charged. Switch to production under Manage before real returns come in.",
+    AUSPOST: "Australia Post is on its test environment: labels are test labels and nothing is charged. Switch to production under Manage before real returns come in.",
+    DEUTSCHE_POST: "DHL Paket is on its sandbox: labels are test labels and nothing is charged. Switch to production under Manage before real returns come in.",
   };
   const parcelDirty =
     parcel.lengthCm !== settings.parcel.lengthCm ||
@@ -267,6 +301,10 @@ export default function ShippingPage() {
     if (id === "SHIPPO" && data.shippo) return `${data.shippo.testMode ? "Test token" : "Live token"} · connected ${dateTime(data.shippo.connectedAt)}`;
     if (id === "SHIPSTATION" && data.shipstation) return `Billed in ${data.shipstation.currency} · connected ${dateTime(data.shipstation.connectedAt)}`;
     if (id === "SENDCLOUD" && data.sendcloud) return `Sender ${data.sendcloud.senderAddress} · connected ${dateTime(data.sendcloud.connectedAt)}`;
+    if (id === "DHL_EXPRESS" && data.dhlExpress) return `Account ${data.dhlExpress.accountNumber} · connected ${dateTime(data.dhlExpress.connectedAt)}`;
+    if (id === "FEDEX" && data.fedex) return `Account ${data.fedex.accountNumber} · connected ${dateTime(data.fedex.connectedAt)}`;
+    if (id === "AUSPOST" && data.ausPost) return `Account ${data.ausPost.accountNumber} · connected ${dateTime(data.ausPost.connectedAt)}`;
+    if (id === "DEUTSCHE_POST" && data.deutschePost) return `Billing ${data.deutschePost.billingNumber} · connected ${dateTime(data.deutschePost.connectedAt)}`;
     return "";
   };
 
@@ -508,7 +546,7 @@ export default function ShippingPage() {
           busy={busy}
           onClose={() => setDialog(null)}
           onConnect={async (provider, body) => {
-            const ok = await run(() => api.post(`/admin/settings/${provider.toLowerCase()}/connect`, body, { auth: "admin" }), `${NAMES[provider]} connected.`);
+            const ok = await run(() => api.post(`/admin/settings/${PATHS[provider]}/connect`, body, { auth: "admin" }), `${NAMES[provider]} connected.`);
             if (ok) setDialog(null);
           }}
         />
@@ -563,6 +601,8 @@ function ConnectDialog({
   const [sp, setSp] = useState({ token: "" });
   const [ss, setSs] = useState({ apiKey: "", apiSecret: "", currency: "USD" });
   const [sc, setSc] = useState({ publicKey: "", secretKey: "", testMode: true });
+  /** The direct carriers share one shape: two secrets, an account, a test switch. */
+  const [dc, setDc] = useState({ a: "", b: "", c: "", account: "", testMode: true });
 
   const ready =
     picked === "SHIPROCKET"
@@ -577,7 +617,11 @@ function ConnectDialog({
               ? Boolean(ss.apiKey.trim() && ss.apiSecret.trim())
               : picked === "SENDCLOUD"
                 ? Boolean(sc.publicKey.trim() && sc.secretKey.trim())
-                : false;
+                : picked === "DEUTSCHE_POST"
+                  ? Boolean(dc.a.trim() && dc.b.trim() && dc.c.trim() && dc.account.trim())
+                  : picked
+                    ? Boolean(dc.a.trim() && dc.b.trim() && dc.account.trim())
+                    : false;
 
   const submit = () => {
     if (!picked || !ready) return;
@@ -592,7 +636,15 @@ function ConnectDialog({
               ? { token: sp.token.trim() }
               : picked === "SHIPSTATION"
                 ? { apiKey: ss.apiKey.trim(), apiSecret: ss.apiSecret.trim(), currency: ss.currency.trim().toUpperCase() || "USD" }
-                : { publicKey: sc.publicKey.trim(), secretKey: sc.secretKey.trim(), testMode: sc.testMode };
+                : picked === "SENDCLOUD"
+                  ? { publicKey: sc.publicKey.trim(), secretKey: sc.secretKey.trim(), testMode: sc.testMode }
+                  : picked === "DHL_EXPRESS"
+                    ? { apiKey: dc.a.trim(), apiSecret: dc.b.trim(), accountNumber: dc.account.trim(), testMode: dc.testMode }
+                    : picked === "FEDEX"
+                      ? { clientId: dc.a.trim(), clientSecret: dc.b.trim(), accountNumber: dc.account.trim(), testMode: dc.testMode }
+                      : picked === "AUSPOST"
+                        ? { apiKey: dc.a.trim(), password: dc.b.trim(), accountNumber: dc.account.trim(), testMode: dc.testMode }
+                        : { apiKey: dc.a.trim(), username: dc.b.trim(), password: dc.c.trim(), billingNumber: dc.account.trim(), testMode: dc.testMode };
     void onConnect(picked, body);
   };
 
@@ -751,6 +803,49 @@ function ConnectDialog({
             </span>
           </label>
         </form>
+      ) : picked === "DHL_EXPRESS" || picked === "FEDEX" || picked === "AUSPOST" || picked === "DEUTSCHE_POST" ? (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit();
+          }}
+        >
+          <p className="settings-row__hint" style={{ marginBottom: 12 }}>
+            {picked === "DHL_EXPRESS" &&
+              "From the DHL developer portal, create an app with the MyDHL API and paste its key and secret, plus your DHL Express account number. The test environment is the test mode."}
+            {picked === "FEDEX" &&
+              "From the FedEx Developer Portal, create a project with the Ship, Rate and Track APIs and paste its client id and secret, plus your FedEx account number. The sandbox is the test mode."}
+            {picked === "AUSPOST" &&
+              "From your MyPost Business or eParcel account, paste the Shipping and Tracking API key, its password, and your account number. The test environment is the test mode."}
+            {picked === "DEUTSCHE_POST" &&
+              "From the DHL developer portal, create an app with the Parcel DE Shipping API and paste its key, your business customer portal login, and the 14-digit billing number labels are charged to. The sandbox is the test mode."}
+          </p>
+          <div className="field">
+            <label htmlFor="dc-a">{picked === "FEDEX" ? "Client id" : "API key"}</label>
+            <input id="dc-a" type="password" value={dc.a} autoComplete="off" onChange={(e) => setDc({ ...dc, a: e.target.value })} required />
+          </div>
+          <div className="field">
+            <label htmlFor="dc-b">{picked === "FEDEX" ? "Client secret" : picked === "AUSPOST" ? "API password" : picked === "DEUTSCHE_POST" ? "Business customer portal user" : "API secret"}</label>
+            <input id="dc-b" type={picked === "DEUTSCHE_POST" ? "text" : "password"} value={dc.b} autoComplete="off" onChange={(e) => setDc({ ...dc, b: e.target.value })} required />
+          </div>
+          {picked === "DEUTSCHE_POST" && (
+            <div className="field">
+              <label htmlFor="dc-c">Business customer portal password</label>
+              <input id="dc-c" type="password" value={dc.c} autoComplete="off" onChange={(e) => setDc({ ...dc, c: e.target.value })} required />
+            </div>
+          )}
+          <div className="field">
+            <label htmlFor="dc-account">{picked === "DEUTSCHE_POST" ? "Billing number" : "Account number"}</label>
+            <input id="dc-account" type="text" value={dc.account} autoComplete="off" onChange={(e) => setDc({ ...dc, account: e.target.value })} required />
+          </div>
+          <label className="check-list__item">
+            <input type="checkbox" checked={dc.testMode} onChange={(e) => setDc({ ...dc, testMode: e.target.checked })} />
+            <span>
+              <span className="radio-list__label">Use the test environment</span>
+              <span className="radio-list__hint">Test labels, nothing charged. The credentials have to match the environment.</span>
+            </span>
+          </label>
+        </form>
       ) : picked === "SHIPPO" ? (
         <form
           onSubmit={(e) => {
@@ -864,7 +959,7 @@ function ManageDialog({
 }) {
   const [showSecret, setShowSecret] = useState(false);
   const [warehouse, setWarehouse] = useState(data.delhivery?.warehouseName ?? "");
-  const path = `/admin/settings/${provider.toLowerCase()}`;
+  const path = `/admin/settings/${PATHS[provider]}`;
   const name = NAMES[provider];
 
   const disconnect = () => {
@@ -997,6 +1092,38 @@ function ManageDialog({
               >
                 Save
               </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {(provider === "DHL_EXPRESS" || provider === "FEDEX" || provider === "AUSPOST" || provider === "DEUTSCHE_POST") && (
+        <>
+          <div className="settings-row">
+            <div>
+              <div className="settings-row__label">Test environment</div>
+              <div className="settings-row__hint">
+                Test labels, nothing charged. The credentials have to belong to the environment chosen here; switching usually means reconnecting with the other set.
+              </div>
+            </div>
+            <Switch
+              on={Boolean(accountOf(data, provider)?.testMode)}
+              label={`${name} test environment`}
+              onChange={(testMode) => void run(() => api.patch(path, { testMode }, { auth: "admin" }), testMode ? "Test environment on." : "Production on — labels are real.")}
+            />
+          </div>
+          <div className="settings-row">
+            <div>
+              <div className="settings-row__label">How labels work</div>
+              <div className="settings-row__hint">
+                {provider === "DEUTSCHE_POST"
+                  ? "A DHL Paket label from the customer to your return destination, charged to your billing number at your contract rate, which the API doesn't quote. Deleted before manifesting, it isn't charged."
+                  : provider === "DHL_EXPRESS"
+                    ? "Every DHL Express product on the lane is quoted at approval; the customer prints the label and hands the parcel to DHL. DHL doesn't cancel labels — an unused one isn't billed."
+                    : provider === "FEDEX"
+                      ? "Every FedEx service on the lane is quoted at approval; a print return label the customer drops off at FedEx. Cancelled labels are voided."
+                      : "Every Australia Post product for the parcel is priced at approval; the customer prints the label and lodges the parcel. The label is hosted by Australia Post."}
+              </div>
             </div>
           </div>
         </>
