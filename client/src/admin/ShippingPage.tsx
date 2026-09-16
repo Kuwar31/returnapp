@@ -54,6 +54,31 @@ const SERVICES: Array<{ id: Provider; name: string; initials: string; blurb: str
   },
 ];
 
+/**
+ * Every service the app knows of, as the connect list shows them: the ones
+ * built, and the ones on the roadmap so a merchant can see what's coming.
+ * `brand` picks the wordmark's colours.
+ */
+const CATALOGUE: Array<{
+  id?: Provider;
+  name: string;
+  brand: string;
+  region: string;
+  learnMore: string;
+  beta?: boolean;
+}> = [
+  { id: "SHIPPO", name: "shippo", brand: "shippo", region: "US", learnMore: "https://goshippo.com" },
+  { name: "FedEx", brand: "fedex", region: "International", learnMore: "https://developer.fedex.com" },
+  { id: "EASYPOST", name: "easypost", brand: "easypost", region: "US, CA, MX, GB, AU, EU", learnMore: "https://www.easypost.com" },
+  { name: "ShipStation", brand: "shipstation", region: "US", learnMore: "https://www.shipstation.com" },
+  { name: "sendcloud", brand: "sendcloud", region: "EU", learnMore: "https://www.sendcloud.com" },
+  { id: "SHIPROCKET", name: "Shiprocket", brand: "shiprocket", region: "IN", learnMore: "https://www.shiprocket.in", beta: true },
+  { id: "DELHIVERY", name: "Delhivery", brand: "delhivery", region: "IN", learnMore: "https://www.delhivery.com", beta: true },
+  { name: "Deutsche Post", brand: "deutschepost", region: "DE", learnMore: "https://developer.dhl.com", beta: true },
+  { name: "Australia Post", brand: "auspost", region: "AU", learnMore: "https://developer.auspost.com.au", beta: true },
+  { name: "DHL Express", brand: "dhl", region: "International", learnMore: "https://developer.dhl.com", beta: true },
+];
+
 const NAMES: Record<Provider, string> = { SHIPROCKET: "Shiprocket", DELHIVERY: "Delhivery", EASYPOST: "EasyPost", SHIPPO: "Shippo" };
 
 export default function ShippingPage() {
@@ -536,6 +561,7 @@ function ConnectDialog({
   return (
     <Modal
       title={picked ? `Connect ${NAMES[picked]}` : "Connect shipping service"}
+      wide={!picked}
       onClose={onClose}
       footer={
         picked ? (
@@ -555,25 +581,34 @@ function ConnectDialog({
       }
     >
       {!picked ? (
-        <div className="connect-list">
-          {SERVICES.map((s) => {
-            const done = connected.includes(s.id);
+        <div className="carrier-cards">
+          {CATALOGUE.map((s) => {
+            const done = s.id ? connected.includes(s.id) : false;
             return (
-              <div key={s.id} className="connect-row">
-                <span className="service-row__logo" aria-hidden="true">
-                  {s.initials}
-                </span>
-                <span className="service-row__body">
-                  <span className="service-row__name">{s.name}</span>
-                  <span className="service-row__meta">{s.blurb}</span>
-                </span>
-                {done ? (
-                  <span className="badge badge--success">Connected</span>
-                ) : (
-                  <button type="button" className="btn btn--sm" onClick={() => setPicked(s.id)}>
-                    Connect
-                  </button>
-                )}
+              <div key={s.name} className="carrier-card">
+                <div className="carrier-card__head">
+                  <span className={`carrier-card__logo carrier-card__logo--${s.brand}`}>{s.name}</span>
+                  {s.beta && <span className="carrier-card__beta">Beta version</span>}
+                  <span className="carrier-card__action">
+                    {done ? (
+                      <span className="carrier-card__active">
+                        <span aria-hidden="true">✓</span> Active
+                      </span>
+                    ) : s.id ? (
+                      <button type="button" className="carrier-card__connect" onClick={() => setPicked(s.id!)}>
+                        <span aria-hidden="true">⊕</span> Activate
+                      </button>
+                    ) : (
+                      <span className="carrier-card__soon">Coming soon</span>
+                    )}
+                  </span>
+                </div>
+                <div className="carrier-card__foot">
+                  <span>Region: {s.region}</span>
+                  <a href={s.learnMore} target="_blank" rel="noreferrer">
+                    Learn more
+                  </a>
+                </div>
               </div>
             );
           })}

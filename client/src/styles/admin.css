@@ -4188,9 +4188,105 @@ table.data tbody tr:hover {
   gap: 8px;
 }
 
-.connect-list {
+/* The catalogue of services, one card each: wordmark, beta flag and the
+   action on the first row, region and a link on the second. */
+.carrier-cards {
   display: flex;
   flex-direction: column;
+  gap: 12px;
+}
+
+.carrier-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.carrier-card__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.carrier-card__logo {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.carrier-card__logo--shippo { color: #1c1c1e; }
+.carrier-card__logo--fedex { color: #4d148c; }
+.carrier-card__logo--easypost { color: #164dd9; font-weight: 700; }
+.carrier-card__logo--shipstation { color: #1e4a8b; font-style: italic; }
+.carrier-card__logo--sendcloud { color: #1e2a4a; font-weight: 600; }
+.carrier-card__logo--shiprocket { color: #1c1c1e; font-weight: 500; }
+.carrier-card__logo--delhivery { color: #e11d2f; }
+.carrier-card__logo--deutschepost { color: #1c1c1e; background: #ffcc00; padding: 4px 8px; border-radius: 4px; font-size: 14px; }
+.carrier-card__logo--auspost { color: #dc1928; font-size: 16px; }
+.carrier-card__logo--dhl { color: #d40511; background: #ffcc00; padding: 4px 8px; border-radius: 4px; font-size: 16px; font-style: italic; }
+
+.carrier-card__beta {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #e6f0fb;
+  color: #1f4e8c;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.carrier-card__action {
+  margin-left: auto;
+  flex: none;
+}
+
+.carrier-card__connect,
+.carrier-card__active,
+.carrier-card__soon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.carrier-card__connect {
+  cursor: pointer;
+}
+
+.carrier-card__connect:hover {
+  background: #f4f4f5;
+}
+
+.carrier-card__active {
+  border-color: #35b34a;
+  color: #1f7a30;
+}
+
+.carrier-card__soon {
+  color: var(--text-muted);
+  border-style: dashed;
+}
+
+.carrier-card__foot {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 18px;
+  font-size: 14px;
+}
+
+.carrier-card__foot a {
+  color: #1f6feb;
 }
 
 .label-defaults {
