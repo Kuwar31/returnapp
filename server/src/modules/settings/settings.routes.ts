@@ -23,6 +23,8 @@ import * as shiprocket from "../shipping/shiprocket.service.js";
 import * as delhivery from "../shipping/delhivery.service.js";
 import * as easypost from "../shipping/easypost.service.js";
 import * as shippo from "../shipping/shippo.service.js";
+import * as shipstation from "../shipping/shipstation.service.js";
+import * as sendcloud from "../shipping/sendcloud.service.js";
 import * as shippingSettings from "../shipping/shipping.settings.js";
 import { indianMobile } from "../shipping/addresses.js";
 import { inventoryAccessProblem } from "../shopify/locations.service.js";
@@ -1138,7 +1140,7 @@ settingsRouter.post(
 const cm = z.number().min(1).max(500);
 const shippingSettingsSchema = z
   .object({
-    provider: z.enum(["SHIPROCKET", "DELHIVERY", "EASYPOST", "SHIPPO"]).nullable(),
+    provider: z.enum(["SHIPROCKET", "DELHIVERY", "EASYPOST", "SHIPPO", "SHIPSTATION", "SENDCLOUD"]).nullable(),
     autoCreate: z.boolean(),
     receiveOnDelivery: z.boolean(),
     destinationId: z.string().min(1).max(60).nullable(),
@@ -1165,12 +1167,14 @@ const readiness = (d: { phone: string | null; zip: string | null }) => ({
  * to say so here than at the first approval.
  */
 const shippingView = async (merchantId: string) => {
-  const [settings, sr, dl, ep, sp, destinations, destination] = await Promise.all([
+  const [settings, sr, dl, ep, sp, ss, sc, destinations, destination] = await Promise.all([
     shippingSettings.getSettings(merchantId),
     shiprocket.getAccount(merchantId),
     delhivery.getAccount(merchantId),
     easypost.getAccount(merchantId),
     shippo.getAccount(merchantId),
+    shipstation.getAccount(merchantId),
+    sendcloud.getAccount(merchantId),
     destinationsService.listDestinations(merchantId),
     shippingSettings.deliveryDestination(merchantId),
   ]);
@@ -1180,6 +1184,8 @@ const shippingView = async (merchantId: string) => {
     delhivery: dl ? delhivery.serializeAccount(dl) : null,
     easypost: ep ? easypost.serializeAccount(ep) : null,
     shippo: sp ? shippo.serializeAccount(sp) : null,
+    shipstation: ss ? shipstation.serializeAccount(ss) : null,
+    sendcloud: sc ? sendcloud.serializeAccount(sc) : null,
     webhookUrl: shiprocket.webhookUrl(),
     destinations: destinations.map((d) => ({ ...destinationsService.serializeDestination(d), ...readiness(d) })),
     /** Where parcels go today: the chosen destination, else the default. */
@@ -1211,6 +1217,12 @@ settingsRouter.patch(
     }
     if (req.body.provider === "SHIPPO" && !(await shippo.getAccount(merchantId))) {
       throw unprocessable("Connect Shippo before choosing it.");
+    }
+    if (req.body.provider === "SHIPSTATION" && !(await shipstation.getAccount(merchantId))) {
+      throw unprocessable("Connect ShipStation before choosing it.");
+    }
+    if (req.body.provider === "SENDCLOUD" && !(await sendcloud.getAccount(merchantId))) {
+      throw unprocessable("Connect Sendcloud before choosing it.");
     }
     await shippingSettings.updateSettings(merchantId, req.body);
     res.json(await shippingView(merchantId));
@@ -1387,6 +1399,88 @@ settingsRouter.post(
   "/shippo/test",
   asyncHandler(async (req, res) => {
     res.json(await shippo.testConnection(req.admin!.merchantId));
+  }),
+);
+
+// --- ShipStation ---
+
+settingsRouter.post(
+  "/shipstation/connect",
+  validate(z.object({ apiKey: z.string().trim().min(8).max(200), apiSecret: z.string().trim().min(8).max(200), currency: z.string().trim().length(3).toUpperCase().default("USD") })),
+  asyncHandler(async (req, res) => {
+    const merchantId = req.admin!.merchantId;
+    await shipstation.connectAccount(merchantId, req.body.apiKey, req.body.apiSecret, req.body.currency);
+    const settings = await shippingSettings.getSettings(merchantId);
+    if (!settings.provider) await shippingSettings.updateSettings(merchantId, { provider: "SHIPSTATION" });
+    res.json(await shippingView(merchantId));
+  }),
+);
+
+settingsRouter.delete(
+  "/shipstation",
+  asyncHandler(async (req, res) => {
+    const merchantId = req.admin!.merchantId;
+    await shipstation.disconnectAccount(merchantId);
+    const settings = await shippingSettings.getSettings(merchantId);
+    if (settings.provider === "SHIPSTATION") await shippingSettings.updateSettings(merchantId, { provider: null });
+    res.json(await shippingView(merchantId));
+  }),
+);
+
+settingsRouter.patch(
+  "/shipstation",
+  validate(z.object({ testMode: z.boolean().optional(), currency: z.string().trim().length(3).toUpperCase().optional() })),
+  asyncHandler(async (req, res) => {
+    await shipstation.updateAccount(req.admin!.merchantId, req.body);
+    res.json(await shippingView(req.admin!.merchantId));
+  }),
+);
+
+settingsRouter.post(
+  "/shipstation/test",
+  asyncHandler(async (req, res) => {
+    res.json(await shipstation.testConnection(req.admin!.merchantId));
+  }),
+);
+
+// --- Sendcloud ---
+
+settingsRouter.post(
+  "/sendcloud/connect",
+  validate(z.object({ publicKey: z.string().trim().min(8).max(200), secretKey: z.string().trim().min(8).max(200), testMode: z.boolean().default(true) })),
+  asyncHandler(async (req, res) => {
+    const merchantId = req.admin!.merchantId;
+    await sendcloud.connectAccount(merchantId, req.body.publicKey, req.body.secretKey, req.body.testMode);
+    const settings = await shippingSettings.getSettings(merchantId);
+    if (!settings.provider) await shippingSettings.updateSettings(merchantId, { provider: "SENDCLOUD" });
+    res.json(await shippingView(merchantId));
+  }),
+);
+
+settingsRouter.delete(
+  "/sendcloud",
+  asyncHandler(async (req, res) => {
+    const merchantId = req.admin!.merchantId;
+    await sendcloud.disconnectAccount(merchantId);
+    const settings = await shippingSettings.getSettings(merchantId);
+    if (settings.provider === "SENDCLOUD") await shippingSettings.updateSettings(merchantId, { provider: null });
+    res.json(await shippingView(merchantId));
+  }),
+);
+
+settingsRouter.patch(
+  "/sendcloud",
+  validate(z.object({ testMode: z.boolean().optional() })),
+  asyncHandler(async (req, res) => {
+    await sendcloud.updateAccount(req.admin!.merchantId, req.body);
+    res.json(await shippingView(req.admin!.merchantId));
+  }),
+);
+
+settingsRouter.post(
+  "/sendcloud/test",
+  asyncHandler(async (req, res) => {
+    res.json(await sendcloud.testConnection(req.admin!.merchantId));
   }),
 );
   }),

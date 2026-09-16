@@ -78,6 +78,8 @@ const schema = z.object({
   EASYPOST_API_URL: z.string().url().default("https://api.easypost.com/v2"),
   // Shippo's API. A test token against it is that carrier's test mode.
   SHIPPO_API_URL: z.string().url().default("https://api.goshippo.com"),
+  SHIPSTATION_API_URL: z.string().url().default("https://ssapi.shipstation.com"),
+  SENDCLOUD_API_URL: z.string().url().default("https://panel.sendcloud.sc/api/v2"),
   // How often open shipments are asked for tracking, for stores without the
   // webhook set up. Zero turns it off, as on a second instance.
   TRACKING_SWEEP_MINUTES: z.coerce.number().int().min(0).max(1440).default(30),

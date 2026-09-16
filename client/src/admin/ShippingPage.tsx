@@ -24,7 +24,7 @@ import { storePath } from "./store-path";
  * environment; EasyPost has test keys.
  */
 
-type Provider = "SHIPROCKET" | "DELHIVERY" | "EASYPOST" | "SHIPPO";
+type Provider = "SHIPROCKET" | "DELHIVERY" | "EASYPOST" | "SHIPPO" | "SHIPSTATION" | "SENDCLOUD";
 type Parcel = ShippingView["settings"]["parcel"];
 
 const SERVICES: Array<{ id: Provider; name: string; initials: string; blurb: string }> = [
@@ -52,6 +52,18 @@ const SERVICES: Array<{ id: Provider; name: string; initials: string; blurb: str
     initials: "SP",
     blurb: "USPS, UPS, FedEx, DHL and more through one token. Drop-off labels the customer prints.",
   },
+  {
+    id: "SHIPSTATION",
+    name: "ShipStation",
+    initials: "SS",
+    blurb: "The carriers in your ShipStation account, rated per service. Labels the customer prints; tracking on the carrier's site.",
+  },
+  {
+    id: "SENDCLOUD",
+    name: "Sendcloud",
+    initials: "SC",
+    blurb: "European carriers contracted through Sendcloud, with return methods priced per country.",
+  },
 ];
 
 /**
@@ -70,8 +82,8 @@ const CATALOGUE: Array<{
   { id: "SHIPPO", name: "shippo", brand: "shippo", region: "US", learnMore: "https://goshippo.com" },
   { name: "FedEx", brand: "fedex", region: "International", learnMore: "https://developer.fedex.com" },
   { id: "EASYPOST", name: "easypost", brand: "easypost", region: "US, CA, MX, GB, AU, EU", learnMore: "https://www.easypost.com" },
-  { name: "ShipStation", brand: "shipstation", region: "US", learnMore: "https://www.shipstation.com" },
-  { name: "sendcloud", brand: "sendcloud", region: "EU", learnMore: "https://www.sendcloud.com" },
+  { id: "SHIPSTATION", name: "ShipStation", brand: "shipstation", region: "US", learnMore: "https://www.shipstation.com" },
+  { id: "SENDCLOUD", name: "sendcloud", brand: "sendcloud", region: "EU", learnMore: "https://www.sendcloud.com" },
   { id: "SHIPROCKET", name: "Shiprocket", brand: "shiprocket", region: "IN", learnMore: "https://www.shiprocket.in", beta: true },
   { id: "DELHIVERY", name: "Delhivery", brand: "delhivery", region: "IN", learnMore: "https://www.delhivery.com", beta: true },
   { name: "Deutsche Post", brand: "deutschepost", region: "DE", learnMore: "https://developer.dhl.com", beta: true },
@@ -79,7 +91,28 @@ const CATALOGUE: Array<{
   { name: "DHL Express", brand: "dhl", region: "International", learnMore: "https://developer.dhl.com", beta: true },
 ];
 
-const NAMES: Record<Provider, string> = { SHIPROCKET: "Shiprocket", DELHIVERY: "Delhivery", EASYPOST: "EasyPost", SHIPPO: "Shippo" };
+const NAMES: Record<Provider, string> = {
+  SHIPROCKET: "Shiprocket",
+  DELHIVERY: "Delhivery",
+  EASYPOST: "EasyPost",
+  SHIPPO: "Shippo",
+  SHIPSTATION: "ShipStation",
+  SENDCLOUD: "Sendcloud",
+};
+
+/** Whether a service is connected, and whether it's in a test mode, from the view. */
+const accountOf = (data: ShippingView, id: Provider): { testMode: boolean } | null =>
+  id === "SHIPROCKET"
+    ? data.shiprocket
+    : id === "DELHIVERY"
+      ? data.delhivery && { testMode: data.delhivery.staging }
+      : id === "EASYPOST"
+        ? data.easypost
+        : id === "SHIPPO"
+          ? data.shippo
+          : id === "SHIPSTATION"
+            ? data.shipstation
+            : data.sendcloud;
 
 export default function ShippingPage() {
   const { session } = useAuth();
@@ -199,23 +232,16 @@ export default function ShippingPage() {
 
   const { settings } = data;
   const active = settings.provider;
-  const connected: Provider[] = SERVICES.map((s) => s.id).filter((id) =>
-    id === "SHIPROCKET" ? Boolean(data.shiprocket) : id === "DELHIVERY" ? Boolean(data.delhivery) : id === "EASYPOST" ? Boolean(data.easypost) : Boolean(data.shippo),
-  );
+  const connected: Provider[] = SERVICES.map((s) => s.id).filter((id) => Boolean(accountOf(data, id)));
   /** A service's test mode, whichever name its carrier gives it. */
-  const testing = (id: Provider) =>
-    id === "SHIPROCKET"
-      ? Boolean(data.shiprocket?.testMode)
-      : id === "DELHIVERY"
-        ? Boolean(data.delhivery?.staging)
-        : id === "EASYPOST"
-          ? Boolean(data.easypost?.testMode)
-          : Boolean(data.shippo?.testMode);
+  const testing = (id: Provider) => Boolean(accountOf(data, id)?.testMode);
   const testModeCopy: Record<Provider, string> = {
     SHIPROCKET: "Test mode is on: return labels are pretend and no courier is booked. Turn it off before real returns come in.",
     DELHIVERY: "Delhivery is on its staging environment: bookings are real calls that charge nothing and send no courier. Switch it to production before real returns come in.",
     EASYPOST: "EasyPost is connected with a test key: labels are test labels and no postage is bought. Reconnect with a production key before real returns come in.",
     SHIPPO: "Shippo is connected with a test token: labels are test labels and no postage is bought. Reconnect with a live token before real returns come in.",
+    SHIPSTATION: "ShipStation is making test labels, which it voids and never charges for. Turn that off under Manage before real returns come in.",
+    SENDCLOUD: "Sendcloud is in test mode: parcels are announced without a label and nothing is charged. Turn that off under Manage before real returns come in.",
   };
   const parcelDirty =
     parcel.lengthCm !== settings.parcel.lengthCm ||
@@ -239,6 +265,8 @@ export default function ShippingPage() {
     if (id === "DELHIVERY" && data.delhivery) return `Warehouse ${data.delhivery.warehouseName} · connected ${dateTime(data.delhivery.connectedAt)}`;
     if (id === "EASYPOST" && data.easypost) return `${data.easypost.testMode ? "Test key" : "Production key"} · connected ${dateTime(data.easypost.connectedAt)}`;
     if (id === "SHIPPO" && data.shippo) return `${data.shippo.testMode ? "Test token" : "Live token"} · connected ${dateTime(data.shippo.connectedAt)}`;
+    if (id === "SHIPSTATION" && data.shipstation) return `Billed in ${data.shipstation.currency} · connected ${dateTime(data.shipstation.connectedAt)}`;
+    if (id === "SENDCLOUD" && data.sendcloud) return `Sender ${data.sendcloud.senderAddress} · connected ${dateTime(data.sendcloud.connectedAt)}`;
     return "";
   };
 
@@ -533,6 +561,8 @@ function ConnectDialog({
   const [dl, setDl] = useState({ token: "", staging: true, warehouseName: "" });
   const [ep, setEp] = useState({ apiKey: "" });
   const [sp, setSp] = useState({ token: "" });
+  const [ss, setSs] = useState({ apiKey: "", apiSecret: "", currency: "USD" });
+  const [sc, setSc] = useState({ publicKey: "", secretKey: "", testMode: true });
 
   const ready =
     picked === "SHIPROCKET"
@@ -543,7 +573,11 @@ function ConnectDialog({
           ? Boolean(ep.apiKey.trim())
           : picked === "SHIPPO"
             ? Boolean(sp.token.trim())
-            : false;
+            : picked === "SHIPSTATION"
+              ? Boolean(ss.apiKey.trim() && ss.apiSecret.trim())
+              : picked === "SENDCLOUD"
+                ? Boolean(sc.publicKey.trim() && sc.secretKey.trim())
+                : false;
 
   const submit = () => {
     if (!picked || !ready) return;
@@ -554,7 +588,11 @@ function ConnectDialog({
           ? { token: dl.token.trim(), staging: dl.staging, warehouseName: dl.warehouseName.trim() }
           : picked === "EASYPOST"
             ? { apiKey: ep.apiKey.trim() }
-            : { token: sp.token.trim() };
+            : picked === "SHIPPO"
+              ? { token: sp.token.trim() }
+              : picked === "SHIPSTATION"
+                ? { apiKey: ss.apiKey.trim(), apiSecret: ss.apiSecret.trim(), currency: ss.currency.trim().toUpperCase() || "USD" }
+                : { publicKey: sc.publicKey.trim(), secretKey: sc.secretKey.trim(), testMode: sc.testMode };
     void onConnect(picked, body);
   };
 
@@ -657,6 +695,59 @@ function ConnectDialog({
             <span>
               <span className="radio-list__label">Use the staging environment (test mode)</span>
               <span className="radio-list__hint">Real calls that charge nothing and send no courier.</span>
+            </span>
+          </label>
+        </form>
+      ) : picked === "SHIPSTATION" ? (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit();
+          }}
+        >
+          <p className="settings-row__hint" style={{ marginBottom: 12 }}>
+            In ShipStation, open Account → API Settings and generate API keys. There's no sandbox: the app asks for test
+            labels, which ShipStation voids and never charges for, until you switch that off under Manage. ShipStation
+            doesn't report tracking, so returns are marked received by hand or from the carrier's own page.
+          </p>
+          <div className="field">
+            <label htmlFor="ss-key">API key</label>
+            <input id="ss-key" type="password" value={ss.apiKey} autoComplete="off" onChange={(e) => setSs({ ...ss, apiKey: e.target.value })} required />
+          </div>
+          <div className="field">
+            <label htmlFor="ss-secret">API secret</label>
+            <input id="ss-secret" type="password" value={ss.apiSecret} autoComplete="off" onChange={(e) => setSs({ ...ss, apiSecret: e.target.value })} required />
+          </div>
+          <div className="field">
+            <label htmlFor="ss-currency">Account currency</label>
+            <input id="ss-currency" type="text" value={ss.currency} maxLength={3} onChange={(e) => setSs({ ...ss, currency: e.target.value })} placeholder="USD" />
+          </div>
+        </form>
+      ) : picked === "SENDCLOUD" ? (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit();
+          }}
+        >
+          <p className="settings-row__hint" style={{ marginBottom: 12 }}>
+            In Sendcloud, open Settings → Integrations → API and create an integration; paste its public and secret key.
+            The account needs a sender address, which becomes where returns are delivered. Sendcloud has no sandbox: in
+            test mode parcels are announced without a label and nothing is charged.
+          </p>
+          <div className="field">
+            <label htmlFor="sc-public">Public key</label>
+            <input id="sc-public" type="text" value={sc.publicKey} autoComplete="off" onChange={(e) => setSc({ ...sc, publicKey: e.target.value })} required />
+          </div>
+          <div className="field">
+            <label htmlFor="sc-secret">Secret key</label>
+            <input id="sc-secret" type="password" value={sc.secretKey} autoComplete="off" onChange={(e) => setSc({ ...sc, secretKey: e.target.value })} required />
+          </div>
+          <label className="check-list__item">
+            <input type="checkbox" checked={sc.testMode} onChange={(e) => setSc({ ...sc, testMode: e.target.checked })} />
+            <span>
+              <span className="radio-list__label">Test mode</span>
+              <span className="radio-list__hint">Announce parcels without a label; nothing is charged.</span>
             </span>
           </label>
         </form>
@@ -906,6 +997,63 @@ function ManageDialog({
               >
                 Save
               </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {provider === "SHIPSTATION" && data.shipstation && (
+        <>
+          <div className="settings-row">
+            <div>
+              <div className="settings-row__label">Test labels</div>
+              <div className="settings-row__hint">ShipStation voids test labels and never charges for them. Off, labels buy real postage.</div>
+            </div>
+            <Switch
+              on={data.shipstation.testMode}
+              label="ShipStation test labels"
+              onChange={(testMode) => void run(() => api.patch(path, { testMode }, { auth: "admin" }), testMode ? "Test labels on." : "Test labels off — labels are real again.")}
+            />
+          </div>
+          <div className="settings-row">
+            <div>
+              <div className="settings-row__label">Tracking</div>
+              <div className="settings-row__hint">
+                ShipStation has no tracking API. The return page links to the carrier's own tracking; mark the return received when the parcel arrives.
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {provider === "SENDCLOUD" && data.sendcloud && (
+        <>
+          <div className="settings-row">
+            <div>
+              <div className="settings-row__label">Test mode</div>
+              <div className="settings-row__hint">Parcels are announced without a label and nothing is charged; the customer gets the app's test label.</div>
+            </div>
+            <Switch
+              on={data.sendcloud.testMode}
+              label="Sendcloud test mode"
+              onChange={(testMode) => void run(() => api.patch(path, { testMode }, { auth: "admin" }), testMode ? "Test mode on." : "Test mode off — labels are real again.")}
+            />
+          </div>
+          <div className="settings-row">
+            <div>
+              <div className="settings-row__label">Sender address</div>
+              <div className="settings-row__hint">{data.sendcloud.senderAddress} — the first sender address on the Sendcloud account.</div>
+            </div>
+          </div>
+          <div className="settings-row settings-row--stacked">
+            <div>
+              <div className="settings-row__label">Status webhook</div>
+              <div className="settings-row__hint">
+                In Sendcloud, open Settings → Integrations → your integration → Webhooks, and paste this URL. Sendcloud signs it with your secret key. Without it, open parcels are checked every half hour.
+              </div>
+            </div>
+            <div style={{ width: "100%" }}>
+              <CopyLink url={data.sendcloud.webhookUrl} label="Webhook URL" />
             </div>
           </div>
         </>

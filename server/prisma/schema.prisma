@@ -137,6 +137,8 @@ model Merchant {
   delhivery            DelhiveryAccount?
   easypost             EasyPostAccount?
   shippo               ShippoAccount?
+  shipstation          ShipStationAccount?
+  sendcloud            SendcloudAccount?
   shipping             ShippingSettings?
 
   @@map("merchants")
@@ -1289,6 +1291,9 @@ model ReturnShipment {
   trackingNumber     String?
   trackingUrl        String?
   labelUrl           String?
+  /// The label PDF itself, base64, for carriers that hand one over rather
+  /// than host it. Served at /api/shipping/label/:id.
+  labelData          String?
   status             ShipmentStatus    @default(PENDING)
   /// Cost of the label, for merchant reporting
   labelCost          Decimal?          @db.Decimal(12, 2)
@@ -1321,6 +1326,8 @@ enum ShipmentProvider {
   DELHIVERY
   EASYPOST
   SHIPPO
+  SHIPSTATION
+  SENDCLOUD
 }
 
 enum ShipmentStatus {
@@ -1446,6 +1453,43 @@ model ShippoAccount {
   updatedAt     DateTime @updatedAt
 
   @@map("shippo_accounts")
+}
+
+/// A store's ShipStation account: an API key and secret.
+model ShipStationAccount {
+  id         String   @id @default(cuid())
+  merchantId String   @unique
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  /// Both encrypted at rest by the service layer.
+  apiKey     String
+  apiSecret  String
+  /// Ask for test labels, which ShipStation voids and never charges for.
+  testLabels Boolean  @default(true)
+  /// What ShipStation bills the account in; it doesn't say on a rate.
+  currency   String   @default("USD")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("shipstation_accounts")
+}
+
+/// A store's Sendcloud account: a public and secret key.
+model SendcloudAccount {
+  id              String   @id @default(cuid())
+  merchantId      String   @unique
+  merchant        Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  /// Both encrypted at rest by the service layer.
+  publicKey       String
+  secretKey       String
+  /// The sender address on the Sendcloud account that stands for the store.
+  senderAddressId Int
+  senderAddress   String
+  /// Announce parcels without a label: nothing charged, the app's test label instead.
+  testMode        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("sendcloud_accounts")
 }
 
 model StoreCredit {

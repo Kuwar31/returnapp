@@ -371,9 +371,9 @@ export interface CourierQuote {
   recommended: boolean;
 }
 
-export type ShipmentProvider = "SHIPROCKET" | "DELHIVERY" | "EASYPOST" | "SHIPPO";
+export type ShipmentProvider = "SHIPROCKET" | "DELHIVERY" | "EASYPOST" | "SHIPPO" | "SHIPSTATION" | "SENDCLOUD";
 /** Carriers whose label the shopper prints and drops off, rather than a courier collecting. */
-export const DROP_OFF_PROVIDERS: ShipmentProvider[] = ["EASYPOST", "SHIPPO"];
+export const DROP_OFF_PROVIDERS: ShipmentProvider[] = ["EASYPOST", "SHIPPO", "SHIPSTATION", "SENDCLOUD"];
 
 export interface CourierQuotes {
   provider: ShipmentProvider;
@@ -425,6 +425,19 @@ export interface ShippingView {
     /** Connected with a test token: test labels, nothing charged. */
     testMode: boolean;
     /** Carries its own token, since Shippo doesn't sign webhooks. */
+    webhookUrl: string;
+  } | null;
+  shipstation: {
+    connectedAt: string;
+    /** Asks for test labels, which ShipStation voids and never charges for. */
+    testMode: boolean;
+    currency: string;
+  } | null;
+  sendcloud: {
+    connectedAt: string;
+    /** Announces without a label: nothing charged, the app's test label instead. */
+    testMode: boolean;
+    senderAddress: string;
     webhookUrl: string;
   } | null;
   webhookUrl: string;

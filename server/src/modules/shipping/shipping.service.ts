@@ -4,7 +4,9 @@ import { logger } from "../../lib/logger.js";
 import { prisma } from "../../lib/prisma.js";
 import * as delhivery from "./delhivery.service.js";
 import * as easypost from "./easypost.service.js";
+import * as sendcloud from "./sendcloud.service.js";
 import * as shippo from "./shippo.service.js";
+import * as shipstation from "./shipstation.service.js";
 import * as shiprocket from "./shiprocket.service.js";
 import { getSettings, type ShippingSettingsRow } from "./shipping.settings.js";
 import {
@@ -34,7 +36,8 @@ import {
  * carrier module the calls only it can make.
  */
 
-export { simulateTracking, testLabelHtml } from "./shipments.js";
+export { hostedLabelPdf, simulateTracking, testLabelHtml } from "./shipments.js";
+export { handleWebhook as handleSendcloudWebhook } from "./sendcloud.service.js";
 export { handleWebhook } from "./shiprocket.service.js";
 export { handleWebhook as handleEasyPostWebhook } from "./easypost.service.js";
 export { handleWebhook as handleShippoWebhook } from "./shippo.service.js";
@@ -60,6 +63,16 @@ const carrierFor = async (settings: ShippingSettingsRow) => {
     const account = await shippo.getAccount(merchantId);
     if (!account) throw unprocessable("Connect Shippo under Settings → Shipping first.");
     return { provider: "SHIPPO" as const, account };
+  }
+  if (settings.provider === "SHIPSTATION") {
+    const account = await shipstation.getAccount(merchantId);
+    if (!account) throw unprocessable("Connect ShipStation under Settings → Shipping first.");
+    return { provider: "SHIPSTATION" as const, account };
+  }
+  if (settings.provider === "SENDCLOUD") {
+    const account = await sendcloud.getAccount(merchantId);
+    if (!account) throw unprocessable("Connect Sendcloud under Settings → Shipping first.");
+    return { provider: "SENDCLOUD" as const, account };
   }
   const account = await delhivery.getAccount(merchantId);
   if (!account) throw unprocessable("Connect Delhivery under Settings → Shipping first.");
@@ -107,6 +120,10 @@ export const quoteCouriers = async (
     couriers = await easypost.quote(carrier.account, parcel, request.reference);
   } else if (carrier.provider === "SHIPPO") {
     couriers = await shippo.quote(carrier.account, parcel, request.reference);
+  } else if (carrier.provider === "SHIPSTATION") {
+    couriers = await shipstation.quote(carrier.account, parcel);
+  } else if (carrier.provider === "SENDCLOUD") {
+    couriers = await sendcloud.quote(carrier.account, parcel);
   } else {
     couriers = await delhivery.quote(carrier.account, parcel);
   }
@@ -160,6 +177,12 @@ export const createReturnLabel = async (
   }
   if (carrier.provider === "SHIPPO") {
     return shippo.book(request, carrier.account, parcel, orderId, actorId, { email, courierId });
+  }
+  if (carrier.provider === "SHIPSTATION") {
+    return shipstation.book(request, carrier.account, parcel, orderId, actorId, { email, courierId });
+  }
+  if (carrier.provider === "SENDCLOUD") {
+    return sendcloud.book(request, carrier.account, parcel, orderId, actorId, { email, courierId });
   }
   return delhivery.book(request, carrier.account, parcel, orderId, actorId, { email });
 };
@@ -222,6 +245,14 @@ export const refreshTracking = async (merchantId: string, returnId: string): Pro
     const account = await shippo.getAccount(merchantId);
     if (!account) throw unprocessable("Shippo is no longer connected, so this parcel can't be tracked.");
     await shippo.refresh(account, shipment);
+  } else if (shipment.provider === "SHIPSTATION") {
+    // ShipStation has no tracking API: the carrier's own page is the only word.
+    return prisma.returnShipment.update({ where: { id: shipment.id }, data: { lastTrackedAt: new Date() } });
+  } else if (shipment.provider === "SENDCLOUD") {
+    const account = await sendcloud.getAccount(merchantId);
+    if (!account) throw unprocessable("Sendcloud is no longer connected, so this parcel can't be tracked.");
+    if (shipment.isTest) return prisma.returnShipment.update({ where: { id: shipment.id }, data: { lastTrackedAt: new Date() } });
+    await sendcloud.refresh(account, shipment);
   } else {
     const account = await delhivery.getAccount(merchantId);
     if (!account) throw unprocessable("Delhivery is no longer connected, so this parcel can't be tracked.");
@@ -301,6 +332,12 @@ export const cancelLabel = async (
   } else if (shipment.provider === "SHIPPO") {
     const account = await shippo.getAccount(merchantId);
     problems = account ? await shippo.cancelCalls(account, shipment) : ["Shippo is no longer connected."];
+  } else if (shipment.provider === "SHIPSTATION") {
+    const account = await shipstation.getAccount(merchantId);
+    problems = account ? await shipstation.cancelCalls(account, shipment) : ["ShipStation is no longer connected."];
+  } else if (shipment.provider === "SENDCLOUD") {
+    const account = await sendcloud.getAccount(merchantId);
+    problems = account ? await sendcloud.cancelCalls(account, shipment) : ["Sendcloud is no longer connected."];
   } else {
     const account = await delhivery.getAccount(merchantId);
     problems = account ? await delhivery.cancelCalls(account, shipment) : ["Delhivery is no longer connected."];

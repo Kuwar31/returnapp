@@ -50,10 +50,12 @@ export const PROVIDER_NAMES: Record<ShipmentProvider, string> = {
   DELHIVERY: "Delhivery",
   EASYPOST: "EasyPost",
   SHIPPO: "Shippo",
+  SHIPSTATION: "ShipStation",
+  SENDCLOUD: "Sendcloud",
 };
 
 /** Carriers whose label the shopper prints and drops off, rather than a courier collecting. */
-export const DROP_OFF_PROVIDERS: ShipmentProvider[] = ["EASYPOST", "SHIPPO"];
+export const DROP_OFF_PROVIDERS: ShipmentProvider[] = ["EASYPOST", "SHIPPO", "SHIPSTATION", "SENDCLOUD"];
 
 /** What each carrier needs of a phone number; see `PhoneRule`. */
 export const PHONE_RULES: Record<ShipmentProvider, PhoneRule> = {
@@ -61,6 +63,8 @@ export const PHONE_RULES: Record<ShipmentProvider, PhoneRule> = {
   DELHIVERY: "INDIAN_MOBILE",
   EASYPOST: "ANY",
   SHIPPO: "ANY",
+  SHIPSTATION: "ANY",
+  SENDCLOUD: "ANY",
 };
 
 // ---------------------------------------------------------------------------
@@ -398,8 +402,26 @@ export const TEST_COURIERS: Array<Omit<CourierQuote, "shopRate" | "recommended">
 export const testLabelSignature = (shipmentId: string): string =>
   createHmac("sha256", env.JWT_SECRET).update(`test-label:${shipmentId}`).digest("hex").slice(0, 32);
 
-const testLabelUrl = (shipmentId: string) =>
+export const testLabelUrl = (shipmentId: string) =>
   `${env.APP_URL.replace(/\/+$/, "")}/api/shipping/test-label/${shipmentId}?sig=${testLabelSignature(shipmentId)}`;
+
+/**
+ * A label PDF a carrier handed over rather than hosted, served by this app
+ * under a signed link — the same guard as the test label, since the link
+ * goes out by email.
+ */
+export const hostedLabelSignature = (shipmentId: string): string =>
+  createHmac("sha256", env.JWT_SECRET).update(`label:${shipmentId}`).digest("hex").slice(0, 32);
+
+export const hostedLabelUrl = (shipmentId: string) =>
+  `${env.APP_URL.replace(/\/+$/, "")}/api/shipping/label/${shipmentId}?sig=${hostedLabelSignature(shipmentId)}`;
+
+export const hostedLabelPdf = async (shipmentId: string, sig: string | undefined): Promise<Buffer | null> => {
+  if (!sig || !safeEqual(sig, hostedLabelSignature(shipmentId))) return null;
+  const shipment = await prisma.returnShipment.findUnique({ where: { id: shipmentId }, select: { labelData: true, status: true } });
+  if (!shipment?.labelData || shipment.status === "CANCELLED") return null;
+  return Buffer.from(shipment.labelData, "base64");
+};
 
 /** "2026-09-13 14:05:00", Indian time, as the couriers' own scans read. */
 export const istStamp = (at: Date): string =>

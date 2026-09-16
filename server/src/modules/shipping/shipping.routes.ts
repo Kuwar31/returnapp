@@ -1,7 +1,14 @@
 import { Router } from "express";
 import { logger } from "../../lib/logger.js";
 import { asyncHandler } from "../../middleware/asyncHandler.js";
-import { handleEasyPostWebhook, handleShippoWebhook, handleWebhook, testLabelHtml } from "./shipping.service.js";
+import {
+  handleEasyPostWebhook,
+  handleSendcloudWebhook,
+  handleShippoWebhook,
+  handleWebhook,
+  hostedLabelPdf,
+  testLabelHtml,
+} from "./shipping.service.js";
 
 export const shippingRouter = Router();
 
@@ -20,6 +27,34 @@ shippingRouter.get(
       return;
     }
     res.type("text/html").send(html);
+  }),
+);
+
+/** A label PDF the app hosts for a carrier that handed one over. Signed link, as the test label. */
+shippingRouter.get(
+  "/label/:id",
+  asyncHandler(async (req, res) => {
+    const sig = typeof req.query.sig === "string" ? req.query.sig : undefined;
+    const pdf = await hostedLabelPdf(req.params.id, sig);
+    if (!pdf) {
+      res.status(404).type("text/plain").send("No such label.");
+      return;
+    }
+    res.type("application/pdf").setHeader("content-disposition", `inline; filename="return-label-${req.params.id}.pdf"`).send(pdf);
+  }),
+);
+
+/** Sendcloud's parcel-status webhook, signed over the raw body with the account's secret key. */
+shippingRouter.post(
+  "/sendcloud/events",
+  asyncHandler(async (req, res) => {
+    const raw = (req as typeof req & { rawBody?: Buffer }).rawBody ?? Buffer.from(JSON.stringify(req.body ?? {}));
+    const result = await handleSendcloudWebhook(raw, req.header("sendcloud-signature") ?? undefined, req.body);
+    if (result === "unauthorized") {
+      res.status(401).json({ error: "Bad signature" });
+      return;
+    }
+    res.json({ ok: true, result });
   }),
 );
 
