@@ -21,6 +21,7 @@ import * as destinationsService from "./destinations.service.js";
 import * as routing from "./routing.service.js";
 import * as shiprocket from "../shipping/shiprocket.service.js";
 import * as delhivery from "../shipping/delhivery.service.js";
+import * as easypost from "../shipping/easypost.service.js";
 import * as shippingSettings from "../shipping/shipping.settings.js";
 import { indianMobile } from "../shipping/addresses.js";
 import { inventoryAccessProblem } from "../shopify/locations.service.js";
@@ -1136,10 +1137,13 @@ settingsRouter.post(
 const cm = z.number().min(1).max(500);
 const shippingSettingsSchema = z
   .object({
-    provider: z.enum(["SHIPROCKET", "DELHIVERY"]).nullable(),
+    provider: z.enum(["SHIPROCKET", "DELHIVERY", "EASYPOST"]).nullable(),
     autoCreate: z.boolean(),
     receiveOnDelivery: z.boolean(),
     destinationId: z.string().min(1).max(60).nullable(),
+    shippingEmail: z
+      .union([z.string().trim().email().max(200), z.literal(""), z.null()])
+      .transform((v) => (v ? v : null)),
     lengthCm: cm,
     breadthCm: cm,
     heightCm: cm,
@@ -1160,10 +1164,11 @@ const readiness = (d: { phone: string | null; zip: string | null }) => ({
  * to say so here than at the first approval.
  */
 const shippingView = async (merchantId: string) => {
-  const [settings, sr, dl, destinations, destination] = await Promise.all([
+  const [settings, sr, dl, ep, destinations, destination] = await Promise.all([
     shippingSettings.getSettings(merchantId),
     shiprocket.getAccount(merchantId),
     delhivery.getAccount(merchantId),
+    easypost.getAccount(merchantId),
     destinationsService.listDestinations(merchantId),
     shippingSettings.deliveryDestination(merchantId),
   ]);
@@ -1171,6 +1176,7 @@ const shippingView = async (merchantId: string) => {
     settings: shippingSettings.serializeSettings(settings),
     shiprocket: sr ? shiprocket.serializeAccount(sr) : null,
     delhivery: dl ? delhivery.serializeAccount(dl) : null,
+    easypost: ep ? easypost.serializeAccount(ep) : null,
     webhookUrl: shiprocket.webhookUrl(),
     destinations: destinations.map((d) => ({ ...destinationsService.serializeDestination(d), ...readiness(d) })),
     /** Where parcels go today: the chosen destination, else the default. */
@@ -1196,6 +1202,9 @@ settingsRouter.patch(
     }
     if (req.body.provider === "DELHIVERY" && !(await delhivery.getAccount(merchantId))) {
       throw unprocessable("Connect Delhivery before choosing it.");
+    }
+    if (req.body.provider === "EASYPOST" && !(await easypost.getAccount(merchantId))) {
+      throw unprocessable("Connect EasyPost before choosing it.");
     }
     await shippingSettings.updateSettings(merchantId, req.body);
     res.json(await shippingView(merchantId));
@@ -1296,5 +1305,45 @@ settingsRouter.post(
   "/delhivery/test",
   asyncHandler(async (req, res) => {
     res.json(await delhivery.testConnection(req.admin!.merchantId));
+
+// --- EasyPost ---
+
+settingsRouter.post(
+  "/easypost/connect",
+  validate(z.object({ apiKey: z.string().trim().min(8).max(200) })),
+  asyncHandler(async (req, res) => {
+    const merchantId = req.admin!.merchantId;
+    await easypost.connectAccount(merchantId, req.body.apiKey);
+    const settings = await shippingSettings.getSettings(merchantId);
+    if (!settings.provider) await shippingSettings.updateSettings(merchantId, { provider: "EASYPOST" });
+    res.json(await shippingView(merchantId));
+  }),
+);
+
+settingsRouter.delete(
+  "/easypost",
+  asyncHandler(async (req, res) => {
+    const merchantId = req.admin!.merchantId;
+    await easypost.disconnectAccount(merchantId);
+    const settings = await shippingSettings.getSettings(merchantId);
+    if (settings.provider === "EASYPOST") await shippingSettings.updateSettings(merchantId, { provider: null });
+    res.json(await shippingView(merchantId));
+  }),
+);
+
+settingsRouter.post(
+  "/easypost/webhook-secret",
+  asyncHandler(async (req, res) => {
+    await easypost.rotateWebhookSecret(req.admin!.merchantId);
+    res.json(await shippingView(req.admin!.merchantId));
+  }),
+);
+
+settingsRouter.post(
+  "/easypost/test",
+  asyncHandler(async (req, res) => {
+    res.json(await easypost.testConnection(req.admin!.merchantId));
+  }),
+);
   }),
 );

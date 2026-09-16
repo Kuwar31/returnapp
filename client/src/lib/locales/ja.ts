@@ -170,6 +170,7 @@ export const ja: Dict = {
   "status.storeLink": "近くの店舗を探す",
   "status.label.title": "返品ラベル",
   "status.label.pickup": "{courier}がご住所まで荷物を集荷に伺います。梱包してご準備ください。",
+  "status.label.dropOff": "ラベルを印刷して荷物に貼り、{courier}にお持ち込みください。",
   "status.label.courier": "配送業者",
   "status.label.pickupOn": "集荷予定日：{date}",
   "status.label.tracking": "追跡番号",

@@ -24,7 +24,13 @@ export const createApp = () => {
   );
   // Shopify webhook signatures are computed over the raw bytes, so that one
   // route parses its own body and must skip the global JSON parser.
-  const jsonParser = express.json({ limit: "1mb" });
+  // Kept raw as well: EasyPost signs its webhooks over the bytes it sent.
+  const jsonParser = express.json({
+    limit: "1mb",
+    verify: (req, _res, buf) => {
+      (req as express.Request & { rawBody?: Buffer }).rawBody = buf;
+    },
+  });
   app.use((req, res, next) => {
     if (req.path === "/api/shopify/webhooks") return next();
     jsonParser(req, res, next);

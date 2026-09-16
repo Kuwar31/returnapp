@@ -173,6 +173,7 @@ export const da: Dict = {
   "status.storeLink": "Find en butik i nærheden",
   "status.label.title": "Din returlabel",
   "status.label.pickup": "{courier} afhenter pakken på din adresse. Hold den pakket og klar.",
+  "status.label.dropOff": "Print labelen, sæt den på pakken og aflever pakken hos {courier}.",
   "status.label.courier": "Fragtfirmaet",
   "status.label.pickupOn": "Afhentning planlagt til {date}.",
   "status.label.tracking": "Sporingsnummer",

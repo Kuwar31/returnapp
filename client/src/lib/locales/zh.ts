@@ -170,6 +170,7 @@ export const zh: Dict = {
   "status.storeLink": "查找附近的门店",
   "status.label.title": "您的退货标签",
   "status.label.pickup": "{courier}将上门取件，请提前打包好包裹。",
+  "status.label.dropOff": "请打印标签，贴在包裹上，然后交给{courier}。",
   "status.label.courier": "快递员",
   "status.label.pickupOn": "预约取件日期：{date}",
   "status.label.tracking": "运单号",

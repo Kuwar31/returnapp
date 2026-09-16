@@ -173,6 +173,7 @@ export const nl: Dict = {
   "status.storeLink": "Vind een winkel bij jou in de buurt",
   "status.label.title": "Je retourlabel",
   "status.label.pickup": "{courier} haalt het pakket op je adres op. Houd het ingepakt en klaar.",
+  "status.label.dropOff": "Print het label, plak het op je pakket en lever het pakket in bij {courier}.",
   "status.label.courier": "De koerier",
   "status.label.pickupOn": "Ophalen gepland op {date}.",
   "status.label.tracking": "Trackingnummer",

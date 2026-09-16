@@ -27,6 +27,8 @@ export const serializeSettings = (s: ShippingSettingsRow) => ({
   receiveOnDelivery: s.receiveOnDelivery,
   /** Null means the store's default destination. */
   destinationId: s.destinationId,
+  /** Null falls back to the store owner's address. */
+  shippingEmail: s.shippingEmail,
   parcel: {
     lengthCm: Number(s.lengthCm),
     breadthCm: Number(s.breadthCm),
@@ -40,6 +42,7 @@ export interface SettingsInput {
   autoCreate?: boolean;
   receiveOnDelivery?: boolean;
   destinationId?: string | null;
+  shippingEmail?: string | null;
   lengthCm?: number;
   breadthCm?: number;
   heightCm?: number;

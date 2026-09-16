@@ -183,6 +183,7 @@ export const ar: Dict = {
   "status.storeLink": "اعثر على متجر قريب منك",
   "status.label.title": "ملصق الإرجاع الخاص بك",
   "status.label.pickup": "سيقوم {courier} باستلام الطرد من عنوانك. أبقِه معبأً وجاهزًا.",
+  "status.label.dropOff": "اطبع الملصق وألصقه على الطرد ثم سلّم الطرد إلى {courier}.",
   "status.label.courier": "شركة الشحن",
   "status.label.pickupOn": "موعد الاستلام: {date}.",
   "status.label.tracking": "رقم التتبع",

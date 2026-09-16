@@ -51,6 +51,8 @@ export interface EmailReturn {
    */
   label?: {
     courier: string | null;
+    /** The shopper prints it and hands the parcel in; nobody collects it. */
+    dropOff: boolean;
     trackingNumber: string | null;
     trackingUrl: string | null;
     labelUrl: string;
@@ -271,7 +273,11 @@ const labelBlock = (request: EmailReturn): string => {
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px">
   <tr><td style="background:#eef6ff;border:1px solid #cfe1f7;border-radius:10px;padding:16px">
     <p style="margin:0 0 8px;font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#8c9196">Your return label</p>
-    <p style="margin:0;font-size:14px;line-height:1.6;color:#1a1a1c">${who} will collect the parcel from your address${day ? `, with pickup scheduled for ${esc(day)}` : ""}. Keep it packed and ready, and put the label on it if you can print it.</p>
+    <p style="margin:0;font-size:14px;line-height:1.6;color:#1a1a1c">${
+      label.dropOff
+        ? `Print the label, attach it to your parcel, and drop the parcel off with ${who}.`
+        : `${who} will collect the parcel from your address${day ? `, with pickup scheduled for ${esc(day)}` : ""}. Keep it packed and ready, and put the label on it if you can print it.`
+    }</p>
     ${label.trackingNumber ? `<p style="margin:6px 0 0;font-size:13px;color:#8c9196">Tracking number ${esc(label.trackingNumber)}</p>` : ""}
     <p style="margin:14px 0 0">${links}</p>
   </td></tr>
@@ -283,7 +289,11 @@ const labelText = (request: EmailReturn): string => {
   if (!label) return "";
   const day = pickupDay(label.pickupScheduledAt);
   return (
-    `\n\nYour return label\n${label.courier ?? "A courier"} will collect the parcel from your address${day ? `, with pickup scheduled for ${day}` : ""}. Keep it packed and ready.\n` +
+    `\n\nYour return label\n${
+      label.dropOff
+        ? `Print the label, attach it to your parcel, and drop the parcel off with ${label.courier ?? "the carrier"}.`
+        : `${label.courier ?? "A courier"} will collect the parcel from your address${day ? `, with pickup scheduled for ${day}` : ""}. Keep it packed and ready.`
+    }\n` +
     (label.trackingNumber ? `Tracking number: ${label.trackingNumber}\n` : "") +
     `Download label: ${label.labelUrl}\n` +
     (label.trackingUrl ? `Track parcel: ${label.trackingUrl}\n` : "")
@@ -303,12 +313,16 @@ export const approvedEmail = (
   const next = keeping
     ? `There's no need to send anything back — keep the items, and we'll process your ${esc(word)}.`
     : collected
-      ? `A courier will collect the items from you, and we'll process your ${esc(word)} as soon as they arrive.`
+      ? request.label?.dropOff
+        ? `Print the label below and drop the parcel off with the carrier; we'll process your ${esc(word)} as soon as it arrives.`
+        : `A courier will collect the items from you, and we'll process your ${esc(word)} as soon as they arrive.`
       : `Send the items back and we'll process your ${esc(word)} as soon as they arrive.`;
   const nextText = keeping
     ? `There's no need to send anything back — keep the items, and we'll process your ${word}.`
     : collected
-      ? `A courier will collect the items from you, and we'll process your ${word} as soon as they arrive.`
+      ? request.label?.dropOff
+        ? `Print the label below and drop the parcel off with the carrier; we'll process your ${word} as soon as it arrives.`
+        : `A courier will collect the items from you, and we'll process your ${word} as soon as they arrive.`
       : `Send the items back and we'll process your ${word} once they arrive.`;
   return {
     to: request.customerEmail,
@@ -348,12 +362,20 @@ export const labelReadyEmail = (
   html: shell({
     brand,
     heading: "Your return label is ready",
-    intro: `${greeting(request)} here's the return label for order #${esc(request.orderNumber)}. A courier will collect the parcel from your address — there's nothing to post.`,
+    intro: `${greeting(request)} here's the return label for order #${esc(request.orderNumber)}. ${
+      request.label?.dropOff
+        ? "Print it, attach it to your parcel, and drop the parcel off with the carrier."
+        : "A courier will collect the parcel from your address — there's nothing to post."
+    }`,
     body: labelBlock(request) + summaryBlock(request, "Estimated total"),
     ctaLabel: "View your return",
   }),
   text:
-    `${greeting(request)}\n\nHere's the return label for order #${request.orderNumber}. A courier will collect the parcel from your address — there's nothing to post.` +
+    `${greeting(request)}\n\nHere's the return label for order #${request.orderNumber}. ${
+      request.label?.dropOff
+        ? "Print it, attach it to your parcel, and drop the parcel off with the carrier."
+        : "A courier will collect the parcel from your address — there's nothing to post."
+    }` +
     labelText(request) +
     `\n\nReference: ${request.reference}\n\n${itemLinesText(request)}` +
     footerText(brand),

@@ -173,6 +173,7 @@ export const de: Dict = {
   "status.storeLink": "Filiale in Ihrer Nähe finden",
   "status.label.title": "Ihr Rücksendeetikett",
   "status.label.pickup": "{courier} holt das Paket an Ihrer Adresse ab. Halten Sie es verpackt bereit.",
+  "status.label.dropOff": "Drucken Sie das Etikett, bringen Sie es am Paket an und geben Sie das Paket bei {courier} ab.",
   "status.label.courier": "Der Kurier",
   "status.label.pickupOn": "Abholung geplant für {date}.",
   "status.label.tracking": "Sendungsnummer",

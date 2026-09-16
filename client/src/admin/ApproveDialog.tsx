@@ -72,7 +72,7 @@ export function ApproveDialog({
             disabled={busy || loading}
             onClick={() => onApprove({ bookLabel: chosen !== null, courierId: chosen?.courierId ?? null })}
           >
-            {busy ? "Approving…" : chosen ? "Approve & book pickup" : "Approve"}
+            {busy ? "Approving…" : chosen ? (quotes?.provider === "EASYPOST" ? "Approve & make label" : "Approve & book pickup") : "Approve"}
           </button>
         </>
       }
@@ -122,8 +122,8 @@ export function ApproveDialog({
                 </span>
               </span>
               <span className="svc__price">
-                <strong>{c.rate === null ? "Contract rate" : money(c.rate, "INR")}</strong>
-                {c.shopRate !== null && quotes.shopCurrency !== "INR" && (
+                <strong>{c.rate === null ? "Contract rate" : money(c.rate, c.currency)}</strong>
+                {c.shopRate !== null && quotes.shopCurrency !== c.currency && (
                   <span className="muted">≈ {money(c.shopRate, quotes.shopCurrency)}</span>
                 )}
               </span>

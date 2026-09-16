@@ -173,6 +173,7 @@ export const it: Dict = {
   "status.storeLink": "Trova un negozio vicino a te",
   "status.label.title": "La tua etichetta di reso",
   "status.label.pickup": "{courier} ritirerà il pacco al tuo indirizzo. Tienilo imballato e pronto.",
+  "status.label.dropOff": "Stampa l'etichetta, applicala al pacco e consegnalo a {courier}.",
   "status.label.courier": "Il corriere",
   "status.label.pickupOn": "Ritiro previsto per il {date}.",
   "status.label.tracking": "Numero di tracciamento",

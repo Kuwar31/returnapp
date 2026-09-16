@@ -179,6 +179,7 @@ export const pl: Dict = {
   "status.storeLink": "Znajdź sklep w pobliżu",
   "status.label.title": "Twoja etykieta zwrotu",
   "status.label.pickup": "{courier} odbierze paczkę z Twojego adresu. Miej ją zapakowaną i gotową.",
+  "status.label.dropOff": "Wydrukuj etykietę, naklej ją na paczkę i nadaj paczkę w {courier}.",
   "status.label.courier": "Kurier",
   "status.label.pickupOn": "Odbiór zaplanowany na {date}.",
   "status.label.tracking": "Numer śledzenia",

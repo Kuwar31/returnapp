@@ -3,9 +3,11 @@ import { notFound, unprocessable } from "../../lib/errors.js";
 import { logger } from "../../lib/logger.js";
 import { prisma } from "../../lib/prisma.js";
 import * as delhivery from "./delhivery.service.js";
+import * as easypost from "./easypost.service.js";
 import * as shiprocket from "./shiprocket.service.js";
 import { getSettings, type ShippingSettingsRow } from "./shipping.settings.js";
 import {
+  PHONE_RULES,
   PROVIDER_NAMES,
   TEST_COURIERS,
   bookTestLabel,
@@ -33,6 +35,7 @@ import {
 
 export { simulateTracking, testLabelHtml } from "./shipments.js";
 export { handleWebhook } from "./shiprocket.service.js";
+export { handleWebhook as handleEasyPostWebhook } from "./easypost.service.js";
 export type { CourierQuote } from "./shipments.js";
 
 /** The carrier that books this store's labels, with its account loaded. */
@@ -45,6 +48,11 @@ const carrierFor = async (settings: ShippingSettingsRow) => {
     const account = await shiprocket.getAccount(merchantId);
     if (!account) throw unprocessable("Connect Shiprocket under Settings → Shipping first.");
     return { provider: "SHIPROCKET" as const, account };
+  }
+  if (settings.provider === "EASYPOST") {
+    const account = await easypost.getAccount(merchantId);
+    if (!account) throw unprocessable("Connect EasyPost under Settings → Shipping first.");
+    return { provider: "EASYPOST" as const, account };
   }
   const account = await delhivery.getAccount(merchantId);
   if (!account) throw unprocessable("Connect Delhivery under Settings → Shipping first.");
@@ -73,23 +81,32 @@ export const quoteCouriers = async (
   const carrier = await carrierFor(settings);
   const request = await loadForLabel(merchantId, returnId);
   labelWanted(request);
-  const parcel = await parcelFor(request, settings);
+  const parcel = await parcelFor(request, settings, PHONE_RULES[carrier.provider]);
   const toShop = rupeesToShop(request.order);
-  const withShop = (rate: number | null) =>
-    rate === null || toShop === null ? null : Math.round(rate * toShop * 100) / 100;
+  /** The store's own figure: rupees through the order's rate, or the rate itself when already in the shop's currency. */
+  const withShop = (rate: number | null, currency: string) => {
+    if (rate === null) return null;
+    if (currency === request.order.currency) return rate;
+    if (currency === "INR" && toShop !== null) return Math.round(rate * toShop * 100) / 100;
+    return null;
+  };
 
   let couriers: CourierQuote[];
   if (carrier.provider === "SHIPROCKET") {
     couriers = carrier.account.testMode
       ? TEST_COURIERS.map((c, i) => ({ ...c, shopRate: null, recommended: i === 0 }))
       : await shiprocket.quote(merchantId, parcel);
+  } else if (carrier.provider === "EASYPOST") {
+    couriers = await easypost.quote(carrier.account, parcel, request.reference);
   } else {
     couriers = await delhivery.quote(carrier.account, parcel);
   }
   return {
     provider: carrier.provider,
     shopCurrency: request.order.currency,
-    couriers: couriers.map((c) => ({ ...c, shopRate: withShop(c.rate) })).sort(byRate),
+    couriers: couriers
+      .map((c) => ({ ...c, currency: c.currency ?? "INR", shopRate: withShop(c.rate, c.currency ?? "INR") }))
+      .sort(byRate),
   };
 };
 
@@ -117,7 +134,7 @@ export const createReturnLabel = async (
 
   let parcel;
   try {
-    parcel = await parcelFor(request, settings);
+    parcel = await parcelFor(request, settings, PHONE_RULES[carrier.provider]);
   } catch (error) {
     return failStep(carrier.provider, returnId, actorId, "checking addresses", error);
   }
@@ -128,6 +145,9 @@ export const createReturnLabel = async (
       return bookTestLabel("SHIPROCKET", request, orderId, actorId, { email, courierId });
     }
     return shiprocket.book(merchantId, request, carrier.account, parcel, orderId, actorId, { email, courierId });
+  }
+  if (carrier.provider === "EASYPOST") {
+    return easypost.book(request, carrier.account, parcel, orderId, actorId, { email, courierId });
   }
   return delhivery.book(request, carrier.account, parcel, orderId, actorId, { email });
 };
@@ -182,6 +202,10 @@ export const refreshTracking = async (merchantId: string, returnId: string): Pro
   }
   if (shipment.provider === "SHIPROCKET") {
     await shiprocket.refresh(merchantId, shipment);
+  } else if (shipment.provider === "EASYPOST") {
+    const account = await easypost.getAccount(merchantId);
+    if (!account) throw unprocessable("EasyPost is no longer connected, so this parcel can't be tracked.");
+    await easypost.refresh(account, shipment);
   } else {
     const account = await delhivery.getAccount(merchantId);
     if (!account) throw unprocessable("Delhivery is no longer connected, so this parcel can't be tracked.");
@@ -255,6 +279,9 @@ export const cancelLabel = async (
   if (shipment.provider === "SHIPROCKET") {
     // A pretend booking exists nowhere but here.
     if (!shipment.isTest) problems = await shiprocket.cancelCalls(merchantId, shipment);
+  } else if (shipment.provider === "EASYPOST") {
+    const account = await easypost.getAccount(merchantId);
+    problems = account ? await easypost.cancelCalls(account, shipment) : ["EasyPost is no longer connected."];
   } else {
     const account = await delhivery.getAccount(merchantId);
     problems = account ? await delhivery.cancelCalls(account, shipment) : ["Delhivery is no longer connected."];

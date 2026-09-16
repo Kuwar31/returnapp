@@ -74,6 +74,8 @@ const schema = z.object({
   // carrier. Overridden only to point a probe at a stand-in.
   DELHIVERY_API_URL: z.string().url().default("https://track.delhivery.com"),
   DELHIVERY_STAGING_URL: z.string().url().default("https://staging-express.delhivery.com"),
+  // EasyPost's API. A test key against it is that carrier's test mode.
+  EASYPOST_API_URL: z.string().url().default("https://api.easypost.com/v2"),
   // How often open shipments are asked for tracking, for stores without the
   // webhook set up. Zero turns it off, as on a second instance.
   TRACKING_SWEEP_MINUTES: z.coerce.number().int().min(0).max(1440).default(30),

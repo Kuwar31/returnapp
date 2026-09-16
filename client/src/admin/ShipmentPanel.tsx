@@ -44,6 +44,8 @@ export function ShipmentPanel({
   const askedForLabel = detail.returnMethod?.kind === "LABEL";
   const keeping = detail.returnMethod?.kind === "KEEP";
   const test = Boolean(shipment?.isTest);
+  /** A printed drop-off label rather than a courier at the door. */
+  const dropOff = shipment?.provider === "EASYPOST";
 
   // Before approval the choosing happens in the approval dialog instead.
   const pending = false;
@@ -108,7 +110,7 @@ export function ShipmentPanel({
         <h2>Return label</h2>
         {shipment && (
           <span className={`chip ship-chip ship-chip--${shipment.status.toLowerCase()}`}>
-            {STATUS_COPY[shipment.status]}
+            {shipment.status === "LABEL_CREATED" && dropOff ? "Label ready" : STATUS_COPY[shipment.status]}
             {test && " · Test"}
           </span>
         )}
@@ -147,7 +149,7 @@ export function ShipmentPanel({
             )}
             {shipment.trackingNumber && (
               <div className="kv">
-                <dt>AWB</dt>
+                <dt>Tracking</dt>
                 <dd>
                   {shipment.trackingUrl ? (
                     <a href={shipment.trackingUrl} target="_blank" rel="noreferrer">
@@ -268,8 +270,8 @@ export function ShipmentPanel({
                 </span>
               </span>
               <span className="svc__price">
-                <strong>{c.rate === null ? "Contract rate" : money(c.rate, "INR")}</strong>
-                {c.shopRate !== null && quotes.shopCurrency !== "INR" && (
+                <strong>{c.rate === null ? "Contract rate" : money(c.rate, c.currency)}</strong>
+                {c.shopRate !== null && quotes.shopCurrency !== c.currency && (
                   <span className="muted">≈ {money(c.shopRate, quotes.shopCurrency)}</span>
                 )}
               </span>

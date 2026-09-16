@@ -173,6 +173,7 @@ export const sv: Dict = {
   "status.storeLink": "Hitta en butik nära dig",
   "status.label.title": "Din returetikett",
   "status.label.pickup": "{courier} hämtar paketet på din adress. Ha det packat och klart.",
+  "status.label.dropOff": "Skriv ut etiketten, fäst den på paketet och lämna in paketet hos {courier}.",
   "status.label.courier": "Transportören",
   "status.label.pickupOn": "Upphämtning planerad {date}.",
   "status.label.tracking": "Spårningsnummer",

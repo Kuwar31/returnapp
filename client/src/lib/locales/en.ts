@@ -216,6 +216,7 @@ export const en = {
   "status.storeLink": "Find a store near you",
   "status.label.title": "Your return label",
   "status.label.pickup": "{courier} will collect the parcel from your address. Keep it packed and ready.",
+  "status.label.dropOff": "Print the label, attach it to your parcel, and drop the parcel off with {courier}.",
   "status.label.courier": "The courier",
   "status.label.pickupOn": "Pickup scheduled for {date}.",
   "status.label.tracking": "Tracking number",

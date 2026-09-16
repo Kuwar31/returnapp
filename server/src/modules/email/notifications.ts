@@ -100,6 +100,8 @@ const loadContext = async (returnRequestId: string) => {
       !["CANCELLED", "FAILED"].includes(request.shipment.status)
         ? {
             courier: request.shipment.carrier,
+            // A drop-off label: printed and handed in, no courier at the door.
+            dropOff: request.shipment.provider === "EASYPOST",
             trackingNumber: request.shipment.trackingNumber,
             trackingUrl: request.shipment.trackingUrl,
             labelUrl: request.shipment.labelUrl,

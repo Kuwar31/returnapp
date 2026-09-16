@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { logger } from "../../lib/logger.js";
 import { asyncHandler } from "../../middleware/asyncHandler.js";
-import { handleWebhook, testLabelHtml } from "./shipping.service.js";
+import { handleEasyPostWebhook, handleWebhook, testLabelHtml } from "./shipping.service.js";
 
 export const shippingRouter = Router();
 
@@ -42,6 +42,24 @@ shippingRouter.post(
     if (result === "unauthorized") {
       logger.warn("Rejected a shipping webhook with an unknown key");
       res.status(401).json({ error: "Unknown webhook token" });
+      return;
+    }
+    res.json({ ok: true, result });
+  }),
+);
+
+/**
+ * EasyPost's tracker webhook. Signed over the raw body with the secret the
+ * merchant pasted into EasyPost; the parcel names the store, and the
+ * store's secret checks the signature.
+ */
+shippingRouter.post(
+  "/easypost/events",
+  asyncHandler(async (req, res) => {
+    const raw = (req as typeof req & { rawBody?: Buffer }).rawBody ?? Buffer.from(JSON.stringify(req.body ?? {}));
+    const result = await handleEasyPostWebhook(raw, req.header("x-hmac-signature") ?? undefined, req.body);
+    if (result === "unauthorized") {
+      res.status(401).json({ error: "Bad signature" });
       return;
     }
     res.json({ ok: true, result });

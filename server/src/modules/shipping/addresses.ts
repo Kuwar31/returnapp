@@ -88,12 +88,24 @@ export interface Party {
   address1: string;
   address2: string;
   city: string;
+  /** The state's name, as Indian carriers want it. */
   state: string;
+  /** The state's code as the order had it — "KA", "CA" — for carriers abroad. */
+  stateCode: string;
   country: string;
+  /** ISO 3166-1 alpha-2. */
+  countryCode: string;
   pincode: string;
   phone: string;
   email: string;
 }
+
+/**
+ * What a carrier needs of a phone number. Indian couriers dial a 10-digit
+ * mobile for the pickup and refuse anything else; a drop-off label abroad
+ * carries whatever number there is, or none.
+ */
+export type PhoneRule = "INDIAN_MOBILE" | "ANY";
 
 /** Both names, as one line. */
 export const fullName = (p: Party): string => `${p.firstName} ${p.lastName}`.trim();
@@ -118,6 +130,7 @@ const shopperPhone = async (
   merchantId: string,
   order: { id: string; externalId: string | null; phone: string | null },
   address: Record<string, unknown>,
+  rule: PhoneRule,
 ): Promise<string> => {
   if (order.phone) return order.phone;
   const onAddress = str(address, "phone");
@@ -129,6 +142,8 @@ const shopperPhone = async (
     await prisma.order.update({ where: { id: order.id }, data: { phone } });
     return phone;
   }
+  // A label that doesn't need a number goes without one.
+  if (rule === "ANY") return "";
   // Say why, since "the order has no number" is often untrue: Shopify has
   // one and won't hand it over until the app is approved for the field.
   const fix = "Enter the customer's number on the return, then book again.";
@@ -161,6 +176,7 @@ export const shopperParty = async (
     customerName: string | null;
   },
   reference: string,
+  rule: PhoneRule = "INDIAN_MOBILE",
 ): Promise<Party> => {
   const a =
     order.shippingAddress && typeof order.shippingAddress === "object"
@@ -178,13 +194,20 @@ export const shopperParty = async (
       `Order for ${reference} has no complete shipping address to collect the parcel from.`,
     );
   }
-  const raw = await shopperPhone(merchantId, order, a);
-  const phone = indianMobile(raw);
-  if (!phone) {
-    throw unprocessable(
-      `The order's phone number, ${raw}, isn't a 10-digit Indian mobile number, which the courier needs for the pickup. Add one on the return, then book again.`,
-    );
+  const raw = await shopperPhone(merchantId, order, a, rule);
+  let phone: string;
+  if (rule === "ANY") {
+    phone = raw.replace(/[^\d+]/g, "");
+  } else {
+    const mobile = indianMobile(raw);
+    if (!mobile) {
+      throw unprocessable(
+        `The order's phone number, ${raw}, isn't a 10-digit Indian mobile number, which the courier needs for the pickup. Add one on the return, then book again.`,
+      );
+    }
+    phone = mobile;
   }
+  const countryCode = str(a, "countryCodeV2", "country_code", "countryCode") ?? "IN";
   return {
     firstName,
     lastName: rest.join(" "),
@@ -192,8 +215,9 @@ export const shopperParty = async (
     address2: str(a, "address2") ?? "",
     city,
     state: str(a, "province") ?? stateName(str(a, "provinceCode", "province_code")) ?? "",
-    country:
-      str(a, "country") ?? countryName(str(a, "countryCodeV2", "country_code", "countryCode")) ?? "India",
+    stateCode: str(a, "provinceCode", "province_code") ?? str(a, "province") ?? "",
+    country: str(a, "country") ?? countryName(countryCode) ?? "India",
+    countryCode: countryCode.toUpperCase(),
     pincode,
     phone,
     email: order.email,
@@ -216,6 +240,7 @@ export const destinationParty = async (
   merchantId: string,
   destination: DestinationLike | null,
   merchantEmail: string | null,
+  rule: PhoneRule = "INDIAN_MOBILE",
 ): Promise<Party> => {
   const d = destination ?? (await defaultDestination(merchantId));
   if (!d) {
@@ -223,11 +248,17 @@ export const destinationParty = async (
       "Add a return destination under Return policies → Destinations first; it's where the courier delivers.",
     );
   }
-  const phone = indianMobile(d.phone);
-  if (!phone) {
-    throw unprocessable(
-      `Give the return destination "${d.name}" a 10-digit Indian mobile number — the courier needs one for the delivery.`,
-    );
+  let phone: string;
+  if (rule === "ANY") {
+    phone = (d.phone ?? "").replace(/[^\d+]/g, "");
+  } else {
+    const mobile = indianMobile(d.phone);
+    if (!mobile) {
+      throw unprocessable(
+        `Give the return destination "${d.name}" a 10-digit Indian mobile number — the courier needs one for the delivery.`,
+      );
+    }
+    phone = mobile;
   }
   if (!d.zip) throw unprocessable(`Give the return destination "${d.name}" a postcode.`);
   return {
@@ -237,7 +268,9 @@ export const destinationParty = async (
     address2: d.address2 ?? "",
     city: d.city,
     state: stateName(d.province) ?? "",
+    stateCode: d.province ?? "",
     country: countryName(d.countryCode) ?? "India",
+    countryCode: d.countryCode.toUpperCase(),
     pincode: d.zip,
     phone,
     email: merchantEmail ?? "",

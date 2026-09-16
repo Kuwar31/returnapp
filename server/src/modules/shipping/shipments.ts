@@ -8,7 +8,7 @@ import { toDecimal } from "../../lib/money.js";
 import { prisma } from "../../lib/prisma.js";
 import { notify } from "../email/notifications.js";
 import { changeStatus, markReceived } from "../returns/returns.service.js";
-import { destinationParty, fullName, shopperParty, type Party } from "./addresses.js";
+import { destinationParty, fullName, shopperParty, type Party, type PhoneRule } from "./addresses.js";
 import { getSettings, type ShippingSettingsRow } from "./shipping.settings.js";
 import {
   describeStatus,
@@ -48,6 +48,14 @@ export const friendly = (error: unknown, fallback: string): Error => {
 export const PROVIDER_NAMES: Record<ShipmentProvider, string> = {
   SHIPROCKET: "Shiprocket",
   DELHIVERY: "Delhivery",
+  EASYPOST: "EasyPost",
+};
+
+/** What each carrier needs of a phone number; see `PhoneRule`. */
+export const PHONE_RULES: Record<ShipmentProvider, PhoneRule> = {
+  SHIPROCKET: "INDIAN_MOBILE",
+  DELHIVERY: "INDIAN_MOBILE",
+  EASYPOST: "ANY",
 };
 
 // ---------------------------------------------------------------------------
@@ -96,12 +104,15 @@ export interface Parcel {
 export const parcelFor = async (
   request: LabelRequest,
   settings: ShippingSettingsRow,
+  rule: PhoneRule = "INDIAN_MOBILE",
 ): Promise<Parcel> => {
-  const from = await shopperParty(request.merchantId, request.order, request.reference);
+  const from = await shopperParty(request.merchantId, request.order, request.reference, rule);
   const to = await destinationParty(
     request.merchantId,
     request.regionalPolicy?.destination ?? settings.destination ?? null,
-    request.merchant.email,
+    // The shipping email, when the store gave one: it's what goes on the label.
+    settings.shippingEmail ?? request.merchant.email,
+    rule,
   );
   const items = request.lineItems
     .filter((line) => !line.keepItem)
@@ -223,8 +234,10 @@ export const finishBooking = async (
 export interface CourierQuote {
   courierId: number;
   name: string;
-  /** Rupees. Null when the carrier bills at contract rates it doesn't quote. */
+  /** In `currency`. Null when the carrier bills at contract rates it doesn't quote. */
   rate: number | null;
+  /** ISO code of `rate`; rupees when absent, which is what Indian carriers quote in. */
+  currency?: string;
   /** The same in the store's currency, when the order's rate makes that possible. */
   shopRate: number | null;
   etd: string | null;

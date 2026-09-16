@@ -135,6 +135,7 @@ model Merchant {
   integrations         Integration[]
   shiprocket           ShiprocketAccount?
   delhivery            DelhiveryAccount?
+  easypost             EasyPostAccount?
   shipping             ShippingSettings?
 
   @@map("merchants")
@@ -1317,6 +1318,7 @@ model ReturnShipment {
 enum ShipmentProvider {
   SHIPROCKET
   DELHIVERY
+  EASYPOST
 }
 
 enum ShipmentStatus {
@@ -1350,6 +1352,9 @@ model ShippingSettings {
   breadthCm         Decimal           @default(15) @db.Decimal(8, 2)
   heightCm          Decimal           @default(10) @db.Decimal(8, 2)
   weightKg          Decimal           @default(0.5) @db.Decimal(8, 3)
+  /// The address carriers write to about labels and deliveries; some need
+  /// one on the label. Null falls back to the store owner's.
+  shippingEmail     String?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
@@ -1404,6 +1409,24 @@ model DelhiveryAccount {
   updatedAt     DateTime @updatedAt
 
   @@map("delhivery_accounts")
+}
+
+/// A store's EasyPost account: one API key. A test key (EZTK…) is the test
+/// mode — real calls, test labels, nothing charged.
+model EasyPostAccount {
+  id            String   @id @default(cuid())
+  merchantId    String   @unique
+  merchant      Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  /// Encrypted at rest by the service layer before it lands here.
+  apiKey        String
+  /// Whether the key is a test key, read off its prefix when connected.
+  testMode      Boolean  @default(true)
+  /// Signs EasyPost's tracker webhooks; unique so the sender is known from it.
+  webhookSecret String   @unique
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("easypost_accounts")
 }
 
 model StoreCredit {

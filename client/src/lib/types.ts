@@ -326,7 +326,7 @@ export interface ShipmentScan {
 }
 
 export interface ReturnShipment {
-  provider: "SHIPROCKET" | "DELHIVERY" | null;
+  provider: "SHIPROCKET" | "DELHIVERY" | "EASYPOST" | null;
   /** Booked in test mode: no courier exists, tracking is simulated. */
   isTest: boolean;
   /** The courier service chosen when it was booked. */
@@ -357,8 +357,10 @@ export interface ReturnShipment {
 export interface CourierQuote {
   courierId: number;
   name: string;
-  /** Rupees. Null when the carrier bills at contract rates it doesn't quote. */
+  /** In `currency`. Null when the carrier bills at contract rates it doesn't quote. */
   rate: number | null;
+  /** ISO code of `rate`. */
+  currency: string;
   /** The same in the store's currency, when the order's rate allows it. */
   shopRate: number | null;
   etd: string | null;
@@ -370,7 +372,7 @@ export interface CourierQuote {
 }
 
 export interface CourierQuotes {
-  provider: "SHIPROCKET" | "DELHIVERY";
+  provider: "SHIPROCKET" | "DELHIVERY" | "EASYPOST";
   couriers: CourierQuote[];
   shopCurrency: string;
 }
@@ -382,11 +384,13 @@ export type DeliveryDestination = ReturnDestination & { hasPhone: boolean; hasZi
 export interface ShippingView {
   settings: {
     /** Which carrier books labels; null until one is chosen. */
-    provider: "SHIPROCKET" | "DELHIVERY" | null;
+    provider: "SHIPROCKET" | "DELHIVERY" | "EASYPOST" | null;
     autoCreate: boolean;
     receiveOnDelivery: boolean;
     /** The destination parcels go to; null means the store's default. */
     destinationId: string | null;
+    /** What carriers write to about labels; null falls back to the owner's. */
+    shippingEmail: string | null;
     parcel: { lengthCm: number; breadthCm: number; heightCm: number; weightKg: number };
   };
   shiprocket: {
@@ -404,6 +408,13 @@ export interface ShippingView {
     /** Delhivery's staging environment — its test mode. */
     staging: boolean;
     warehouseName: string;
+  } | null;
+  easypost: {
+    connectedAt: string;
+    /** Connected with a test key: test labels, nothing charged. */
+    testMode: boolean;
+    webhookUrl: string;
+    webhookSecret: string;
   } | null;
   webhookUrl: string;
   destinations: DeliveryDestination[];

@@ -288,7 +288,9 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
           {!dead && label && (
             <Section title={t("status.label.title")}>
               <p className="confirm__method-text" style={{ margin: 0 }}>
-                {t("status.label.pickup", { courier: label.carrier ?? t("status.label.courier") })}
+                {label.provider === "EASYPOST"
+                  ? t("status.label.dropOff", { courier: label.carrier ?? t("status.label.courier") })
+                  : t("status.label.pickup", { courier: label.carrier ?? t("status.label.courier") })}
                 {label.pickupScheduledAt &&
                   ` ${t("status.label.pickupOn", { date: shortDate(label.pickupScheduledAt) })}`}
               </p>

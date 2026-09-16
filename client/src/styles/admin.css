@@ -4098,47 +4098,122 @@ table.data tbody tr:hover {
   max-width: 680px;
 }
 
-/* ---------- shipping: the carrier cards ---------- */
+/* ---------- shipping: services, as Loop lists them ---------- */
 
-.carriers {
+.services {
   display: grid;
-  gap: 16px;
+  gap: 10px;
+  margin: 12px 0 0;
 }
 
-.carrier.is-active {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
-}
-
-.carrier__head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 6px;
-}
-
-.carrier__head h2 {
-  margin-bottom: 2px;
-}
-
-.carrier__use {
+.services__empty {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 16px 18px;
+  border-radius: var(--radius);
+  background: #f4f4f5;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.services__foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.service-row,
+.connect-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.connect-row {
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  padding: 14px 4px;
+}
+
+.connect-row:last-child {
+  border-bottom: none;
+}
+
+.service-row__logo {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
   flex: none;
-  font-size: 13.5px;
+  border-radius: 10px;
+  background: #eef0ff;
+  color: #3730a3;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.service-row__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.service-row__name {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 14.5px;
   font-weight: 600;
-  cursor: pointer;
 }
 
-.carrier__use input {
-  accent-color: var(--accent);
+.service-row__meta {
+  font-size: 13px;
+  color: var(--text-muted);
 }
 
-.carrier__use.is-disabled {
-  opacity: 0.5;
-  cursor: default;
+.service-row__actions {
+  flex: none;
+  display: flex;
+  gap: 8px;
+}
+
+.connect-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.label-defaults {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 20px;
+}
+
+.label-defaults__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chip--accent {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+@media (max-width: 720px) {
+  .label-defaults {
+    grid-template-columns: 1fr;
+  }
 }
 
 .badge--warn {
