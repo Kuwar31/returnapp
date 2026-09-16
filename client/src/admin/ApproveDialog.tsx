@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { money } from "../lib/format";
-import type { CourierQuote, CourierQuotes, ReturnDetail } from "../lib/types";
+import { DROP_OFF_PROVIDERS, type CourierQuote, type CourierQuotes, type ReturnDetail } from "../lib/types";
 import { Modal } from "./Modal";
 
 /**
@@ -72,7 +72,7 @@ export function ApproveDialog({
             disabled={busy || loading}
             onClick={() => onApprove({ bookLabel: chosen !== null, courierId: chosen?.courierId ?? null })}
           >
-            {busy ? "Approving…" : chosen ? (quotes?.provider === "EASYPOST" ? "Approve & make label" : "Approve & book pickup") : "Approve"}
+            {busy ? "Approving…" : chosen ? (quotes && DROP_OFF_PROVIDERS.includes(quotes.provider) ? "Approve & make label" : "Approve & book pickup") : "Approve"}
           </button>
         </>
       }

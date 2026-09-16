@@ -136,6 +136,7 @@ model Merchant {
   shiprocket           ShiprocketAccount?
   delhivery            DelhiveryAccount?
   easypost             EasyPostAccount?
+  shippo               ShippoAccount?
   shipping             ShippingSettings?
 
   @@map("merchants")
@@ -1319,6 +1320,7 @@ enum ShipmentProvider {
   SHIPROCKET
   DELHIVERY
   EASYPOST
+  SHIPPO
 }
 
 enum ShipmentStatus {
@@ -1427,6 +1429,23 @@ model EasyPostAccount {
   updatedAt     DateTime @updatedAt
 
   @@map("easypost_accounts")
+}
+
+/// A store's Shippo account: one API token. A test token (shippo_test_…) is
+/// the test mode.
+model ShippoAccount {
+  id            String   @id @default(cuid())
+  merchantId    String   @unique
+  merchant      Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  /// Encrypted at rest by the service layer before it lands here.
+  token         String
+  testMode      Boolean  @default(true)
+  /// Shippo doesn't sign webhooks; this rides in the webhook URL and names the store.
+  webhookSecret String   @unique
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("shippo_accounts")
 }
 
 model StoreCredit {

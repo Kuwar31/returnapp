@@ -4,6 +4,7 @@ import { logger } from "../../lib/logger.js";
 import { prisma } from "../../lib/prisma.js";
 import * as delhivery from "./delhivery.service.js";
 import * as easypost from "./easypost.service.js";
+import * as shippo from "./shippo.service.js";
 import * as shiprocket from "./shiprocket.service.js";
 import { getSettings, type ShippingSettingsRow } from "./shipping.settings.js";
 import {
@@ -36,6 +37,7 @@ import {
 export { simulateTracking, testLabelHtml } from "./shipments.js";
 export { handleWebhook } from "./shiprocket.service.js";
 export { handleWebhook as handleEasyPostWebhook } from "./easypost.service.js";
+export { handleWebhook as handleShippoWebhook } from "./shippo.service.js";
 export type { CourierQuote } from "./shipments.js";
 
 /** The carrier that books this store's labels, with its account loaded. */
@@ -53,6 +55,11 @@ const carrierFor = async (settings: ShippingSettingsRow) => {
     const account = await easypost.getAccount(merchantId);
     if (!account) throw unprocessable("Connect EasyPost under Settings → Shipping first.");
     return { provider: "EASYPOST" as const, account };
+  }
+  if (settings.provider === "SHIPPO") {
+    const account = await shippo.getAccount(merchantId);
+    if (!account) throw unprocessable("Connect Shippo under Settings → Shipping first.");
+    return { provider: "SHIPPO" as const, account };
   }
   const account = await delhivery.getAccount(merchantId);
   if (!account) throw unprocessable("Connect Delhivery under Settings → Shipping first.");
@@ -98,6 +105,8 @@ export const quoteCouriers = async (
       : await shiprocket.quote(merchantId, parcel);
   } else if (carrier.provider === "EASYPOST") {
     couriers = await easypost.quote(carrier.account, parcel, request.reference);
+  } else if (carrier.provider === "SHIPPO") {
+    couriers = await shippo.quote(carrier.account, parcel, request.reference);
   } else {
     couriers = await delhivery.quote(carrier.account, parcel);
   }
@@ -148,6 +157,9 @@ export const createReturnLabel = async (
   }
   if (carrier.provider === "EASYPOST") {
     return easypost.book(request, carrier.account, parcel, orderId, actorId, { email, courierId });
+  }
+  if (carrier.provider === "SHIPPO") {
+    return shippo.book(request, carrier.account, parcel, orderId, actorId, { email, courierId });
   }
   return delhivery.book(request, carrier.account, parcel, orderId, actorId, { email });
 };
@@ -206,6 +218,10 @@ export const refreshTracking = async (merchantId: string, returnId: string): Pro
     const account = await easypost.getAccount(merchantId);
     if (!account) throw unprocessable("EasyPost is no longer connected, so this parcel can't be tracked.");
     await easypost.refresh(account, shipment);
+  } else if (shipment.provider === "SHIPPO") {
+    const account = await shippo.getAccount(merchantId);
+    if (!account) throw unprocessable("Shippo is no longer connected, so this parcel can't be tracked.");
+    await shippo.refresh(account, shipment);
   } else {
     const account = await delhivery.getAccount(merchantId);
     if (!account) throw unprocessable("Delhivery is no longer connected, so this parcel can't be tracked.");
@@ -282,6 +298,9 @@ export const cancelLabel = async (
   } else if (shipment.provider === "EASYPOST") {
     const account = await easypost.getAccount(merchantId);
     problems = account ? await easypost.cancelCalls(account, shipment) : ["EasyPost is no longer connected."];
+  } else if (shipment.provider === "SHIPPO") {
+    const account = await shippo.getAccount(merchantId);
+    problems = account ? await shippo.cancelCalls(account, shipment) : ["Shippo is no longer connected."];
   } else {
     const account = await delhivery.getAccount(merchantId);
     problems = account ? await delhivery.cancelCalls(account, shipment) : ["Delhivery is no longer connected."];

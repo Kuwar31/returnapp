@@ -2,7 +2,7 @@ import { useState } from "react";
 import { data, Link, useParams, useRevalidator } from "react-router";
 import { api } from "../lib/api";
 import { money, shortDate } from "../lib/format";
-import type { ReturnDetail, ReturnStatus } from "../lib/types";
+import { DROP_OFF_PROVIDERS, type ReturnDetail, type ReturnStatus } from "../lib/types";
 import { ErrorAlert } from "../components/Feedback";
 import { at, type Key, type TranslateFn } from "../lib/i18n";
 import { usePortal, useT } from "./PortalLayout";
@@ -288,7 +288,7 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
           {!dead && label && (
             <Section title={t("status.label.title")}>
               <p className="confirm__method-text" style={{ margin: 0 }}>
-                {label.provider === "EASYPOST"
+                {label.provider && DROP_OFF_PROVIDERS.includes(label.provider)
                   ? t("status.label.dropOff", { courier: label.carrier ?? t("status.label.courier") })
                   : t("status.label.pickup", { courier: label.carrier ?? t("status.label.courier") })}
                 {label.pickupScheduledAt &&

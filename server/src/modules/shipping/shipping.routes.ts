@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { logger } from "../../lib/logger.js";
 import { asyncHandler } from "../../middleware/asyncHandler.js";
-import { handleEasyPostWebhook, handleWebhook, testLabelHtml } from "./shipping.service.js";
+import { handleEasyPostWebhook, handleShippoWebhook, handleWebhook, testLabelHtml } from "./shipping.service.js";
 
 export const shippingRouter = Router();
 
@@ -60,6 +60,20 @@ shippingRouter.post(
     const result = await handleEasyPostWebhook(raw, req.header("x-hmac-signature") ?? undefined, req.body);
     if (result === "unauthorized") {
       res.status(401).json({ error: "Bad signature" });
+      return;
+    }
+    res.json({ ok: true, result });
+  }),
+);
+
+/** Shippo's tracking webhook: unsigned, so the URL's token names the store. */
+shippingRouter.post(
+  "/shippo/events",
+  asyncHandler(async (req, res) => {
+    const token = typeof req.query.token === "string" ? req.query.token : undefined;
+    const result = await handleShippoWebhook(token, req.body);
+    if (result === "unauthorized") {
+      res.status(401).json({ error: "Unknown webhook token" });
       return;
     }
     res.json({ ok: true, result });

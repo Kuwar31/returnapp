@@ -326,7 +326,7 @@ export interface ShipmentScan {
 }
 
 export interface ReturnShipment {
-  provider: "SHIPROCKET" | "DELHIVERY" | "EASYPOST" | null;
+  provider: ShipmentProvider | null;
   /** Booked in test mode: no courier exists, tracking is simulated. */
   isTest: boolean;
   /** The courier service chosen when it was booked. */
@@ -371,8 +371,12 @@ export interface CourierQuote {
   recommended: boolean;
 }
 
+export type ShipmentProvider = "SHIPROCKET" | "DELHIVERY" | "EASYPOST" | "SHIPPO";
+/** Carriers whose label the shopper prints and drops off, rather than a courier collecting. */
+export const DROP_OFF_PROVIDERS: ShipmentProvider[] = ["EASYPOST", "SHIPPO"];
+
 export interface CourierQuotes {
-  provider: "SHIPROCKET" | "DELHIVERY" | "EASYPOST";
+  provider: ShipmentProvider;
   couriers: CourierQuote[];
   shopCurrency: string;
 }
@@ -384,7 +388,7 @@ export type DeliveryDestination = ReturnDestination & { hasPhone: boolean; hasZi
 export interface ShippingView {
   settings: {
     /** Which carrier books labels; null until one is chosen. */
-    provider: "SHIPROCKET" | "DELHIVERY" | "EASYPOST" | null;
+    provider: ShipmentProvider | null;
     autoCreate: boolean;
     receiveOnDelivery: boolean;
     /** The destination parcels go to; null means the store's default. */
@@ -415,6 +419,13 @@ export interface ShippingView {
     testMode: boolean;
     webhookUrl: string;
     webhookSecret: string;
+  } | null;
+  shippo: {
+    connectedAt: string;
+    /** Connected with a test token: test labels, nothing charged. */
+    testMode: boolean;
+    /** Carries its own token, since Shippo doesn't sign webhooks. */
+    webhookUrl: string;
   } | null;
   webhookUrl: string;
   destinations: DeliveryDestination[];

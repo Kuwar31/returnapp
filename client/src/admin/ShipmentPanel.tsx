@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { api } from "../lib/api";
 import { dateTime, money } from "../lib/format";
-import type { CourierQuotes, ReturnDetail, ShipmentStatus } from "../lib/types";
+import { DROP_OFF_PROVIDERS, type CourierQuotes, type ReturnDetail, type ShipmentStatus } from "../lib/types";
 
 /**
  * The return label on the return page: the courier booked to collect the
@@ -45,7 +45,7 @@ export function ShipmentPanel({
   const keeping = detail.returnMethod?.kind === "KEEP";
   const test = Boolean(shipment?.isTest);
   /** A printed drop-off label rather than a courier at the door. */
-  const dropOff = shipment?.provider === "EASYPOST";
+  const dropOff = Boolean(shipment?.provider && DROP_OFF_PROVIDERS.includes(shipment.provider));
 
   // Before approval the choosing happens in the approval dialog instead.
   const pending = false;

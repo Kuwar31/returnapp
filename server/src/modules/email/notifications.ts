@@ -1,3 +1,4 @@
+import { DROP_OFF_PROVIDERS } from "../shipping/shipments.js";
 import type { NotificationKind, Prisma } from "@prisma/client";
 import { logger } from "../../lib/logger.js";
 import { returnStatusUrl } from "../../lib/portal-links.js";
@@ -101,7 +102,7 @@ const loadContext = async (returnRequestId: string) => {
         ? {
             courier: request.shipment.carrier,
             // A drop-off label: printed and handed in, no courier at the door.
-            dropOff: request.shipment.provider === "EASYPOST",
+            dropOff: DROP_OFF_PROVIDERS.includes(request.shipment.provider!),
             trackingNumber: request.shipment.trackingNumber,
             trackingUrl: request.shipment.trackingUrl,
             labelUrl: request.shipment.labelUrl,

@@ -24,7 +24,7 @@ import { storePath } from "./store-path";
  * environment; EasyPost has test keys.
  */
 
-type Provider = "SHIPROCKET" | "DELHIVERY" | "EASYPOST";
+type Provider = "SHIPROCKET" | "DELHIVERY" | "EASYPOST" | "SHIPPO";
 type Parcel = ShippingView["settings"]["parcel"];
 
 const SERVICES: Array<{ id: Provider; name: string; initials: string; blurb: string }> = [
@@ -46,9 +46,15 @@ const SERVICES: Array<{ id: Provider; name: string; initials: string; blurb: str
     initials: "EP",
     blurb: "USPS, UPS, FedEx, DHL and more through one API key. Drop-off labels the customer prints.",
   },
+  {
+    id: "SHIPPO",
+    name: "Shippo",
+    initials: "SP",
+    blurb: "USPS, UPS, FedEx, DHL and more through one token. Drop-off labels the customer prints.",
+  },
 ];
 
-const NAMES: Record<Provider, string> = { SHIPROCKET: "Shiprocket", DELHIVERY: "Delhivery", EASYPOST: "EasyPost" };
+const NAMES: Record<Provider, string> = { SHIPROCKET: "Shiprocket", DELHIVERY: "Delhivery", EASYPOST: "EasyPost", SHIPPO: "Shippo" };
 
 export default function ShippingPage() {
   const { session } = useAuth();
@@ -169,15 +175,22 @@ export default function ShippingPage() {
   const { settings } = data;
   const active = settings.provider;
   const connected: Provider[] = SERVICES.map((s) => s.id).filter((id) =>
-    id === "SHIPROCKET" ? Boolean(data.shiprocket) : id === "DELHIVERY" ? Boolean(data.delhivery) : Boolean(data.easypost),
+    id === "SHIPROCKET" ? Boolean(data.shiprocket) : id === "DELHIVERY" ? Boolean(data.delhivery) : id === "EASYPOST" ? Boolean(data.easypost) : Boolean(data.shippo),
   );
   /** A service's test mode, whichever name its carrier gives it. */
   const testing = (id: Provider) =>
-    id === "SHIPROCKET" ? Boolean(data.shiprocket?.testMode) : id === "DELHIVERY" ? Boolean(data.delhivery?.staging) : Boolean(data.easypost?.testMode);
+    id === "SHIPROCKET"
+      ? Boolean(data.shiprocket?.testMode)
+      : id === "DELHIVERY"
+        ? Boolean(data.delhivery?.staging)
+        : id === "EASYPOST"
+          ? Boolean(data.easypost?.testMode)
+          : Boolean(data.shippo?.testMode);
   const testModeCopy: Record<Provider, string> = {
     SHIPROCKET: "Test mode is on: return labels are pretend and no courier is booked. Turn it off before real returns come in.",
     DELHIVERY: "Delhivery is on its staging environment: bookings are real calls that charge nothing and send no courier. Switch it to production before real returns come in.",
     EASYPOST: "EasyPost is connected with a test key: labels are test labels and no postage is bought. Reconnect with a production key before real returns come in.",
+    SHIPPO: "Shippo is connected with a test token: labels are test labels and no postage is bought. Reconnect with a live token before real returns come in.",
   };
   const parcelDirty =
     parcel.lengthCm !== settings.parcel.lengthCm ||
@@ -200,6 +213,7 @@ export default function ShippingPage() {
     if (id === "SHIPROCKET" && data.shiprocket) return `${data.shiprocket.email} · connected ${dateTime(data.shiprocket.connectedAt)}`;
     if (id === "DELHIVERY" && data.delhivery) return `Warehouse ${data.delhivery.warehouseName} · connected ${dateTime(data.delhivery.connectedAt)}`;
     if (id === "EASYPOST" && data.easypost) return `${data.easypost.testMode ? "Test key" : "Production key"} · connected ${dateTime(data.easypost.connectedAt)}`;
+    if (id === "SHIPPO" && data.shippo) return `${data.shippo.testMode ? "Test token" : "Live token"} · connected ${dateTime(data.shippo.connectedAt)}`;
     return "";
   };
 
@@ -493,6 +507,7 @@ function ConnectDialog({
   const [sr, setSr] = useState({ email: "", password: "" });
   const [dl, setDl] = useState({ token: "", staging: true, warehouseName: "" });
   const [ep, setEp] = useState({ apiKey: "" });
+  const [sp, setSp] = useState({ token: "" });
 
   const ready =
     picked === "SHIPROCKET"
@@ -501,7 +516,9 @@ function ConnectDialog({
         ? Boolean(dl.token.trim() && dl.warehouseName.trim())
         : picked === "EASYPOST"
           ? Boolean(ep.apiKey.trim())
-          : false;
+          : picked === "SHIPPO"
+            ? Boolean(sp.token.trim())
+            : false;
 
   const submit = () => {
     if (!picked || !ready) return;
@@ -510,7 +527,9 @@ function ConnectDialog({
         ? { email: sr.email.trim(), password: sr.password }
         : picked === "DELHIVERY"
           ? { token: dl.token.trim(), staging: dl.staging, warehouseName: dl.warehouseName.trim() }
-          : { apiKey: ep.apiKey.trim() };
+          : picked === "EASYPOST"
+            ? { apiKey: ep.apiKey.trim() }
+            : { token: sp.token.trim() };
     void onConnect(picked, body);
   };
 
@@ -605,6 +624,22 @@ function ConnectDialog({
               <span className="radio-list__hint">Real calls that charge nothing and send no courier.</span>
             </span>
           </label>
+        </form>
+      ) : picked === "SHIPPO" ? (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit();
+          }}
+        >
+          <p className="settings-row__hint" style={{ marginBottom: 12 }}>
+            Paste an API token from your Shippo dashboard, under Settings → API. A test token (starts with shippo_test_)
+            is the test mode: real calls, test labels, nothing charged. A live token (shippo_live_) buys real postage.
+          </p>
+          <div className="field">
+            <label htmlFor="sp-token">API token</label>
+            <input id="sp-token" type="password" value={sp.token} autoComplete="off" onChange={(e) => setSp({ token: e.target.value })} placeholder="shippo_test_… or shippo_live_…" required />
+          </div>
         </form>
       ) : (
         <form
@@ -836,6 +871,54 @@ function ManageDialog({
               >
                 Save
               </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {provider === "SHIPPO" && data.shippo && (
+        <>
+          <div className="settings-row">
+            <div>
+              <div className="settings-row__label">{data.shippo.testMode ? "Test token" : "Live token"}</div>
+              <div className="settings-row__hint">
+                Connected {dateTime(data.shippo.connectedAt)}.{" "}
+                {data.shippo.testMode
+                  ? "Labels are test labels and no postage is bought. To go live, disconnect and connect again with a live token."
+                  : "Labels buy real postage from the carriers set up in your Shippo account."}
+              </div>
+            </div>
+          </div>
+          <div className="settings-row">
+            <div>
+              <div className="settings-row__label">How labels work</div>
+              <div className="settings-row__hint">
+                Shippo makes a drop-off label: the customer prints it, attaches it, and hands the parcel to the carrier. Every carrier set up in Shippo is quoted at approval.
+              </div>
+            </div>
+          </div>
+          <div className="settings-row settings-row--stacked">
+            <div>
+              <div className="settings-row__label">Tracking webhook</div>
+              <div className="settings-row__hint">
+                In Shippo, open Settings → API → Webhooks, add this URL for the "Track updated" event. The URL carries its own token, since Shippo doesn't sign what it sends. Without it, open parcels are checked every half hour.
+              </div>
+            </div>
+            <div style={{ width: "100%" }}>
+              <CopyLink url={data.shippo.webhookUrl} label="Webhook URL" />
+              <div className="ship-secret" style={{ marginTop: 10 }}>
+                <button
+                  type="button"
+                  className="btn btn--secondary btn--sm"
+                  disabled={busy}
+                  onClick={() => {
+                    if (!window.confirm("Regenerate the token? Shippo will need the new URL.")) return;
+                    void run(() => api.post(`${path}/webhook-secret`, undefined, { auth: "admin" }), "Token regenerated — paste the new URL into Shippo.");
+                  }}
+                >
+                  Regenerate URL
+                </button>
+              </div>
             </div>
           </div>
         </>

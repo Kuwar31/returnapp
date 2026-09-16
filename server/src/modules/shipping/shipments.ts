@@ -49,13 +49,18 @@ export const PROVIDER_NAMES: Record<ShipmentProvider, string> = {
   SHIPROCKET: "Shiprocket",
   DELHIVERY: "Delhivery",
   EASYPOST: "EasyPost",
+  SHIPPO: "Shippo",
 };
+
+/** Carriers whose label the shopper prints and drops off, rather than a courier collecting. */
+export const DROP_OFF_PROVIDERS: ShipmentProvider[] = ["EASYPOST", "SHIPPO"];
 
 /** What each carrier needs of a phone number; see `PhoneRule`. */
 export const PHONE_RULES: Record<ShipmentProvider, PhoneRule> = {
   SHIPROCKET: "INDIAN_MOBILE",
   DELHIVERY: "INDIAN_MOBILE",
   EASYPOST: "ANY",
+  SHIPPO: "ANY",
 };
 
 // ---------------------------------------------------------------------------

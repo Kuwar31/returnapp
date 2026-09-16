@@ -22,6 +22,7 @@ import * as routing from "./routing.service.js";
 import * as shiprocket from "../shipping/shiprocket.service.js";
 import * as delhivery from "../shipping/delhivery.service.js";
 import * as easypost from "../shipping/easypost.service.js";
+import * as shippo from "../shipping/shippo.service.js";
 import * as shippingSettings from "../shipping/shipping.settings.js";
 import { indianMobile } from "../shipping/addresses.js";
 import { inventoryAccessProblem } from "../shopify/locations.service.js";
@@ -1137,7 +1138,7 @@ settingsRouter.post(
 const cm = z.number().min(1).max(500);
 const shippingSettingsSchema = z
   .object({
-    provider: z.enum(["SHIPROCKET", "DELHIVERY", "EASYPOST"]).nullable(),
+    provider: z.enum(["SHIPROCKET", "DELHIVERY", "EASYPOST", "SHIPPO"]).nullable(),
     autoCreate: z.boolean(),
     receiveOnDelivery: z.boolean(),
     destinationId: z.string().min(1).max(60).nullable(),
@@ -1164,11 +1165,12 @@ const readiness = (d: { phone: string | null; zip: string | null }) => ({
  * to say so here than at the first approval.
  */
 const shippingView = async (merchantId: string) => {
-  const [settings, sr, dl, ep, destinations, destination] = await Promise.all([
+  const [settings, sr, dl, ep, sp, destinations, destination] = await Promise.all([
     shippingSettings.getSettings(merchantId),
     shiprocket.getAccount(merchantId),
     delhivery.getAccount(merchantId),
     easypost.getAccount(merchantId),
+    shippo.getAccount(merchantId),
     destinationsService.listDestinations(merchantId),
     shippingSettings.deliveryDestination(merchantId),
   ]);
@@ -1177,6 +1179,7 @@ const shippingView = async (merchantId: string) => {
     shiprocket: sr ? shiprocket.serializeAccount(sr) : null,
     delhivery: dl ? delhivery.serializeAccount(dl) : null,
     easypost: ep ? easypost.serializeAccount(ep) : null,
+    shippo: sp ? shippo.serializeAccount(sp) : null,
     webhookUrl: shiprocket.webhookUrl(),
     destinations: destinations.map((d) => ({ ...destinationsService.serializeDestination(d), ...readiness(d) })),
     /** Where parcels go today: the chosen destination, else the default. */
@@ -1205,6 +1208,9 @@ settingsRouter.patch(
     }
     if (req.body.provider === "EASYPOST" && !(await easypost.getAccount(merchantId))) {
       throw unprocessable("Connect EasyPost before choosing it.");
+    }
+    if (req.body.provider === "SHIPPO" && !(await shippo.getAccount(merchantId))) {
+      throw unprocessable("Connect Shippo before choosing it.");
     }
     await shippingSettings.updateSettings(merchantId, req.body);
     res.json(await shippingView(merchantId));
@@ -1343,6 +1349,46 @@ settingsRouter.post(
   "/easypost/test",
   asyncHandler(async (req, res) => {
     res.json(await easypost.testConnection(req.admin!.merchantId));
+
+// --- Shippo ---
+
+settingsRouter.post(
+  "/shippo/connect",
+  validate(z.object({ token: z.string().trim().min(8).max(200) })),
+  asyncHandler(async (req, res) => {
+    const merchantId = req.admin!.merchantId;
+    await shippo.connectAccount(merchantId, req.body.token);
+    const settings = await shippingSettings.getSettings(merchantId);
+    if (!settings.provider) await shippingSettings.updateSettings(merchantId, { provider: "SHIPPO" });
+    res.json(await shippingView(merchantId));
+  }),
+);
+
+settingsRouter.delete(
+  "/shippo",
+  asyncHandler(async (req, res) => {
+    const merchantId = req.admin!.merchantId;
+    await shippo.disconnectAccount(merchantId);
+    const settings = await shippingSettings.getSettings(merchantId);
+    if (settings.provider === "SHIPPO") await shippingSettings.updateSettings(merchantId, { provider: null });
+    res.json(await shippingView(merchantId));
+  }),
+);
+
+settingsRouter.post(
+  "/shippo/webhook-secret",
+  asyncHandler(async (req, res) => {
+    await shippo.rotateWebhookSecret(req.admin!.merchantId);
+    res.json(await shippingView(req.admin!.merchantId));
+  }),
+);
+
+settingsRouter.post(
+  "/shippo/test",
+  asyncHandler(async (req, res) => {
+    res.json(await shippo.testConnection(req.admin!.merchantId));
+  }),
+);
   }),
 );
   }),
