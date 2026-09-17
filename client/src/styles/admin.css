@@ -4519,3 +4519,169 @@ table.data tbody tr:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* ==========================================================================
+   The top bar: the app on the left, the account on the right, as Loop has it.
+   The sidebar starts under it and sticks there.
+   ========================================================================== */
+
+.admin {
+  --bar-height: 60px;
+  grid-template-rows: var(--bar-height) 1fr;
+}
+
+.admin__bar {
+  grid-column: 1 / -1;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: var(--bar-height);
+  padding: 0 24px 0 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.admin__bar .admin__brand {
+  color: inherit;
+  text-decoration: none;
+}
+
+.admin__sidebar {
+  top: var(--bar-height);
+  height: calc(100vh - var(--bar-height));
+  overflow-y: auto;
+}
+
+.account {
+  margin-top: 0;
+  flex: none;
+}
+
+.account__button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 320px;
+  padding: 6px 12px 6px 6px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--surface-muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.account__button:hover,
+.account__button[aria-expanded="true"] {
+  background: #eceae4;
+}
+
+.account__avatar {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.account__label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.account__store {
+  font-size: 13.5px;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account__person {
+  font-size: 12px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account__chevron {
+  flex: none;
+  margin-left: 4px;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--text-muted);
+}
+
+/* Opens under the button, against the right edge, wide enough for a slug. */
+.account__menu {
+  left: auto;
+  right: 0;
+  min-width: 260px;
+}
+
+.account__who {
+  padding: 8px 10px 6px;
+  font-size: 12.5px;
+  color: var(--text-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+
+.account__heading {
+  padding: 6px 10px 2px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.account__signout {
+  border: 0;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: #b42318;
+}
+
+@media (max-width: 900px) {
+  .admin {
+    grid-template-rows: var(--bar-height) auto 1fr;
+  }
+
+  .admin__bar {
+    padding: 0 12px 0 16px;
+  }
+
+  .admin__sidebar {
+    top: auto;
+    height: auto;
+    overflow: visible;
+  }
+
+  /* The name is what there's room for; the person is in the menu. */
+  .account__person {
+    display: none;
+  }
+
+  .account__button {
+    max-width: 200px;
+  }
+}
