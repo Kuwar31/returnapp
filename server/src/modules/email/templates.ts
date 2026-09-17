@@ -22,7 +22,12 @@ export interface EmailReturn {
   items: Array<{
     title: string;
     variantTitle: string | null;
+    /** What the shopper is being paid for: the accepted units once inspected, else what they sent. */
     quantity: number;
+    /** What they asked to return; differs from `quantity` after a partial acceptance. */
+    requested: number;
+    /** Inspected and turned down entirely. */
+    rejected: boolean;
     reasonLabel: string | null;
   }>;
   /**
@@ -72,13 +77,26 @@ const esc = (value: string): string =>
 const greeting = (request: EmailReturn): string =>
   request.customerName ? `Hi ${request.customerName.split(" ")[0]},` : "Hi,";
 
+/**
+ * How many of a line count, in words: "× 2", or after an inspection that
+ * turned some down, "× 1 of 2 accepted"; a line refused outright says so
+ * rather than reading as part of the payout.
+ */
+const countOf = (item: EmailReturn["items"][number]): string =>
+  item.rejected
+    ? `× ${item.requested} — not accepted`
+    : item.quantity < item.requested
+      ? `× ${item.quantity} of ${item.requested} accepted`
+      : `× ${item.quantity}`;
+
 const itemLines = (request: EmailReturn): string =>
   request.items
     .map((item) => {
       const variant = item.variantTitle ? ` · ${esc(item.variantTitle)}` : "";
       const reason = item.reasonLabel ? ` — ${esc(item.reasonLabel)}` : "";
-      return `<tr><td style="padding:6px 0;border-bottom:1px solid #ececed;font-size:14px;color:#1a1a1c">
-        ${esc(item.title)}${variant} × ${item.quantity}${reason}
+      const tone = item.rejected ? "#8c9196" : "#1a1a1c";
+      return `<tr><td style="padding:6px 0;border-bottom:1px solid #ececed;font-size:14px;color:${tone}">
+        ${esc(item.title)}${variant} ${countOf(item)}${reason}
       </td></tr>`;
     })
     .join("");
@@ -88,7 +106,7 @@ const itemLinesText = (request: EmailReturn): string =>
     .map((item) => {
       const variant = item.variantTitle ? ` · ${item.variantTitle}` : "";
       const reason = item.reasonLabel ? ` — ${item.reasonLabel}` : "";
-      return `  - ${item.title}${variant} × ${item.quantity}${reason}`;
+      return `  - ${item.title}${variant} ${countOf(item)}${reason}`;
     })
     .join("\n");
 

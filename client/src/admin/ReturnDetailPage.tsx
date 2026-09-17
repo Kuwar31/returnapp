@@ -357,7 +357,15 @@ function InspectionRow({
 
         <div className="ritem__right">
           <span className={`badge badge--${state.tone}`}>{state.label}</span>
-          <span className="ritem__price">{money(item.lineTotal, currency)}</span>
+          {/* After a partial acceptance the line is worth the accepted units, not what was sent. */}
+          {inspected && accepted < item.quantity ? (
+            <span className="ritem__price">
+              {money(item.unitPrice * accepted, currency)}{" "}
+              <s className="muted">{money(item.lineTotal, currency)}</s>
+            </span>
+          ) : (
+            <span className="ritem__price">{money(item.lineTotal, currency)}</span>
+          )}
           {restock.phase !== "hidden" && (
             <RestockCell
               item={item}
@@ -463,6 +471,10 @@ export default function ReturnDetailPage() {
   const [acting, setActing] = useState(false);
   const [note, setNote] = useState("");
   const [preview, setPreview] = useState<RefundPreview | null>(null);
+  /** Changes whenever an inspection does, so the refund preview follows it. */
+  const inspectionKey = detail
+    ? detail.lineItems.map((li) => `${li.acceptedQuantity ?? "-"}${li.keepItem ? "k" : ""}`).join(",") + `|${detail.totals.estimatedTotal}`
+    : "";
   /** The approval dialog, for a return that asked for a courier pickup. */
   const [approving, setApproving] = useState(false);
   const [diagnosis, setDiagnosis] = useState<ExchangeDiagnosis | null>(null);
@@ -510,7 +522,12 @@ export default function ReturnDetailPage() {
     return () => {
       active = false;
     };
-  }, [id, detail?.status]);
+    // Re-asked after every inspection as well as every status change: accepting
+    // one unit of two changes what Shopify will pay, and a button still
+    // offering the old figure is how a merchant comes to believe the customer
+    // was refunded in full.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, detail?.status, inspectionKey]);
 
   /**
    * Whether Shopify settled this return's exchange correctly.

@@ -79,10 +79,14 @@ const loadContext = async (returnRequestId: string) => {
         ? null
         : toDecimal(request.settledTotal).toNumber(),
     rejectionReason: request.rejectionReason,
+    // What the shopper is paid for follows the inspection, as the totals do:
+    // a mail that lists two units against a total for one reads as a mistake.
     items: request.lineItems.map((item) => ({
       title: item.orderLineItem?.title ?? "Item",
       variantTitle: item.orderLineItem?.variantTitle ?? null,
-      quantity: item.quantity,
+      quantity: item.acceptedQuantity ?? item.quantity,
+      requested: item.quantity,
+      rejected: item.acceptedQuantity === 0,
       reasonLabel: item.reason?.label ?? null,
     })),
     payment: await resolvePayment(request.merchantId, request),
