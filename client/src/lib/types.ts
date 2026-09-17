@@ -381,7 +381,9 @@ export type ShipmentProvider =
   | "DHL_EXPRESS"
   | "FEDEX"
   | "AUSPOST"
-  | "DEUTSCHE_POST";
+  | "DEUTSCHE_POST"
+  /** The store's own label system, posted to at approval. */
+  | "EXTERNAL";
 /** Carriers whose label the shopper prints and drops off, rather than a courier collecting. */
 export const DROP_OFF_PROVIDERS: ShipmentProvider[] = [
   "EASYPOST",
@@ -392,7 +394,43 @@ export const DROP_OFF_PROVIDERS: ShipmentProvider[] = [
   "FEDEX",
   "AUSPOST",
   "DEUTSCHE_POST",
+  "EXTERNAL",
 ];
+
+/** What a packing slip's barcode encodes. */
+export type PackingSlipBarcode = "RETURN_ID" | "ORDER_NUMBER";
+
+/** A named package, as AfterShip has merchants define them. */
+export interface PackageSize {
+  id: string;
+  name: string;
+  length: number;
+  width: number;
+  height: number;
+  unit: "CM" | "IN";
+  /** The empty package's weight. */
+  weight: number;
+  massUnit: "KG" | "LB";
+  isDefault: boolean;
+  /** One line: "30 × 20 × 10 cm, 0.2 kg". */
+  summary: string;
+}
+
+/** A field printed in a label's reference slot. */
+export type LabelReferenceType = "RMA_ID" | "ORDER_NUMBER" | "PRODUCT_TITLE" | "RETURN_VALUE" | "CUSTOM";
+export interface LabelReference {
+  type: LabelReferenceType;
+  /** CUSTOM only. */
+  text?: string;
+}
+
+/** Packing slip settings, on a regional policy or as the store's default. */
+export interface PackingSlipSettings {
+  packingSlips: boolean;
+  packingSlipTaxInclusive: boolean;
+  packingSlipBarcode: boolean;
+  packingSlipBarcodeSource: PackingSlipBarcode;
+}
 
 export interface CourierQuotes {
   provider: ShipmentProvider;
@@ -415,7 +453,16 @@ export interface ShippingView {
     /** What carriers write to about labels; null falls back to the owner's. */
     shippingEmail: string | null;
     parcel: { lengthCm: number; breadthCm: number; heightCm: number; weightKg: number };
-  };
+    /** Which return methods show the packing slip. */
+    packingSlipMethods: ReturnMethodKind[];
+    /** Void a label with no shipping update this many days after approval; null leaves labels alone. */
+    autoCancelDays: number | null;
+    /** Up to three fields for the label's reference slots. */
+    labelReferences: LabelReference[];
+  } & PackingSlipSettings;
+  packageSizes: PackageSize[];
+  /** How many routing rules offer "Ship with a return label". */
+  labelRules: number;
   shiprocket: {
     email: string;
     connectedAt: string;
@@ -463,6 +510,8 @@ export interface ShippingView {
   fedex: { connectedAt: string; testMode: boolean; accountNumber: string } | null;
   ausPost: { connectedAt: string; testMode: boolean; accountNumber: string } | null;
   deutschePost: { connectedAt: string; testMode: boolean; billingNumber: string } | null;
+  /** The store's own label system: where it's posted to, and the secret both sides share. */
+  external: { connectedAt: string; testMode: boolean; url: string; secret: string; eventsUrl: string } | null;
   webhookUrl: string;
   destinations: DeliveryDestination[];
   /** Where parcels go today: the chosen destination, else the default. */
@@ -514,6 +563,8 @@ export interface ReturnDetail {
    */
   instructions?: string[];
   returnTo?: { name: string; lines: string[] } | null;
+  /** The printable packing slip, when the policy makes one and there's something to pack. */
+  packingSlipUrl?: string | null;
   /** How the shopper is sending the items back, as they were shown it. */
   returnMethod?: {
     kind: ReturnMethodKind;
@@ -847,6 +898,10 @@ export interface ReturnDestination {
   zip: string | null;
   countryCode: string;
   phone: string | null;
+  /** Who receives parcels there; printed on the label. */
+  company: string | null;
+  contactName: string | null;
+  email: string | null;
   isDefault: boolean;
   /** The Shopify Location to restock at, when the destination is one. */
   locationId: string | null;
@@ -873,6 +928,14 @@ export interface RegionalPolicy {
   bypassReview: boolean;
   /** Numbered steps on the confirmation page; empty keeps the portal's wording. */
   instructions: string[];
+  /** Make a label at approval for returns under this policy. */
+  generateLabels: boolean;
+  /** Which service makes it; null follows the store's default, EXTERNAL the store's own connector. */
+  labelProvider: ShipmentProvider | null;
+  packingSlips: boolean;
+  packingSlipTaxInclusive: boolean;
+  packingSlipBarcode: boolean;
+  packingSlipBarcodeSource: PackingSlipBarcode;
   sortOrder: number;
   outcomes: Record<OutcomeKey, RegionalOutcome>;
 }
@@ -934,6 +997,12 @@ export interface RoutingMethod {
   autoApprove: boolean;
   /** STORE only: a link to the retail locations. */
   storeUrl: string | null;
+  /** LABEL only — the rule's return shipping information; each null defers. */
+  carrier: ShipmentProvider | null;
+  /** Matched against the carrier's service names at booking; unmatched books the cheapest. */
+  serviceName: string | null;
+  destinationId: string | null;
+  packageSizeId: string | null;
 }
 
 /** Every condition present must match; none means the rule matches everything. */
@@ -963,6 +1032,11 @@ export interface RoutingRulesResponse {
   policies: Array<{ id: string; name: string }>;
   reasons: Array<{ id: string; label: string }>;
   currency: string;
+  /** For the label method's return shipping information. */
+  destinations: ReturnDestination[];
+  packageSizes: PackageSize[];
+  carriers: ShipmentProvider[];
+  defaultCarrier: ShipmentProvider | null;
 }
 
 // ---------------------------------------------------------------------------

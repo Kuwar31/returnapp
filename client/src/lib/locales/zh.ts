@@ -176,6 +176,7 @@ export const zh: Dict = {
   "status.label.tracking": "运单号",
   "status.label.status": "包裹状态",
   "status.label.download": "下载标签",
+  "status.packingSlip": "打印装箱单",
   "status.label.track": "追踪包裹",
   "review.method.change": "更改",
   "status.questions": "有疑问？",

@@ -259,7 +259,7 @@ const parcelInput = (parcel: Parcel, methodId: number, orderId: string, requestL
   parcel: {
     // Where it's going: the store.
     name: fullName(parcel.to) || parcel.to.firstName,
-    company_name: parcel.to.firstName,
+    company_name: parcel.to.company || parcel.to.firstName,
     address: parcel.to.address1,
     address_2: parcel.to.address2 || undefined,
     city: parcel.to.city,

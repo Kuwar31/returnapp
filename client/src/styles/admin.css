@@ -4316,3 +4316,206 @@ table.data tbody tr:hover {
   background: #fff3cd;
   color: #7a5a00;
 }
+
+/* Labels & shipping tab: the connector warning, as Loop draws it. */
+.labels__sub {
+  margin: 20px 0 10px;
+  font-size: 15px;
+}
+
+.callout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.callout > div {
+  flex: 1 1 260px;
+}
+
+.callout--warn {
+  background: #f7f3dc;
+  color: #4a3f10;
+}
+
+.callout__icon {
+  flex: none;
+  color: #8a6d00;
+}
+
+.callout strong {
+  display: block;
+  margin-bottom: 2px;
+  color: #2b2300;
+}
+
+.callout__link {
+  flex: none;
+  margin-left: auto;
+  align-self: center;
+  font-weight: 600;
+  white-space: nowrap;
+  color: inherit;
+}
+
+.packing-barcode {
+  margin: 8px 0 4px 30px;
+}
+
+.packing-barcode .field-label {
+  margin-bottom: 8px;
+}
+
+.carrier-card__logo--external {
+  color: #1c1c1e;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+@media (max-width: 640px) {
+  .callout {
+    flex-wrap: wrap;
+  }
+
+  .callout__link {
+    margin-left: 0;
+  }
+
+  .packing-barcode {
+    margin-left: 0;
+  }
+}
+
+/* Shipping: AfterShip's progress dashboard, package size dialog, references. */
+.progress {
+  margin-bottom: 24px;
+}
+
+.progress__head {
+  margin-bottom: 12px;
+}
+
+.progress__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px 18px;
+}
+
+.progress__step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13.5px;
+}
+
+.progress__step.is-done {
+  color: var(--muted);
+  background: var(--surface-muted);
+}
+
+.progress__mark {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.progress__step.is-done .progress__mark {
+  background: #16a34a;
+  border-color: #16a34a;
+  color: #fff;
+}
+
+.progress__label {
+  flex: 1;
+  font-weight: 600;
+}
+
+.progress__step.is-done .progress__label {
+  font-weight: 500;
+}
+
+.progress__optional {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.progress__cta {
+  flex: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent, #2563eb);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pkg-units {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 20px;
+}
+
+.refs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.refs__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.refs__row select,
+.refs__row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.refs__n {
+  flex: none;
+  width: 20px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.rship {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 20px;
+}
+
+.rship__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+@media (max-width: 720px) {
+  .pkg-units,
+  .rship {
+    grid-template-columns: 1fr;
+  }
+}

@@ -98,6 +98,8 @@ export interface Party {
   pincode: string;
   phone: string;
   email: string;
+  /** The business at this address, for carriers with a company line; blank for a shopper. */
+  company: string;
 }
 
 /**
@@ -209,6 +211,7 @@ export const shopperParty = async (
   }
   const countryCode = str(a, "countryCodeV2", "country_code", "countryCode") ?? "IN";
   return {
+    company: "",
     firstName,
     lastName: rest.join(" "),
     address1,
@@ -226,6 +229,9 @@ export const shopperParty = async (
 
 export interface DestinationLike {
   name: string;
+  company?: string | null;
+  contactName?: string | null;
+  email?: string | null;
   address1: string;
   address2: string | null;
   city: string;
@@ -262,8 +268,10 @@ export const destinationParty = async (
   }
   if (!d.zip) throw unprocessable(`Give the return destination "${d.name}" a postcode.`);
   return {
-    firstName: d.name,
+    // The contact on the label, else the location's name; the company beside it.
+    firstName: d.contactName?.trim() || d.name,
     lastName: "",
+    company: d.company?.trim() || (d.contactName?.trim() ? d.name : ""),
     address1: d.address1,
     address2: d.address2 ?? "",
     city: d.city,
@@ -273,6 +281,6 @@ export const destinationParty = async (
     countryCode: d.countryCode.toUpperCase(),
     pincode: d.zip,
     phone,
-    email: merchantEmail ?? "",
+    email: d.email?.trim() || merchantEmail || "",
   };
 };

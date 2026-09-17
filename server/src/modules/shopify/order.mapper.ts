@@ -20,6 +20,8 @@ export interface NormalizedLineItem {
   imageUrl: string | null;
   quantity: number;
   unitPrice: number;
+  /** Per-unit tax on that price: inside it when the order includes taxes, on top otherwise. */
+  unitTax: number;
   currency: string;
 }
 
@@ -33,6 +35,8 @@ export interface NormalizedOrder {
   currency: string;
   subtotal: number;
   total: number;
+  /** Whether the store's prices carry tax already. */
+  taxesIncluded: boolean;
   /** What the customer was charged in, when it differs from shop currency. */
   presentmentCurrency: string | null;
   presentmentTotal: number | null;
@@ -91,6 +95,7 @@ interface WebhookLineItem {
   quantity: number;
   price?: string;
   total_discount?: string;
+  tax_lines?: Array<{ price?: string | null }> | null;
 }
 
 export interface WebhookOrder {
@@ -103,6 +108,7 @@ export interface WebhookOrder {
   currency: string;
   subtotal_price?: string;
   total_price?: string;
+  taxes_included?: boolean | null;
   presentment_currency?: string | null;
   total_price_set?: {
     presentment_money?: { amount?: string; currency_code?: string } | null;
@@ -168,6 +174,7 @@ export const mapWebhookOrder = (
     currency: payload.currency,
     subtotal: num(payload.subtotal_price),
     total: num(payload.total_price),
+    taxesIncluded: payload.taxes_included === true,
     presentmentCurrency:
       payload.total_price_set?.presentment_money?.currency_code ??
       payload.presentment_currency ??
@@ -215,6 +222,10 @@ export const mapWebhookOrder = (
         imageUrl: null,
         quantity: line.quantity,
         unitPrice: line.quantity > 0 ? net / line.quantity : 0,
+        unitTax:
+          line.quantity > 0
+            ? (line.tax_lines ?? []).reduce((sum, t) => sum + num(t.price), 0) / line.quantity
+            : 0,
         currency: payload.currency,
       };
     }),
@@ -237,6 +248,7 @@ export interface GraphQLOrderNode {
     shopMoney: { amount: string };
     presentmentMoney?: { amount: string; currencyCode: string } | null;
   } | null;
+  taxesIncluded?: boolean | null;
   fulfillments: Array<{
     createdAt: string;
     deliveredAt: string | null;
@@ -264,6 +276,7 @@ export interface GraphQLOrderNode {
       quantity: number;
       image: { url: string } | null;
       discountedUnitPriceSet: { shopMoney: { amount: string } } | null;
+      taxLines?: Array<{ priceSet: { shopMoney: { amount: string } } | null }> | null;
       product: {
         id: string;
         productType: string | null;
@@ -299,6 +312,7 @@ export const mapGraphQLOrder = (
     currency: node.currencyCode,
     subtotal: num(node.subtotalPriceSet?.shopMoney.amount),
     total: num(node.totalPriceSet?.shopMoney.amount),
+    taxesIncluded: node.taxesIncluded === true,
     presentmentCurrency:
       node.totalPriceSet?.presentmentMoney?.currencyCode ?? null,
     presentmentTotal: node.totalPriceSet?.presentmentMoney
@@ -329,6 +343,10 @@ export const mapGraphQLOrder = (
       imageUrl: line.image?.url ?? null,
       quantity: line.quantity,
       unitPrice: num(line.discountedUnitPriceSet?.shopMoney.amount),
+      unitTax:
+        line.quantity > 0
+          ? (line.taxLines ?? []).reduce((sum, t) => sum + num(t.priceSet?.shopMoney.amount), 0) / line.quantity
+          : 0,
       currency: node.currencyCode,
     })),
   };

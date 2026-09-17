@@ -9,6 +9,8 @@ import { prisma } from "../../lib/prisma.js";
 import { notify } from "../email/notifications.js";
 import { changeStatus, markReceived } from "../returns/returns.service.js";
 import { destinationParty, fullName, shopperParty, type Party, type PhoneRule } from "./addresses.js";
+import { defaultPackageSize, metric } from "../settings/package-sizes.service.js";
+import { readLabelReferences, renderLabelReferences } from "./label-references.js";
 import { getSettings, type ShippingSettingsRow } from "./shipping.settings.js";
 import {
   describeStatus,
@@ -56,10 +58,11 @@ export const PROVIDER_NAMES: Record<ShipmentProvider, string> = {
   FEDEX: "FedEx",
   AUSPOST: "Australia Post",
   DEUTSCHE_POST: "DHL Paket",
+  EXTERNAL: "your connector",
 };
 
 /** Carriers whose label the shopper prints and drops off, rather than a courier collecting. */
-export const DROP_OFF_PROVIDERS: ShipmentProvider[] = ["EASYPOST", "SHIPPO", "SHIPSTATION", "SENDCLOUD", "DHL_EXPRESS", "FEDEX", "AUSPOST", "DEUTSCHE_POST"];
+export const DROP_OFF_PROVIDERS: ShipmentProvider[] = ["EASYPOST", "SHIPPO", "SHIPSTATION", "SENDCLOUD", "DHL_EXPRESS", "FEDEX", "AUSPOST", "DEUTSCHE_POST", "EXTERNAL"];
 
 /** What each carrier needs of a phone number; see `PhoneRule`. */
 export const PHONE_RULES: Record<ShipmentProvider, PhoneRule> = {
@@ -73,6 +76,7 @@ export const PHONE_RULES: Record<ShipmentProvider, PhoneRule> = {
   FEDEX: "ANY",
   AUSPOST: "ANY",
   DEUTSCHE_POST: "ANY",
+  EXTERNAL: "ANY",
 };
 
 // ---------------------------------------------------------------------------
@@ -83,9 +87,17 @@ export const labelInclude = {
   order: true,
   lineItems: { include: { orderLineItem: true } },
   shipment: true,
-  regionalPolicy: { select: { destination: true } },
+  regionalPolicy: { select: { destination: true, generateLabels: true, labelProvider: true } },
+  // The rule's "Return shipping information", where its label method set any.
+  routingRule: { select: { methods: { where: { kind: "LABEL" }, include: { destination: true, packageSize: true } } } },
   merchant: { select: { name: true, email: true } },
 } satisfies Prisma.ReturnRequestInclude;
+
+/** The routing rule's label method for a return, when it has one. */
+export const ruleMethodOf = (request: { routingRule: { methods: Array<{ kind: string }> } | null }) => {
+  const m = request.routingRule?.methods.find((x) => x.kind === "LABEL");
+  return (m ?? null) as (LabelRequest["routingRule"] extends infer R ? (R extends { methods: Array<infer M> } ? M : never) : never) | null;
+};
 
 export type LabelRequest = Prisma.ReturnRequestGetPayload<{ include: typeof labelInclude }>;
 
@@ -111,6 +123,8 @@ export interface Parcel {
   breadthCm: number;
   heightCm: number;
   weightKg: number;
+  /** Up to three lines for the label's reference slots, per the store's settings. */
+  references: string[];
 }
 
 /**
@@ -124,13 +138,20 @@ export const parcelFor = async (
   rule: PhoneRule = "INDIAN_MOBILE",
 ): Promise<Parcel> => {
   const from = await shopperParty(request.merchantId, request.order, request.reference, rule);
+  const method = ruleMethodOf(request);
   const to = await destinationParty(
     request.merchantId,
-    request.regionalPolicy?.destination ?? settings.destination ?? null,
+    // The rule's warehouse first, then the region's, then the one chosen under Shipping.
+    method?.destination ?? request.regionalPolicy?.destination ?? settings.destination ?? null,
     // The shipping email, when the store gave one: it's what goes on the label.
     settings.shippingEmail ?? request.merchant.email,
     rule,
   );
+  // The rule's package size, else the store's default one, else the old columns.
+  const size = method?.packageSize ?? (await defaultPackageSize(request.merchantId));
+  const box = size
+    ? metric(size)
+    : { lengthCm: Number(settings.lengthCm), breadthCm: Number(settings.breadthCm), heightCm: Number(settings.heightCm), weightKg: Number(settings.weightKg) };
   const items = request.lineItems
     .filter((line) => !line.keepItem)
     .map((line) => {
@@ -150,10 +171,8 @@ export const parcelFor = async (
     to,
     items,
     value: toDecimal(request.itemsSubtotal).toNumber(),
-    lengthCm: Number(settings.lengthCm),
-    breadthCm: Number(settings.breadthCm),
-    heightCm: Number(settings.heightCm),
-    weightKg: Number(settings.weightKg),
+    ...box,
+    references: renderLabelReferences(readLabelReferences(settings.labelReferences), request),
   };
 };
 

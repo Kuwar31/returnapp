@@ -113,14 +113,18 @@ export interface Shipment {
 /** Makes the shipment and, with it, every rate the account's carriers offer. */
 export const createShipment = (
   e: Env,
-  input: { to: AddressInput; from: AddressInput; parcel: { length: number; width: number; height: number; weight: number }; reference: string },
+  input: { to: AddressInput; from: AddressInput; parcel: { length: number; width: number; height: number; weight: number }; reference: string; references?: string[] },
 ) =>
   request<Shipment>(e, "POST", "/shipments", {
     address_from: input.from,
     address_to: input.to,
     parcels: [{ ...input.parcel, distance_unit: "cm", mass_unit: "kg" }],
-    // A return: the shopper posts it, the store receives it.
-    extra: { is_return: true, reference_1: input.reference },
+    // A return: the shopper posts it, the store receives it. Shippo prints two references.
+    extra: {
+      is_return: true,
+      reference_1: input.references?.[0] ?? input.reference,
+      ...(input.references?.[1] ? { reference_2: input.references[1] } : {}),
+    },
     metadata: input.reference,
     async: false,
   });

@@ -7,12 +7,15 @@ import * as easypost from "./easypost.service.js";
 import * as auspost from "./auspost.service.js";
 import * as dhlexpress from "./dhlexpress.service.js";
 import * as dhlparcelde from "./dhlparcelde.service.js";
+import * as external from "./external.service.js";
 import * as fedex from "./fedex.service.js";
 import * as sendcloud from "./sendcloud.service.js";
 import * as shippo from "./shippo.service.js";
 import * as shipstation from "./shipstation.service.js";
 import * as shiprocket from "./shiprocket.service.js";
 import { getSettings, type ShippingSettingsRow } from "./shipping.settings.js";
+import { changeStatus } from "../returns/returns.service.js";
+import { notify } from "../email/notifications.js";
 import {
   PHONE_RULES,
   PROVIDER_NAMES,
@@ -25,6 +28,7 @@ import {
   loadForLabel,
   OPEN_FOR_LABEL,
   parcelFor,
+  ruleMethodOf,
   rupeesToShop,
   trackedInclude,
   type CourierQuote,
@@ -45,55 +49,66 @@ export { handleWebhook as handleSendcloudWebhook } from "./sendcloud.service.js"
 export { handleWebhook } from "./shiprocket.service.js";
 export { handleWebhook as handleEasyPostWebhook } from "./easypost.service.js";
 export { handleWebhook as handleShippoWebhook } from "./shippo.service.js";
+export { handleEvent as handleExternalEvent } from "./external.service.js";
 export type { CourierQuote } from "./shipments.js";
 
-/** The carrier that books this store's labels, with its account loaded. */
-const carrierFor = async (settings: ShippingSettingsRow) => {
+/**
+ * The carrier that books this return's labels, with its account loaded:
+ * the one its routing rule names, else its regional policy's, else the
+ * store's default.
+ */
+const carrierFor = async (settings: ShippingSettingsRow, policyProvider: ShipmentProvider | null = null, ruleProvider: ShipmentProvider | null = null) => {
   const merchantId = settings.merchantId;
-  if (!settings.provider) {
+  const provider = ruleProvider ?? policyProvider ?? settings.provider;
+  if (!provider) {
     throw unprocessable("Choose a carrier under Settings → Shipping first.");
   }
-  if (settings.provider === "SHIPROCKET") {
+  if (provider === "EXTERNAL") {
+    const account = await external.getAccount(merchantId);
+    if (!account) throw unprocessable("Set up the external connector under Settings → Shipping first.");
+    return { provider: "EXTERNAL" as const, account };
+  }
+  if (provider === "SHIPROCKET") {
     const account = await shiprocket.getAccount(merchantId);
     if (!account) throw unprocessable("Connect Shiprocket under Settings → Shipping first.");
     return { provider: "SHIPROCKET" as const, account };
   }
-  if (settings.provider === "EASYPOST") {
+  if (provider === "EASYPOST") {
     const account = await easypost.getAccount(merchantId);
     if (!account) throw unprocessable("Connect EasyPost under Settings → Shipping first.");
     return { provider: "EASYPOST" as const, account };
   }
-  if (settings.provider === "SHIPPO") {
+  if (provider === "SHIPPO") {
     const account = await shippo.getAccount(merchantId);
     if (!account) throw unprocessable("Connect Shippo under Settings → Shipping first.");
     return { provider: "SHIPPO" as const, account };
   }
-  if (settings.provider === "SHIPSTATION") {
+  if (provider === "SHIPSTATION") {
     const account = await shipstation.getAccount(merchantId);
     if (!account) throw unprocessable("Connect ShipStation under Settings → Shipping first.");
     return { provider: "SHIPSTATION" as const, account };
   }
-  if (settings.provider === "SENDCLOUD") {
+  if (provider === "SENDCLOUD") {
     const account = await sendcloud.getAccount(merchantId);
     if (!account) throw unprocessable("Connect Sendcloud under Settings → Shipping first.");
     return { provider: "SENDCLOUD" as const, account };
   }
-  if (settings.provider === "DHL_EXPRESS") {
+  if (provider === "DHL_EXPRESS") {
     const account = await dhlexpress.getAccount(merchantId);
     if (!account) throw unprocessable("Connect DHL Express under Settings → Shipping first.");
     return { provider: "DHL_EXPRESS" as const, account };
   }
-  if (settings.provider === "FEDEX") {
+  if (provider === "FEDEX") {
     const account = await fedex.getAccount(merchantId);
     if (!account) throw unprocessable("Connect FedEx under Settings → Shipping first.");
     return { provider: "FEDEX" as const, account };
   }
-  if (settings.provider === "AUSPOST") {
+  if (provider === "AUSPOST") {
     const account = await auspost.getAccount(merchantId);
     if (!account) throw unprocessable("Connect Australia Post under Settings → Shipping first.");
     return { provider: "AUSPOST" as const, account };
   }
-  if (settings.provider === "DEUTSCHE_POST") {
+  if (provider === "DEUTSCHE_POST") {
     const account = await dhlparcelde.getAccount(merchantId);
     if (!account) throw unprocessable("Connect DHL Paket under Settings → Shipping first.");
     return { provider: "DEUTSCHE_POST" as const, account };
@@ -122,8 +137,8 @@ export const quoteCouriers = async (
   returnId: string,
 ): Promise<{ provider: ShipmentProvider; couriers: CourierQuote[]; shopCurrency: string }> => {
   const settings = await getSettings(merchantId);
-  const carrier = await carrierFor(settings);
   const request = await loadForLabel(merchantId, returnId);
+  const carrier = await carrierFor(settings, request.regionalPolicy?.labelProvider ?? null, ruleMethodOf(request)?.carrier ?? null);
   labelWanted(request);
   const parcel = await parcelFor(request, settings, PHONE_RULES[carrier.provider]);
   const toShop = rupeesToShop(request.order);
@@ -136,7 +151,9 @@ export const quoteCouriers = async (
   };
 
   let couriers: CourierQuote[];
-  if (carrier.provider === "SHIPROCKET") {
+  if (carrier.provider === "EXTERNAL") {
+    couriers = external.quote();
+  } else if (carrier.provider === "SHIPROCKET") {
     couriers = carrier.account.testMode
       ? TEST_COURIERS.map((c, i) => ({ ...c, shopRate: null, recommended: i === 0 }))
       : await shiprocket.quote(merchantId, parcel);
@@ -184,11 +201,22 @@ export const createReturnLabel = async (
   options: { email?: boolean; courierId?: number | null } = {},
 ): Promise<ReturnShipment> => {
   const settings = await getSettings(merchantId);
-  const carrier = await carrierFor(settings);
   const request = await loadForLabel(merchantId, returnId);
+  const method = ruleMethodOf(request);
+  const carrier = await carrierFor(settings, request.regionalPolicy?.labelProvider ?? null, method?.carrier ?? null);
   const { existing, orderId } = bookable(request);
   const email = options.email !== false;
-  const courierId = options.courierId ?? existing?.courierId ?? null;
+  let courierId = options.courierId ?? existing?.courierId ?? null;
+  // The rule's named service, when nobody chose one: matched against what's offered, else the cheapest.
+  if (courierId === null && method?.serviceName?.trim()) {
+    try {
+      const wanted = method.serviceName.trim().toLowerCase();
+      const { couriers } = await quoteCouriers(merchantId, returnId);
+      courierId = couriers.find((c) => c.name.toLowerCase() === wanted)?.courierId ?? couriers.find((c) => c.name.toLowerCase().includes(wanted))?.courierId ?? null;
+    } catch (error) {
+      logger.warn({ merchantId, returnId, err: error }, "Couldn't match the rule's shipping service; booking the carrier's pick");
+    }
+  }
 
   let parcel;
   try {
@@ -197,6 +225,9 @@ export const createReturnLabel = async (
     return failStep(carrier.provider, returnId, actorId, "checking addresses", error);
   }
 
+  if (carrier.provider === "EXTERNAL") {
+    return external.book(request, carrier.account, parcel, orderId, actorId, { email });
+  }
   if (carrier.provider === "SHIPROCKET") {
     // Test mode books a pretend pickup: the same checks, nothing sent.
     if (carrier.account.testMode) {
@@ -250,12 +281,19 @@ export const createLabelOnApproval = async (
   try {
     if (choice.book === false) return;
     const settings = await getSettings(merchantId);
-    if (!settings.provider) return;
-    if (!settings.autoCreate && choice.book !== true) return;
     const request = await prisma.returnRequest.findFirst({
       where: { id: returnId, merchantId },
-      select: { returnMethod: true, shipment: { select: { labelUrl: true } } },
+      select: {
+        returnMethod: true,
+        shipment: { select: { labelUrl: true } },
+        regionalPolicy: { select: { generateLabels: true, labelProvider: true } },
+        routingRule: { select: { methods: { where: { kind: "LABEL" }, select: { carrier: true } } } },
+      },
     });
+    if (!(request?.routingRule?.methods[0]?.carrier ?? request?.regionalPolicy?.labelProvider ?? settings.provider)) return;
+    // The region's own switch first, then the store's.
+    const automatic = request?.regionalPolicy ? request.regionalPolicy.generateLabels : settings.autoCreate;
+    if (!automatic && choice.book !== true) return;
     if (request?.shipment?.labelUrl) return;
     if (request?.returnMethod !== "LABEL" && choice.book !== true) return;
     await createReturnLabel(merchantId, returnId, actorId, { email: false, courierId: choice.courierId ?? null });
@@ -275,6 +313,10 @@ export const refreshTracking = async (merchantId: string, returnId: string): Pro
     include: trackedInclude,
   });
   if (!shipment?.provider) throw notFound("This return has no booked shipment.");
+  if (shipment.provider === "EXTERNAL") {
+    // Nothing to ask: the connector posts what it knows.
+    return prisma.returnShipment.update({ where: { id: shipment.id }, data: { lastTrackedAt: new Date() } });
+  }
   if (shipment.provider === "SHIPROCKET" && shipment.isTest) {
     // Nothing to ask: a pretend parcel moves only when simulated from the return.
     return prisma.returnShipment.update({ where: { id: shipment.id }, data: { lastTrackedAt: new Date() } });
@@ -360,6 +402,56 @@ export const runTrackingSweepSafely = async (): Promise<void> => {
   } catch (error) {
     logger.error({ err: error }, "Tracking sweep failed");
   }
+  try {
+    const result = await runAutoCancel();
+    if (result.cancelled > 0) logger.info(result, "Auto-cancel done");
+  } catch (error) {
+    logger.error({ err: error }, "Auto-cancel failed");
+  }
+};
+
+/**
+ * AfterShip's "Auto-cancel return labels": a label with no shipping update
+ * this many days after approval is voided and the return expires. Runs
+ * with the tracking sweep, one store at a time.
+ */
+export const runAutoCancel = async (): Promise<{ cancelled: number; failed: number }> => {
+  const stores = await prisma.shippingSettings.findMany({
+    where: { autoCancelDays: { not: null } },
+    select: { merchantId: true, autoCancelDays: true },
+  });
+  let cancelled = 0;
+  let failed = 0;
+  for (const store of stores) {
+    const days = store.autoCancelDays!;
+    const due = await prisma.returnShipment.findMany({
+      where: {
+        provider: { not: null },
+        status: { in: ["PENDING", "LABEL_CREATED"] },
+        shippedAt: null,
+        returnRequest: { merchantId: store.merchantId, status: "APPROVED", reviewedAt: { lte: new Date(Date.now() - days * 86_400_000) } },
+      },
+      select: { returnRequestId: true },
+      take: 100,
+    });
+    for (const { returnRequestId } of due) {
+      try {
+        await cancelLabel(store.merchantId, returnRequestId, null);
+        await changeStatus({
+          merchantId: store.merchantId,
+          id: returnRequestId,
+          to: "EXPIRED",
+          message: `Closed automatically — the return label had no shipping update ${days} days after approval, so it was cancelled`,
+        });
+        await notify(returnRequestId, "EXPIRED");
+        cancelled++;
+      } catch (error) {
+        failed++;
+        logger.warn({ merchantId: store.merchantId, returnId: returnRequestId, err: error }, "Auto-cancel failed for a return");
+      }
+    }
+  }
+  return { cancelled, failed };
 };
 
 // ---------------------------------------------------------------------------
@@ -383,7 +475,10 @@ export const cancelLabel = async (
     throw unprocessable("That parcel can't be cancelled any more.");
   }
   let problems: string[] = [];
-  if (shipment.provider === "SHIPROCKET") {
+  if (shipment.provider === "EXTERNAL") {
+    const account = await external.getAccount(merchantId);
+    problems = account ? await external.cancelCalls(account, shipment) : [];
+  } else if (shipment.provider === "SHIPROCKET") {
     // A pretend booking exists nowhere but here.
     if (!shipment.isTest) problems = await shiprocket.cancelCalls(merchantId, shipment);
   } else if (shipment.provider === "EASYPOST") {

@@ -114,6 +114,7 @@ export const testConnection = async (merchantId: string) => {
 
 const address = (p: Party) => ({
   name: fullName(p) || p.firstName,
+  ...(p.company ? { business_name: p.company } : {}),
   lines: [p.address1, p.address2].filter(Boolean),
   suburb: p.city,
   state: p.stateCode || p.state,
@@ -212,10 +213,10 @@ export const book = async (
     const reply = await call<ShipmentReply>(e, "/shipments", {
       shipments: [
         {
-          shipment_reference: orderId.slice(0, 50),
+          shipment_reference: (parcel.references[0] ?? orderId).slice(0, 50),
           from: address(parcel.from),
           to: address(parcel.to),
-          items: [{ ...item(parcel), item_reference: request.reference.slice(0, 50), product_id: productId, authority_to_leave: false, allow_partial_delivery: false }],
+          items: [{ ...item(parcel), item_reference: (parcel.references[1] ?? request.reference).slice(0, 50), product_id: productId, authority_to_leave: false, allow_partial_delivery: false }],
         },
       ],
     });

@@ -179,6 +179,7 @@ export const fr: Dict = {
   "status.label.tracking": "Numéro de suivi",
   "status.label.status": "Statut du colis",
   "status.label.download": "Télécharger l'étiquette",
+  "status.packingSlip": "Imprimer le bordereau d'expédition",
   "status.label.track": "Suivre le colis",
   "review.method.change": "Modifier",
   "status.questions": "Des questions ?",

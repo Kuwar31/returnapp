@@ -179,6 +179,7 @@ export const it: Dict = {
   "status.label.tracking": "Numero di tracciamento",
   "status.label.status": "Stato del pacco",
   "status.label.download": "Scarica l'etichetta",
+  "status.packingSlip": "Stampa la bolla di imballaggio",
   "status.label.track": "Traccia il pacco",
   "review.method.change": "Cambia",
   "status.questions": "Domande?",

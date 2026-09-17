@@ -29,6 +29,9 @@ import * as dhlexpress from "../shipping/dhlexpress.service.js";
 import * as fedex from "../shipping/fedex.service.js";
 import * as auspost from "../shipping/auspost.service.js";
 import * as dhlparcelde from "../shipping/dhlparcelde.service.js";
+import * as external from "../shipping/external.service.js";
+import * as packageSizes from "./package-sizes.service.js";
+import { LABEL_REFERENCE_TYPES, MAX_LABEL_REFERENCES } from "../shipping/label-references.js";
 import * as shippingSettings from "../shipping/shipping.settings.js";
 import { indianMobile } from "../shipping/addresses.js";
 import { inventoryAccessProblem } from "../shopify/locations.service.js";
@@ -776,6 +779,8 @@ const outcomeSchema = z
     message: "A percentage fee can't be more than 100%.",
   });
 
+const PROVIDERS = ["SHIPROCKET", "DELHIVERY", "EASYPOST", "SHIPPO", "SHIPSTATION", "SENDCLOUD", "DHL_EXPRESS", "FEDEX", "AUSPOST", "DEUTSCHE_POST"] as const;
+
 const regionalPolicySchema = z.object({
   name: z.string().trim().min(1).max(80),
   countries: z
@@ -813,6 +818,13 @@ const regionalPolicySchema = z.object({
     .array(z.string().trim().max(300))
     .max(20)
     .transform((steps) => steps.filter(Boolean)),
+  generateLabels: z.boolean(),
+  /** Null follows the store's default carrier; EXTERNAL asks the store's own connector. */
+  labelProvider: z.enum([...PROVIDERS, "EXTERNAL"]).nullable(),
+  packingSlips: z.boolean(),
+  packingSlipTaxInclusive: z.boolean(),
+  packingSlipBarcode: z.boolean(),
+  packingSlipBarcodeSource: z.enum(["RETURN_ID", "ORDER_NUMBER"]),
   outcomes: z.object({
     REFUND: outcomeSchema,
     EXCHANGE: outcomeSchema,
@@ -893,6 +905,11 @@ const destinationSchema = z.object({
     .toUpperCase()
     .regex(/^[A-Z]{2}$/, "Choose a country."),
   phone: optionalLine(40),
+  company: optionalLine(100),
+  contactName: optionalLine(100),
+  email: z
+    .union([z.string().trim().email().max(200), z.literal(""), z.null(), z.undefined()])
+    .transform((v) => (v ? v : null)),
   isDefault: z.boolean().optional(),
   /** The Shopify Location to restock at; null when the destination isn't one. */
   locationId: z.string().regex(REGION_LOCATION_GID).nullable().optional().transform((v) => v ?? null),
@@ -971,6 +988,11 @@ const routingMethodSchema = z.object({
     .refine((v) => v === null || /^https?:\/\/\S+$/i.test(v), {
       message: "Enter a valid URL, starting with http:// or https://.",
     }),
+  /** LABEL only — the rule's return shipping information; each null defers. */
+  carrier: z.enum([...PROVIDERS, "EXTERNAL"]).nullable().optional().transform((v) => v ?? null),
+  serviceName: blankToNull(120),
+  destinationId: z.string().min(1).max(60).nullable().optional().transform((v) => v ?? null),
+  packageSizeId: z.string().min(1).max(60).nullable().optional().transform((v) => v ?? null),
 });
 
 const list = (max: number, itemMax = 80) =>
@@ -1036,11 +1058,26 @@ settingsRouter.get(
         select: { currency: true },
       }),
     ]);
+    const [destinations, sizes, shipping] = await Promise.all([
+      destinationsService.listDestinations(merchantId),
+      packageSizes.listPackageSizes(merchantId),
+      shippingView(merchantId),
+    ]);
+    const connected = {
+      SHIPROCKET: shipping.shiprocket, DELHIVERY: shipping.delhivery, EASYPOST: shipping.easypost, SHIPPO: shipping.shippo,
+      SHIPSTATION: shipping.shipstation, SENDCLOUD: shipping.sendcloud, DHL_EXPRESS: shipping.dhlExpress, FEDEX: shipping.fedex,
+      AUSPOST: shipping.ausPost, DEUTSCHE_POST: shipping.deutschePost, EXTERNAL: shipping.external,
+    };
     res.json({
       rules: rules.map(routing.serializeRule),
       policies,
       reasons,
       currency: merchant.currency,
+      // For the label method's return shipping information.
+      destinations: destinations.map(destinationsService.serializeDestination),
+      packageSizes: sizes.map(packageSizes.serializePackageSize),
+      carriers: (Object.keys(connected) as Array<keyof typeof connected>).filter((id) => Boolean(connected[id])),
+      defaultCarrier: shipping.settings.provider,
     });
   }),
 );
@@ -1144,10 +1181,22 @@ settingsRouter.post(
 const cm = z.number().min(1).max(500);
 const shippingSettingsSchema = z
   .object({
-    provider: z
-      .enum(["SHIPROCKET", "DELHIVERY", "EASYPOST", "SHIPPO", "SHIPSTATION", "SENDCLOUD", "DHL_EXPRESS", "FEDEX", "AUSPOST", "DEUTSCHE_POST"])
-      .nullable(),
+    provider: z.enum([...PROVIDERS, "EXTERNAL"]).nullable(),
     autoCreate: z.boolean(),
+    packingSlips: z.boolean(),
+    packingSlipTaxInclusive: z.boolean(),
+    packingSlipBarcode: z.boolean(),
+    packingSlipBarcodeSource: z.enum(["RETURN_ID", "ORDER_NUMBER"]),
+    packingSlipMethods: z.array(z.enum(["LABEL", "CARRIER", "STORE", "KEEP"])).max(4).transform((v) => [...new Set(v)]),
+    autoCancelDays: z.number().int().min(1).max(365).nullable(),
+    labelReferences: z
+      .array(
+        z.object({
+          type: z.enum(LABEL_REFERENCE_TYPES as [string, ...string[]]),
+          text: z.string().trim().max(35).optional(),
+        }),
+      )
+      .max(MAX_LABEL_REFERENCES),
     receiveOnDelivery: z.boolean(),
     destinationId: z.string().min(1).max(60).nullable(),
     shippingEmail: z
@@ -1173,7 +1222,7 @@ const readiness = (d: { phone: string | null; zip: string | null }) => ({
  * to say so here than at the first approval.
  */
 const shippingView = async (merchantId: string) => {
-  const [settings, sr, dl, ep, sp, ss, sc, dx, fx, ap, dp, destinations, destination] = await Promise.all([
+  const [settings, sr, dl, ep, sp, ss, sc, dx, fx, ap, dp, ex, destinations, destination, sizes, labelRules] = await Promise.all([
     shippingSettings.getSettings(merchantId),
     shiprocket.getAccount(merchantId),
     delhivery.getAccount(merchantId),
@@ -1185,8 +1234,11 @@ const shippingView = async (merchantId: string) => {
     fedex.getAccount(merchantId),
     auspost.getAccount(merchantId),
     dhlparcelde.getAccount(merchantId),
+    external.getAccount(merchantId),
     destinationsService.listDestinations(merchantId),
     shippingSettings.deliveryDestination(merchantId),
+    packageSizes.listPackageSizes(merchantId),
+    prisma.returnRoutingRule.count({ where: { merchantId, methods: { some: { kind: "LABEL", enabled: true } } } }),
   ]);
   return {
     settings: shippingSettings.serializeSettings(settings),
@@ -1200,6 +1252,10 @@ const shippingView = async (merchantId: string) => {
     fedex: fx ? fedex.serializeAccount(fx) : null,
     ausPost: ap ? auspost.serializeAccount(ap) : null,
     deutschePost: dp ? dhlparcelde.serializeAccount(dp) : null,
+    external: ex ? external.serializeAccount(ex) : null,
+    packageSizes: sizes.map(packageSizes.serializePackageSize),
+    /** How many routing rules offer "Ship with a return label" — AfterShip's last setup step. */
+    labelRules,
     webhookUrl: shiprocket.webhookUrl(),
     destinations: destinations.map((d) => ({ ...destinationsService.serializeDestination(d), ...readiness(d) })),
     /** Where parcels go today: the chosen destination, else the default. */
@@ -1250,8 +1306,50 @@ settingsRouter.patch(
     if (req.body.provider === "DEUTSCHE_POST" && !(await dhlparcelde.getAccount(merchantId))) {
       throw unprocessable("Connect DHL Paket before choosing it.");
     }
+    if (req.body.provider === "EXTERNAL" && !(await external.getAccount(merchantId))) {
+      throw unprocessable("Set up the external connector before choosing it.");
+    }
     await shippingSettings.updateSettings(merchantId, req.body);
     res.json(await shippingView(merchantId));
+  }),
+);
+
+// --- Package sizes ---
+
+const packageSizeSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  length: z.number().min(0.1).max(10_000),
+  width: z.number().min(0.1).max(10_000),
+  height: z.number().min(0.1).max(10_000),
+  unit: z.enum(["CM", "IN"]),
+  weight: z.number().min(0).max(10_000),
+  massUnit: z.enum(["KG", "LB"]),
+  isDefault: z.boolean().optional(),
+});
+
+settingsRouter.post(
+  "/package-sizes",
+  validate(packageSizeSchema),
+  asyncHandler(async (req, res) => {
+    const created = await packageSizes.createPackageSize(req.admin!.merchantId, req.body);
+    res.status(201).json(packageSizes.serializePackageSize(created));
+  }),
+);
+
+settingsRouter.patch(
+  "/package-sizes/:id",
+  validate(packageSizeSchema),
+  asyncHandler(async (req, res) => {
+    const updated = await packageSizes.updatePackageSize(req.admin!.merchantId, req.params.id, req.body);
+    res.json(packageSizes.serializePackageSize(updated));
+  }),
+);
+
+settingsRouter.delete(
+  "/package-sizes/:id",
+  asyncHandler(async (req, res) => {
+    await packageSizes.deletePackageSize(req.admin!.merchantId, req.params.id);
+    res.status(204).end();
   }),
 );
 
@@ -1349,6 +1447,8 @@ settingsRouter.post(
   "/delhivery/test",
   asyncHandler(async (req, res) => {
     res.json(await delhivery.testConnection(req.admin!.merchantId));
+  }),
+);
 
 // --- EasyPost ---
 
@@ -1387,6 +1487,8 @@ settingsRouter.post(
   "/easypost/test",
   asyncHandler(async (req, res) => {
     res.json(await easypost.testConnection(req.admin!.merchantId));
+  }),
+);
 
 // --- Shippo ---
 
@@ -1551,6 +1653,40 @@ settingsRouter.post(
   }),
 );
 
+// --- EXTERNAL connector ---
+
+settingsRouter.post(
+  "/external/connect",
+  validate(z.object({ url: z.string().trim().min(8).max(500), secret: z.string().trim().max(200).optional().nullable() })),
+  asyncHandler(async (req, res) => {
+    const merchantId = req.admin!.merchantId;
+    await external.connectAccount(merchantId, req.body.url, req.body.secret);
+    const settings = await shippingSettings.getSettings(merchantId);
+    if (!settings.provider) await shippingSettings.updateSettings(merchantId, { provider: "EXTERNAL" });
+    res.json(await shippingView(merchantId));
+  }),
+);
+
+settingsRouter.delete(
+  "/external",
+  asyncHandler(async (req, res) => {
+    const merchantId = req.admin!.merchantId;
+    await external.disconnectAccount(merchantId);
+    const settings = await shippingSettings.getSettings(merchantId);
+    if (settings.provider === "EXTERNAL") await shippingSettings.updateSettings(merchantId, { provider: null });
+    // Policies that named it follow the store's default again.
+    await prisma.regionalPolicy.updateMany({ where: { merchantId, labelProvider: "EXTERNAL" }, data: { labelProvider: null } });
+    res.json(await shippingView(merchantId));
+  }),
+);
+
+settingsRouter.post(
+  "/external/test",
+  asyncHandler(async (req, res) => {
+    res.json(await external.testConnection(req.admin!.merchantId));
+  }),
+);
+
 // --- FEDEX ---
 
 settingsRouter.post(
@@ -1671,9 +1807,5 @@ settingsRouter.post(
   "/deutsche-post/test",
   asyncHandler(async (req, res) => {
     res.json(await dhlparcelde.testConnection(req.admin!.merchantId));
-  }),
-);
-  }),
-);
   }),
 );

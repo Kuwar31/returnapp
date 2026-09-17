@@ -41,6 +41,7 @@ export const upsertOrder = async (
     currency: order.currency,
     subtotal: toDecimal(order.subtotal),
     total: toDecimal(order.total),
+    taxesIncluded: order.taxesIncluded,
     // Never regress to null: a payload without presentment data shouldn't erase
     // what an earlier sync already established.
     ...(order.presentmentCurrency
@@ -95,6 +96,7 @@ export const upsertOrder = async (
         variantOptions: line.variantOptions ?? undefined,
         quantity: line.quantity,
         unitPrice: toDecimal(line.unitPrice),
+        unitTax: toDecimal(Math.round(line.unitTax * 100) / 100),
         currency: line.currency,
       };
 
@@ -186,6 +188,7 @@ const SYNC_ORDERS_QUERY = `#graphql
           shopMoney { amount }
           presentmentMoney { amount currencyCode }
         }
+        taxesIncluded
         fulfillments(first: 10) { createdAt deliveredAt displayStatus }
         # Phone is deliberately absent. It is protected customer data, and an
         # app without that approval doesn't simply get the field omitted —
@@ -215,6 +218,7 @@ const SYNC_ORDERS_QUERY = `#graphql
             quantity
             image { url }
             discountedUnitPriceSet { shopMoney { amount } }
+            taxLines { priceSet { shopMoney { amount } } }
             product { id productType tags }
             variant { id selectedOptions { name value } }
           }

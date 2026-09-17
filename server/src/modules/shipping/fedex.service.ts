@@ -160,7 +160,7 @@ const address = (p: Party) => ({
 });
 
 const party = (p: Party) => ({
-  contact: { personName: fullName(p) || p.firstName, phoneNumber: p.phone || "0000000000", ...(p.email ? { emailAddress: p.email } : {}) },
+  contact: { personName: fullName(p) || p.firstName, ...(p.company ? { companyName: p.company } : {}), phoneNumber: p.phone || "0000000000", ...(p.email ? { emailAddress: p.email } : {}) },
   address: address(p),
 });
 
@@ -266,7 +266,13 @@ export const book = async (
         shippingChargesPayment: { paymentType: "SENDER", payor: { responsibleParty: { accountNumber: { value: e.account } } } },
         shipmentSpecialServices: { specialServiceTypes: ["RETURN_SHIPMENT"], returnShipmentDetail: { returnType: "PRINT_RETURN_LABEL" } },
         labelSpecification: { imageType: "PDF", labelStockType: "PAPER_4X6" },
-        requestedPackageLineItems: lineItems(parcel).map((li) => ({ ...li, customerReferences: [{ customerReferenceType: "CUSTOMER_REFERENCE", value: orderId.slice(0, 40) }] })),
+        // FedEx prints three reference slots; the store's references fill them, else the booking's own.
+        requestedPackageLineItems: lineItems(parcel).map((li) => ({
+          ...li,
+          customerReferences: (parcel.references.length ? parcel.references : [orderId])
+            .slice(0, 3)
+            .map((value, i) => ({ customerReferenceType: ["CUSTOMER_REFERENCE", "INVOICE_NUMBER", "P_O_NUMBER"][i], value: value.slice(0, 40) })),
+        })),
       },
     });
     const ts = reply.output?.transactionShipments?.[0];

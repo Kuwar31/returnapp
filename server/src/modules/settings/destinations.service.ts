@@ -18,6 +18,10 @@ export interface DestinationInput {
   zip: string | null;
   countryCode: string;
   phone: string | null;
+  /** Who receives parcels there; printed on the label. */
+  company: string | null;
+  contactName: string | null;
+  email: string | null;
   isDefault?: boolean;
   /** The Shopify Location to restock at, when the destination is one. */
   locationId: string | null;
@@ -42,6 +46,9 @@ export const serializeDestination = (d: ReturnDestination) => ({
   zip: d.zip,
   countryCode: d.countryCode,
   phone: d.phone,
+  company: d.company,
+  contactName: d.contactName,
+  email: d.email,
   isDefault: d.isDefault,
   locationId: d.locationId,
   /** One line, for the cards and the policy editor. */
@@ -66,6 +73,9 @@ const scalars = (input: DestinationInput) => ({
   zip: input.zip,
   countryCode: input.countryCode,
   phone: input.phone,
+  company: input.company,
+  contactName: input.contactName,
+  email: input.email,
   locationId: input.locationId,
 });
 

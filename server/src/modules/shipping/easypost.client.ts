@@ -153,7 +153,7 @@ export interface Shipment {
 /** Makes the shipment and, with it, the rates every carrier on the account offers. */
 export const createShipment = (
   e: Env,
-  input: { to: AddressInput; from: AddressInput; parcel: ParcelInput; reference: string },
+  input: { to: AddressInput; from: AddressInput; parcel: ParcelInput; reference: string; references?: string[] },
 ) =>
   request<Shipment>(e, "POST", "/shipments", {
     shipment: {
@@ -163,7 +163,12 @@ export const createShipment = (
       // A return: the shopper posts it, the store receives it.
       is_return: true,
       reference: input.reference,
-      options: { label_format: "PDF", label_size: "4x6" },
+      options: {
+        label_format: "PDF",
+        label_size: "4x6",
+        // The store's label references, in the three lines EasyPost prints.
+        ...Object.fromEntries((input.references ?? []).slice(0, 3).map((text, i) => [`print_custom_${i + 1}`, text])),
+      },
     },
   });
 

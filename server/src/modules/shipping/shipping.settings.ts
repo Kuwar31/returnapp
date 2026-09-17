@@ -1,4 +1,5 @@
-import type { Prisma, ShipmentProvider } from "@prisma/client";
+import { Prisma, type PackingSlipBarcode, type ReturnMethodKind, type ShipmentProvider } from "@prisma/client";
+import { readLabelReferences, type LabelReference } from "./label-references.js";
 import { notFound } from "../../lib/errors.js";
 import { prisma } from "../../lib/prisma.js";
 import { defaultDestination } from "../settings/destinations.service.js";
@@ -11,13 +12,22 @@ import { defaultDestination } from "../settings/destinations.service.js";
 
 const include = { destination: true } as const;
 
-export const getSettings = async (merchantId: string) =>
-  prisma.shippingSettings.upsert({
-    where: { merchantId },
-    create: { merchantId },
-    update: {},
-    include,
-  });
+export const getSettings = async (merchantId: string) => {
+  try {
+    return await prisma.shippingSettings.upsert({
+      where: { merchantId },
+      create: { merchantId },
+      update: {},
+      include,
+    });
+  } catch (error) {
+    // Two first readers at once: the loser's create collides, the row is there now.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return prisma.shippingSettings.findUniqueOrThrow({ where: { merchantId }, include });
+    }
+    throw error;
+  }
+};
 
 export type ShippingSettingsRow = Awaited<ReturnType<typeof getSettings>>;
 
@@ -29,6 +39,17 @@ export const serializeSettings = (s: ShippingSettingsRow) => ({
   destinationId: s.destinationId,
   /** Null falls back to the store owner's address. */
   shippingEmail: s.shippingEmail,
+  /** Packing slips for returns under the store policy. */
+  packingSlips: s.packingSlips,
+  packingSlipTaxInclusive: s.packingSlipTaxInclusive,
+  packingSlipBarcode: s.packingSlipBarcode,
+  packingSlipBarcodeSource: s.packingSlipBarcodeSource,
+  /** Which return methods show the packing slip. */
+  packingSlipMethods: s.packingSlipMethods,
+  /** Void a label with no shipping update this many days after approval; null leaves labels alone. */
+  autoCancelDays: s.autoCancelDays,
+  /** Up to three fields for the label's reference slots. */
+  labelReferences: readLabelReferences(s.labelReferences),
   parcel: {
     lengthCm: Number(s.lengthCm),
     breadthCm: Number(s.breadthCm),
@@ -43,6 +64,13 @@ export interface SettingsInput {
   receiveOnDelivery?: boolean;
   destinationId?: string | null;
   shippingEmail?: string | null;
+  packingSlips?: boolean;
+  packingSlipTaxInclusive?: boolean;
+  packingSlipBarcode?: boolean;
+  packingSlipBarcodeSource?: PackingSlipBarcode;
+  packingSlipMethods?: ReturnMethodKind[];
+  autoCancelDays?: number | null;
+  labelReferences?: LabelReference[];
   lengthCm?: number;
   breadthCm?: number;
   heightCm?: number;

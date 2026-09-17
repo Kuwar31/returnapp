@@ -121,6 +121,7 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
 
 const address = (p: Party): api.AddressInput => ({
   name: fullName(p) || p.firstName,
+  ...(p.company ? { company: p.company } : {}),
   street1: p.address1,
   street2: p.address2 || undefined,
   city: p.city,
@@ -236,6 +237,7 @@ export const book = async (
           from: address(parcel.from),
           parcel: parcelInput(parcel),
           reference: orderId,
+          references: parcel.references,
         });
     if (!shipment.rates?.length) throw noRates(shipment);
     await saveShipment(returnId, "EASYPOST", {

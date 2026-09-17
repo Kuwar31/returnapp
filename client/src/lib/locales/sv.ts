@@ -179,6 +179,7 @@ export const sv: Dict = {
   "status.label.tracking": "Spårningsnummer",
   "status.label.status": "Paketstatus",
   "status.label.download": "Ladda ner etikett",
+  "status.packingSlip": "Skriv ut packsedel",
   "status.label.track": "Spåra paketet",
   "review.method.change": "Ändra",
   "status.questions": "Frågor?",

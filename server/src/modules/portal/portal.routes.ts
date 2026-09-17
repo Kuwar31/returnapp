@@ -17,6 +17,7 @@ import {
   referenceAuthSchema,
   submitSchema,
 } from "./portal.schemas.js";
+import { packingSlipUrlFor } from "../returns/packing-slip.js";
 import * as portalService from "./portal.service.js";
 import {
   resolveDisplayMode,
@@ -395,6 +396,8 @@ portalRouter.get(
       instructions: region?.instructions ?? [],
       // The policy's destination, else the store's default; null with neither.
       returnTo: await destinationForShopper(merchant.id, region?.destinationId ?? null),
+      // The printable slip, when the policy makes one and there's something to pack.
+      packingSlipUrl: await packingSlipUrlFor(merchant.id, request.id),
     });
   }),
 );

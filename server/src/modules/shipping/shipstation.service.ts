@@ -178,6 +178,7 @@ export const testConnection = async (merchantId: string) => {
 
 const address = (p: Party) => ({
   name: fullName(p) || p.firstName,
+  ...(p.company ? { company: p.company } : {}),
   street1: p.address1,
   street2: p.address2 || null,
   city: p.city,

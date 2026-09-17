@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { api } from "../lib/api";
 import { dateTime } from "../lib/format";
-import type { ShipmentProvider, ShippingView } from "../lib/types";
+import { accountOf, PROVIDER_NAMES } from "../lib/shipping";
+import type { LabelReference, LabelReferenceType, PackageSize, PackingSlipBarcode, PackingSlipSettings, ReturnMethodKind, ShipmentProvider, ShippingView } from "../lib/types";
 import { CopyLink } from "../components/CopyLink";
 import { ErrorAlert, Loading } from "../components/Feedback";
 import { useAuth } from "./AuthContext";
@@ -25,7 +26,6 @@ import { storePath } from "./store-path";
  */
 
 type Provider = ShipmentProvider;
-type Parcel = ShippingView["settings"]["parcel"];
 
 const SERVICES: Array<{ id: Provider; name: string; initials: string; blurb: string }> = [
   {
@@ -68,6 +68,12 @@ const SERVICES: Array<{ id: Provider; name: string; initials: string; blurb: str
   { id: "FEDEX", name: "FedEx", initials: "FX", blurb: "Your FedEx account through its REST APIs, rated per service, with return labels." },
   { id: "AUSPOST", name: "Australia Post", initials: "AP", blurb: "Your MyPost Business or eParcel account, priced per product within Australia." },
   { id: "DEUTSCHE_POST", name: "DHL Paket", initials: "DP", blurb: "Deutsche Post / DHL Paket for Germany, at your contract rates." },
+  {
+    id: "EXTERNAL",
+    name: "External connector",
+    initials: "EC",
+    blurb: "Your own label system: each approved return is posted to a URL you give, and it answers with the label.",
+  },
 ];
 
 /**
@@ -80,7 +86,7 @@ const CATALOGUE: Array<{
   name: string;
   brand: string;
   region: string;
-  learnMore: string;
+  learnMore?: string;
   beta?: boolean;
 }> = [
   { id: "SHIPPO", name: "shippo", brand: "shippo", region: "US", learnMore: "https://goshippo.com" },
@@ -93,20 +99,10 @@ const CATALOGUE: Array<{
   { id: "DEUTSCHE_POST", name: "Deutsche Post", brand: "deutschepost", region: "DE", learnMore: "https://developer.dhl.com", beta: true },
   { id: "AUSPOST", name: "Australia Post", brand: "auspost", region: "AU", learnMore: "https://developer.auspost.com.au", beta: true },
   { id: "DHL_EXPRESS", name: "DHL Express", brand: "dhl", region: "International", learnMore: "https://developer.dhl.com", beta: true },
+  { id: "EXTERNAL", name: "External connector", brand: "external", region: "Anywhere — your own system" },
 ];
 
-const NAMES: Record<Provider, string> = {
-  SHIPROCKET: "Shiprocket",
-  DELHIVERY: "Delhivery",
-  EASYPOST: "EasyPost",
-  SHIPPO: "Shippo",
-  SHIPSTATION: "ShipStation",
-  SENDCLOUD: "Sendcloud",
-  DHL_EXPRESS: "DHL Express",
-  FEDEX: "FedEx",
-  AUSPOST: "Australia Post",
-  DEUTSCHE_POST: "DHL Paket",
-};
+const NAMES = PROVIDER_NAMES;
 
 /** The API path segment for a service's admin routes. */
 const PATHS: Record<Provider, string> = {
@@ -120,29 +116,9 @@ const PATHS: Record<Provider, string> = {
   FEDEX: "fedex",
   AUSPOST: "auspost",
   DEUTSCHE_POST: "deutsche-post",
+  EXTERNAL: "external",
 };
 
-/** Whether a service is connected, and whether it's in a test mode, from the view. */
-const accountOf = (data: ShippingView, id: Provider): { testMode: boolean } | null =>
-  id === "SHIPROCKET"
-    ? data.shiprocket
-    : id === "DELHIVERY"
-      ? data.delhivery && { testMode: data.delhivery.staging }
-      : id === "EASYPOST"
-        ? data.easypost
-        : id === "SHIPPO"
-          ? data.shippo
-          : id === "SHIPSTATION"
-            ? data.shipstation
-            : id === "SENDCLOUD"
-              ? data.sendcloud
-              : id === "DHL_EXPRESS"
-                ? data.dhlExpress
-                : id === "FEDEX"
-                  ? data.fedex
-                  : id === "AUSPOST"
-                    ? data.ausPost
-                    : data.deutschePost;
 
 export default function ShippingPage() {
   const { session } = useAuth();
@@ -152,16 +128,16 @@ export default function ShippingPage() {
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [parcel, setParcel] = useState<Parcel>({ lengthCm: 20, breadthCm: 15, heightCm: 10, weightKg: 0.5 });
   const [shippingEmail, setShippingEmail] = useState("");
   /** The delivery destination's phone and postcode, editable in place. */
   const [contact, setContact] = useState<{ id: string | null; phone: string; zip: string }>({ id: null, phone: "", zip: "" });
   /** Which dialog is open, if any. */
-  const [dialog, setDialog] = useState<null | { kind: "connect" } | { kind: "default" } | { kind: "manage"; provider: Provider }>(null);
+  const [dialog, setDialog] = useState<
+    null | { kind: "connect" } | { kind: "default" } | { kind: "manage"; provider: Provider } | { kind: "package"; size: PackageSize | null }
+  >(null);
 
   const apply = (found: ShippingView) => {
     setData(found);
-    setParcel(found.settings.parcel);
     setShippingEmail(found.settings.shippingEmail ?? "");
   };
 
@@ -210,13 +186,16 @@ export default function ShippingPage() {
 
   const patchSettings = (
     changes: Partial<
-      Parcel & {
+      {
         provider: Provider | null;
         autoCreate: boolean;
         receiveOnDelivery: boolean;
         destinationId: string | null;
         shippingEmail: string | null;
-      }
+        packingSlipMethods: ReturnMethodKind[];
+        autoCancelDays: number | null;
+        labelReferences: LabelReference[];
+      } & PackingSlipSettings
     >,
     message?: string,
   ) => run(() => api.patch("/admin/settings/shipping", changes, { auth: "admin" }), message);
@@ -276,12 +255,17 @@ export default function ShippingPage() {
     FEDEX: "FedEx is on its sandbox: labels are test labels and nothing is charged. Switch to production under Manage before real returns come in.",
     AUSPOST: "Australia Post is on its test environment: labels are test labels and nothing is charged. Switch to production under Manage before real returns come in.",
     DEUTSCHE_POST: "DHL Paket is on its sandbox: labels are test labels and nothing is charged. Switch to production under Manage before real returns come in.",
+    EXTERNAL: "",
   };
-  const parcelDirty =
-    parcel.lengthCm !== settings.parcel.lengthCm ||
-    parcel.breadthCm !== settings.parcel.breadthCm ||
-    parcel.heightCm !== settings.parcel.heightCm ||
-    parcel.weightKg !== settings.parcel.weightKg;
+  /** AfterShip's progress dashboard: what's done on the way to automatic labels. */
+  const steps: Array<{ label: string; done: boolean; optional?: boolean; to?: string; action?: () => void; cta: string }> = [
+    { label: "Add carrier", done: connected.length > 0, cta: "Connect shipping service", action: () => setDialog({ kind: "connect" }) },
+    { label: "Add return location", done: data.destinations.length > 0, cta: "Add destination", to: `${base}/settings/policies/destinations` },
+    { label: "Add package size", done: data.packageSizes.length > 0, cta: "Add package size", action: () => setDialog({ kind: "package", size: null }) },
+    { label: "Return labels", done: settings.autoCancelDays !== null || settings.labelReferences.length > 0, optional: true, cta: "Review", to: "#return-labels" },
+    { label: "Shipping documents", done: settings.packingSlips, optional: true, cta: "Review", to: "#shipping-documents" },
+    { label: "Set up return routing rules", done: data.labelRules > 0, cta: "Set up in routing rules", to: `${base}/settings/policies/routing` },
+  ];
   const emailDirty = shippingEmail.trim() !== (settings.shippingEmail ?? "");
   const effective = effectiveOf(data);
   const storeDefault = data.destinations.find((d) => d.isDefault) ?? null;
@@ -305,6 +289,7 @@ export default function ShippingPage() {
     if (id === "FEDEX" && data.fedex) return `Account ${data.fedex.accountNumber} · connected ${dateTime(data.fedex.connectedAt)}`;
     if (id === "AUSPOST" && data.ausPost) return `Account ${data.ausPost.accountNumber} · connected ${dateTime(data.ausPost.connectedAt)}`;
     if (id === "DEUTSCHE_POST" && data.deutschePost) return `Billing ${data.deutschePost.billingNumber} · connected ${dateTime(data.deutschePost.connectedAt)}`;
+    if (id === "EXTERNAL" && data.external) return `${data.external.url} · connected ${dateTime(data.external.connectedAt)}`;
     return "";
   };
 
@@ -324,10 +309,51 @@ export default function ShippingPage() {
       {status && <div className="alert alert--info">{status}</div>}
       {active && testing(active) && <div className="alert alert--warn">{testModeCopy[active]}</div>}
 
+      <div className="panel progress">
+        <div className="progress__head">
+          <div>
+            <h2 style={{ marginBottom: 2 }}>Automatic return labels</h2>
+            <p className="settings-row__hint">
+              {steps.filter((s) => s.done).length} of {steps.length} steps done. Once a carrier, a return location and a
+              package size are set, choose them per zone under routing rules and labels are made at approval.
+            </p>
+          </div>
+        </div>
+        <ol className="progress__steps">
+          {steps.map((step) => (
+            <li key={step.label} className={`progress__step${step.done ? " is-done" : ""}`}>
+              <span className="progress__mark" aria-hidden="true">
+                {step.done ? "✓" : ""}
+              </span>
+              <span className="progress__label">
+                {step.label}
+                {step.optional && <span className="progress__optional"> (optional)</span>}
+              </span>
+              {!step.done &&
+                (step.to ? (
+                  step.to.startsWith("#") ? (
+                    <a className="progress__cta" href={step.to}>
+                      {step.cta}
+                    </a>
+                  ) : (
+                    <Link className="progress__cta" to={step.to}>
+                      {step.cta}
+                    </Link>
+                  )
+                ) : (
+                  <button type="button" className="progress__cta link-btn" onClick={step.action}>
+                    {step.cta}
+                  </button>
+                ))}
+            </li>
+          ))}
+        </ol>
+      </div>
+
       <div className="split">
         <div>
-          <h3 className="split__title">Integrations</h3>
-          <p className="split__blurb">Manage external shipping carrier accounts and which one makes your return labels.</p>
+          <h3 className="split__title">Carrier accounts and services</h3>
+          <p className="split__blurb">Connect your own carrier accounts, and choose which one makes return labels by default.</p>
         </div>
         <div className="panel">
           <h2>Shipping services</h2>
@@ -408,41 +434,98 @@ export default function ShippingPage() {
 
       <div className="split">
         <div>
-          <h3 className="split__title">Label and shipment settings</h3>
-          <p className="split__blurb">Customize default settings that apply to all enabled services.</p>
+          <h3 className="split__title">Package sizes</h3>
+          <p className="split__blurb">
+            Carriers price and accept parcels by size, and orders don't carry one, so every return label is booked at
+            a package size from this list. The default applies unless a routing rule names another.
+          </p>
         </div>
         <div className="panel">
-          <h2>Label defaults</h2>
-          <p className="settings-row__hint" style={{ margin: "4px 0 14px" }}>
-            Orders don't carry dimensions, so every return parcel is booked at these. Carriers bill on the greater of
-            this weight and the volumetric one.
-          </p>
-          <div className="label-defaults">
-            {(
-              [
-                ["weightKg", "Product weight default", "kg", "Applied per parcel; orders don't carry a weight."],
-                ["lengthCm", "Package length default", "cm", "The typical packaging used to send back returns."],
-                ["breadthCm", "Package width default", "cm", "The typical packaging used to send back returns."],
-                ["heightCm", "Package height default", "cm", "The typical packaging used to send back returns."],
-              ] as Array<[keyof Parcel, string, string, string]>
-            ).map(([key, label, unit, hint]) => (
-              <label key={key} className="label-defaults__field">
-                <span className="settings-row__label">{label}</span>
-                <NumberField
-                  value={parcel[key]}
-                  min={key === "weightKg" ? 0.05 : 1}
-                  step={key === "weightKg" ? "0.05" : "1"}
-                  unit={unit}
-                  onChange={(value) => setParcel({ ...parcel, [key]: value })}
-                />
-                <span className="settings-row__hint">{hint}</span>
-              </label>
-            ))}
-          </div>
+          <h2>Package sizes</h2>
+          {data.packageSizes.length === 0 ? (
+            <div className="services__empty">
+              <span aria-hidden="true">ⓘ</span> No package sizes yet — labels can't be made without one
+            </div>
+          ) : (
+            <div className="services">
+              {data.packageSizes.map((p) => (
+                <div key={p.id} className="service-row">
+                  <span className="service-row__logo" aria-hidden="true">
+                    ▭
+                  </span>
+                  <span className="service-row__body">
+                    <span className="service-row__name">
+                      {p.name}
+                      {p.isDefault && <span className="chip chip--accent">Default</span>}
+                    </span>
+                    <span className="service-row__meta">{p.summary}</span>
+                  </span>
+                  <span className="service-row__actions">
+                    <button type="button" className="btn btn--secondary btn--sm" onClick={() => setDialog({ kind: "package", size: p })}>
+                      Edit
+                    </button>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="services__foot">
-            <button type="button" className="btn btn--sm" disabled={busy || !parcelDirty} onClick={() => void patchSettings(parcel, "Label defaults saved.")}>
-              Save
+            <button type="button" className="btn btn--sm" onClick={() => setDialog({ kind: "package", size: null })}>
+              Add package size
             </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="split" id="return-labels">
+        <div>
+          <h3 className="split__title">Return labels</h3>
+          <p className="split__blurb">What happens to labels after they're made, and what's printed on them.</p>
+        </div>
+        <div className="panel">
+          <div className="settings-row">
+            <div>
+              <div className="settings-row__label">Auto-cancel return labels</div>
+              <div className="settings-row__hint">
+                Cancel a label that has no shipping update this many days after the return was approved. The return
+                expires and the prepaid label is voided.
+              </div>
+            </div>
+            <Switch
+              on={settings.autoCancelDays !== null}
+              label="Auto-cancel return labels"
+              onChange={(on) => void patchSettings({ autoCancelDays: on ? 28 : null }, on ? "Labels auto-cancel after 28 days without a scan." : "Labels are left alone.")}
+            />
+          </div>
+          {settings.autoCancelDays !== null && (
+            <div className="settings-row">
+              <div>
+                <div className="settings-row__label">Days after approval</div>
+              </div>
+              <NumberField
+                value={settings.autoCancelDays}
+                min={1}
+                max={365}
+                unit="days"
+                onChange={(autoCancelDays) => void patchSettings({ autoCancelDays })}
+              />
+            </div>
+          )}
+          <div className="settings-row settings-row--stacked">
+            <div>
+              <div className="settings-row__label">Customize label references</div>
+              <div className="settings-row__hint">
+                Up to three fields printed in the label's reference slots, so the warehouse can read what a parcel is
+                before opening it. Carriers print what their labels have room for.
+              </div>
+            </div>
+            <LabelReferencesEditor value={settings.labelReferences} disabled={busy} onSave={(labelReferences) => void patchSettings({ labelReferences }, "Label references saved.")} />
+          </div>
+          <div className="settings-row">
+            <div>
+              <div className="settings-row__label">Print additional labels for a return</div>
+              <div className="settings-row__hint">One label per parcel isn't available yet: each return is booked as a single parcel.</div>
+            </div>
           </div>
           <div className="settings-row" style={{ marginTop: 8 }}>
             <div>
@@ -461,12 +544,68 @@ export default function ShippingPage() {
         </div>
       </div>
 
+      <div className="split" id="shipping-documents">
+        <div>
+          <h3 className="split__title">Shipping documents</h3>
+          <p className="split__blurb">
+            A printable packing slip the customer puts in the parcel, with the items coming back and a barcode for the
+            warehouse. These are the defaults for returns under your store policy; a regional policy sets its own under
+            Labels &amp; shipping.
+          </p>
+        </div>
+        <div className="panel">
+          <PackingSlipFields
+            value={settings}
+            disabled={busy}
+            onChange={(changes) => void patchSettings(changes)}
+          />
+          {settings.packingSlips && (
+            <>
+              <div className="pairing__divider" />
+              <div className="field-label">Select return methods</div>
+              <p className="settings-row__hint" style={{ marginBottom: 8 }}>
+                Which ways of sending items back show the packing slip.
+              </p>
+              <div className="check-list">
+                {(
+                  [
+                    ["LABEL", "Ship with a return label"],
+                    ["CARRIER", "Ship with the carrier customers choose"],
+                    ["STORE", "Return to a retail store"],
+                    ["KEEP", "Green returns"],
+                  ] as Array<[ReturnMethodKind, string]>
+                ).map(([kind, label]) => (
+                  <label key={kind} className="check-list__item">
+                    <input
+                      type="checkbox"
+                      checked={settings.packingSlipMethods.includes(kind)}
+                      disabled={busy}
+                      onChange={(e) =>
+                        void patchSettings({
+                          packingSlipMethods: e.target.checked
+                            ? [...settings.packingSlipMethods, kind]
+                            : settings.packingSlipMethods.filter((k) => k !== kind),
+                        })
+                      }
+                    />
+                    <span>
+                      <span className="radio-list__label">{label}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
       <div className="split">
         <div>
-          <h3 className="split__title">Where parcels go</h3>
+          <h3 className="split__title">Warehouse locations</h3>
           <p className="split__blurb">
-            The carrier delivers to the destination chosen here, unless the customer's regional policy names one of its
-            own. Indian couriers need a 10-digit mobile number and a postcode for it.
+            The carrier delivers to the location chosen here, unless a routing rule or the customer's regional policy
+            names one of its own. The location's contact, company and address go on the label. Indian couriers need a
+            10-digit mobile number and a postcode for it.
           </p>
         </div>
         <div className="panel">
@@ -540,6 +679,34 @@ export default function ShippingPage() {
         </div>
       </div>
 
+      {dialog?.kind === "package" && (
+        <PackageSizeDialog
+          size={dialog.size}
+          first={data.packageSizes.length === 0}
+          busy={busy}
+          onClose={() => setDialog(null)}
+          onSave={async (body) => {
+            const ok = await run(
+              () =>
+                dialog.size
+                  ? api.patch(`/admin/settings/package-sizes/${dialog.size.id}`, body, { auth: "admin" })
+                  : api.post("/admin/settings/package-sizes", body, { auth: "admin" }),
+              `Saved "${body.name}".`,
+            );
+            if (ok) setDialog(null);
+          }}
+          onDelete={
+            dialog.size
+              ? async () => {
+                  if (!window.confirm(`Delete "${dialog.size!.name}"?`)) return;
+                  const ok = await run(() => api.delete(`/admin/settings/package-sizes/${dialog.size!.id}`, { auth: "admin" }), "Package size deleted.");
+                  if (ok) setDialog(null);
+                }
+              : undefined
+          }
+        />
+      )}
+
       {dialog?.kind === "connect" && (
         <ConnectDialog
           connected={connected}
@@ -603,9 +770,12 @@ function ConnectDialog({
   const [sc, setSc] = useState({ publicKey: "", secretKey: "", testMode: true });
   /** The direct carriers share one shape: two secrets, an account, a test switch. */
   const [dc, setDc] = useState({ a: "", b: "", c: "", account: "", testMode: true });
+  const [ex, setEx] = useState({ url: "", secret: "" });
 
   const ready =
-    picked === "SHIPROCKET"
+    picked === "EXTERNAL"
+      ? Boolean(ex.url.trim())
+      : picked === "SHIPROCKET"
       ? Boolean(sr.email.trim() && sr.password)
       : picked === "DELHIVERY"
         ? Boolean(dl.token.trim() && dl.warehouseName.trim())
@@ -626,7 +796,9 @@ function ConnectDialog({
   const submit = () => {
     if (!picked || !ready) return;
     const body =
-      picked === "SHIPROCKET"
+      picked === "EXTERNAL"
+        ? { url: ex.url.trim(), secret: ex.secret.trim() || null }
+        : picked === "SHIPROCKET"
         ? { email: sr.email.trim(), password: sr.password }
         : picked === "DELHIVERY"
           ? { token: dl.token.trim(), staging: dl.staging, warehouseName: dl.warehouseName.trim() }
@@ -695,14 +867,37 @@ function ConnectDialog({
                 </div>
                 <div className="carrier-card__foot">
                   <span>Region: {s.region}</span>
-                  <a href={s.learnMore} target="_blank" rel="noreferrer">
-                    Learn more
-                  </a>
+                  {s.learnMore && (
+                    <a href={s.learnMore} target="_blank" rel="noreferrer">
+                      Learn more
+                    </a>
+                  )}
                 </div>
               </div>
             );
           })}
         </div>
+      ) : picked === "EXTERNAL" ? (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit();
+          }}
+        >
+          <p className="settings-row__hint" style={{ marginBottom: 12 }}>
+            For a label system of your own. Every approved return that needs a label is posted to this URL as JSON,
+            signed with a shared secret in the <code>x-returns-signature</code> header. Answer with the label straight
+            away, or later by posting to the events URL shown under Manage. The URL has to answer a ping to connect.
+          </p>
+          <div className="field">
+            <label htmlFor="ex-url">Connector URL</label>
+            <input id="ex-url" type="url" value={ex.url} autoComplete="off" onChange={(e) => setEx({ ...ex, url: e.target.value })} placeholder="https://labels.yourstore.com/returns" required />
+          </div>
+          <div className="field">
+            <label htmlFor="ex-secret">Shared secret (optional)</label>
+            <input id="ex-secret" type="password" value={ex.secret} autoComplete="off" onChange={(e) => setEx({ ...ex, secret: e.target.value })} placeholder="Leave blank to have one made for you" />
+          </div>
+        </form>
       ) : picked === "SHIPROCKET" ? (
         <form
           onSubmit={(e) => {
@@ -1097,6 +1292,51 @@ function ManageDialog({
         </>
       )}
 
+      {provider === "EXTERNAL" && data.external && (
+        <>
+          <div className="settings-row settings-row--stacked">
+            <div>
+              <div className="settings-row__label">Connector URL</div>
+              <div className="settings-row__hint">
+                Each approved return is posted here as a <code>label.requested</code> event: the return id and reference, the order number, both addresses, the items and the parcel. Reply with{" "}
+                <code>labelUrl</code> (or <code>labelPdfBase64</code>), <code>trackingNumber</code>, <code>trackingUrl</code> and <code>carrier</code>, or reply empty and send them later. Connected {dateTime(data.external.connectedAt)}.
+              </div>
+            </div>
+            <div style={{ width: "100%" }}>
+              <CopyLink url={data.external.url} label="Connector URL" />
+            </div>
+          </div>
+          <div className="settings-row settings-row--stacked">
+            <div>
+              <div className="settings-row__label">Shared secret</div>
+              <div className="settings-row__hint">
+                Requests to your connector carry <code>x-returns-signature: sha256=&lt;HMAC of the body&gt;</code> with this secret. Your connector sends it back as <code>x-api-key</code> on events.
+              </div>
+            </div>
+            <div className="ship-secret">
+              <code className="ship-secret__value">{showSecret ? data.external.secret : "•".repeat(24)}</code>
+              <button type="button" className="btn btn--secondary btn--sm" onClick={() => setShowSecret((v) => !v)}>
+                {showSecret ? "Hide" : "Show"}
+              </button>
+              <button type="button" className="btn btn--secondary btn--sm" onClick={() => void navigator.clipboard.writeText(data.external!.secret)}>
+                Copy
+              </button>
+            </div>
+          </div>
+          <div className="settings-row settings-row--stacked">
+            <div>
+              <div className="settings-row__label">Events URL</div>
+              <div className="settings-row__hint">
+                Where your connector posts a label it made later, or where the parcel is: JSON with <code>returnId</code> (or <code>reference</code>), the label fields above, and optionally <code>status</code> of LABEL_CREATED, IN_TRANSIT, DELIVERED or FAILED.
+              </div>
+            </div>
+            <div style={{ width: "100%" }}>
+              <CopyLink url={data.external.eventsUrl} label="Events URL" />
+            </div>
+          </div>
+        </>
+      )}
+
       {(provider === "DHL_EXPRESS" || provider === "FEDEX" || provider === "AUSPOST" || provider === "DEUTSCHE_POST") && (
         <>
           <div className="settings-row">
@@ -1263,5 +1503,234 @@ function ManageDialog({
         </>
       )}
     </Modal>
+  );
+}
+
+
+// ---------------------------------------------------------------------------
+// Packing slips — shared with the policy editor
+// ---------------------------------------------------------------------------
+
+/**
+ * Loop's "Generate packing slips" block: the switch, then what the slip
+ * shows. Used for the store defaults here and per policy on the policies
+ * page, so both say the same thing.
+ */
+export function PackingSlipFields({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: PackingSlipSettings;
+  disabled?: boolean;
+  onChange: (changes: Partial<PackingSlipSettings>) => void;
+}) {
+  return (
+    <>
+      <div className="settings-row">
+        <div>
+          <div className="settings-row__label">Generate packing slips</div>
+          <div className="settings-row__hint">Automatically generate packing slips for a return.</div>
+        </div>
+        <Switch on={value.packingSlips} label="Generate packing slips" disabled={disabled} onChange={(packingSlips) => onChange({ packingSlips })} />
+      </div>
+      {value.packingSlips && (
+        <div className="check-list" style={{ marginTop: 4 }}>
+          <label className="check-list__item">
+            <input type="checkbox" checked={value.packingSlipTaxInclusive} disabled={disabled} onChange={(e) => onChange({ packingSlipTaxInclusive: e.target.checked })} />
+            <span>
+              <span className="radio-list__label">Show tax-inclusive pricing on the packing slip</span>
+              <span className="radio-list__hint">If enabled, the packing slip will display tax-inclusive pricing for each item.</span>
+            </span>
+          </label>
+          <label className="check-list__item">
+            <input type="checkbox" checked={value.packingSlipBarcode} disabled={disabled} onChange={(e) => onChange({ packingSlipBarcode: e.target.checked })} />
+            <span>
+              <span className="radio-list__label">Include barcode</span>
+              <span className="radio-list__hint">Include a scannable barcode on the packing slip.</span>
+            </span>
+          </label>
+          {value.packingSlipBarcode && (
+            <div className="packing-barcode">
+              <div className="field-label">Select what information to include in the barcode:</div>
+              <div className="radio-list">
+                {(
+                  [
+                    ["RETURN_ID", "Return ID", "Populate barcode on packing slip with the return's reference."],
+                    ["ORDER_NUMBER", "Order number", "Populate barcode on packing slip with the order number."],
+                  ] as Array<[PackingSlipBarcode, string, string]>
+                ).map(([id, label, hint]) => (
+                  <label key={id} className="radio-list__item">
+                    <input type="radio" name="packing-barcode" checked={value.packingSlipBarcodeSource === id} disabled={disabled} onChange={() => onChange({ packingSlipBarcodeSource: id })} />
+                    <span>
+                      <span className="radio-list__label">{label}</span>
+                      <span className="radio-list__hint">{hint}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
+
+// ---------------------------------------------------------------------------
+// Package sizes
+// ---------------------------------------------------------------------------
+
+function PackageSizeDialog({
+  size,
+  first,
+  busy,
+  onClose,
+  onSave,
+  onDelete,
+}: {
+  size: PackageSize | null;
+  /** The first size is the default whether or not it's asked to be. */
+  first: boolean;
+  busy: boolean;
+  onClose: () => void;
+  onSave: (body: Omit<PackageSize, "id" | "summary">) => Promise<void>;
+  onDelete?: () => Promise<void>;
+}) {
+  const [draft, setDraft] = useState<Omit<PackageSize, "id" | "summary">>(
+    size
+      ? { name: size.name, length: size.length, width: size.width, height: size.height, unit: size.unit, weight: size.weight, massUnit: size.massUnit, isDefault: size.isDefault }
+      : { name: "", length: 30, width: 20, height: 10, unit: "CM", weight: 0.2, massUnit: "KG", isDefault: first },
+  );
+  const ready = draft.name.trim().length > 0 && draft.length > 0 && draft.width > 0 && draft.height > 0 && draft.weight >= 0;
+  const dimension = (key: "length" | "width" | "height", label: string) => (
+    <label className="label-defaults__field">
+      <span className="settings-row__label">{label}</span>
+      <NumberField value={draft[key]} min={0.1} step="0.1" unit={draft.unit.toLowerCase()} onChange={(value) => setDraft({ ...draft, [key]: value })} />
+    </label>
+  );
+  return (
+    <Modal
+      title={size ? "Edit package size" : "Add package size"}
+      onClose={onClose}
+      footer={
+        <>
+          {onDelete && (
+            <button type="button" className="btn btn--danger btn--sm" disabled={busy} onClick={() => void onDelete()}>
+              Delete
+            </button>
+          )}
+          <button type="button" className="btn btn--secondary btn--sm" disabled={busy} onClick={onClose}>
+            Cancel
+          </button>
+          <button type="button" className="btn btn--sm" disabled={busy || !ready} onClick={() => void onSave({ ...draft, name: draft.name.trim() })}>
+            {busy ? "Saving…" : "Save"}
+          </button>
+        </>
+      }
+    >
+      <div className="field">
+        <label htmlFor="pkg-name">Name</label>
+        <input id="pkg-name" type="text" value={draft.name} maxLength={80} placeholder="Small box" onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+      </div>
+      <div className="pkg-units">
+        <label className="label-defaults__field">
+          <span className="settings-row__label">Length unit</span>
+          <select className="settings-input" value={draft.unit} onChange={(e) => setDraft({ ...draft, unit: e.target.value as PackageSize["unit"] })}>
+            <option value="CM">Centimetres</option>
+            <option value="IN">Inches</option>
+          </select>
+        </label>
+        <label className="label-defaults__field">
+          <span className="settings-row__label">Weight unit</span>
+          <select className="settings-input" value={draft.massUnit} onChange={(e) => setDraft({ ...draft, massUnit: e.target.value as PackageSize["massUnit"] })}>
+            <option value="KG">Kilograms</option>
+            <option value="LB">Pounds</option>
+          </select>
+        </label>
+      </div>
+      <div className="label-defaults" style={{ marginTop: 14 }}>
+        {dimension("length", "Length")}
+        {dimension("width", "Width")}
+        {dimension("height", "Height")}
+        <label className="label-defaults__field">
+          <span className="settings-row__label">Weight when empty</span>
+          <NumberField value={draft.weight} min={0} step="0.05" unit={draft.massUnit.toLowerCase()} onChange={(weight) => setDraft({ ...draft, weight })} />
+        </label>
+      </div>
+      <p className="settings-row__hint" style={{ marginTop: 10 }}>
+        Most carriers bill on the parcel's actual weight; a large, light parcel may be billed on its volume. Pay-on-scan
+        services reweigh the parcel when it's dropped off.
+      </p>
+      <label className="check-list__item" style={{ marginTop: 12 }}>
+        <input type="checkbox" checked={draft.isDefault} disabled={first || Boolean(size?.isDefault)} onChange={(e) => setDraft({ ...draft, isDefault: e.target.checked })} />
+        <span>
+          <span className="radio-list__label">Make this the default package size</span>
+          <span className="radio-list__hint">Used for every label unless a routing rule names another.{first && " Your first size is the default."}</span>
+        </span>
+      </label>
+    </Modal>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Label references
+// ---------------------------------------------------------------------------
+
+const REFERENCE_TYPES: Array<[LabelReferenceType, string]> = [
+  ["RMA_ID", "RMA ID (the return's reference)"],
+  ["ORDER_NUMBER", "Order number"],
+  ["PRODUCT_TITLE", "Product title"],
+  ["RETURN_VALUE", "Return value"],
+  ["CUSTOM", "Custom text"],
+];
+
+function LabelReferencesEditor({
+  value,
+  disabled,
+  onSave,
+}: {
+  value: LabelReference[];
+  disabled?: boolean;
+  onSave: (references: LabelReference[]) => void;
+}) {
+  const [rows, setRows] = useState<LabelReference[]>(value);
+  useEffect(() => setRows(value), [value]);
+  const dirty = JSON.stringify(rows) !== JSON.stringify(value);
+  const set = (i: number, patch: Partial<LabelReference>) => setRows(rows.map((r, n) => (n === i ? { ...r, ...patch } : r)));
+  return (
+    <div style={{ width: "100%" }}>
+      {rows.length > 0 && (
+        <div className="refs">
+          {rows.map((r, i) => (
+            <div key={i} className="refs__row">
+              <span className="refs__n">{i + 1}.</span>
+              <select className="settings-input" value={r.type} aria-label={`Reference ${i + 1}`} onChange={(e) => set(i, { type: e.target.value as LabelReferenceType, text: e.target.value === "CUSTOM" ? (r.text ?? "") : undefined })}>
+                {REFERENCE_TYPES.map(([id, label]) => (
+                  <option key={id} value={id}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              {r.type === "CUSTOM" && (
+                <input type="text" className="settings-input" value={r.text ?? ""} maxLength={35} placeholder="Up to 35 characters" aria-label={`Reference ${i + 1} text`} onChange={(e) => set(i, { text: e.target.value })} />
+              )}
+              <button type="button" className="steps__del" aria-label={`Remove reference ${i + 1}`} onClick={() => setRows(rows.filter((_, n) => n !== i))}>
+                🗑
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="ship-secret" style={{ marginTop: rows.length ? 10 : 0 }}>
+        <button type="button" className="btn btn--secondary btn--sm" disabled={disabled || rows.length >= 3} onClick={() => setRows([...rows, { type: rows.length === 0 ? "RMA_ID" : "ORDER_NUMBER" }])}>
+          + Add reference
+        </button>
+        <button type="button" className="btn btn--sm" disabled={disabled || !dirty} onClick={() => onSave(rows.map((r) => (r.type === "CUSTOM" ? { type: r.type, text: (r.text ?? "").trim() } : { type: r.type })))}>
+          Save
+        </button>
+      </div>
+    </div>
   );
 }

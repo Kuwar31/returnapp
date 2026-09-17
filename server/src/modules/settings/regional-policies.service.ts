@@ -1,4 +1,4 @@
-import { Prisma, type WindowStart } from "@prisma/client";
+import { Prisma, type PackingSlipBarcode, type ShipmentProvider, type WindowStart } from "@prisma/client";
 import { notFound, unprocessable } from "../../lib/errors.js";
 import { prisma } from "../../lib/prisma.js";
 import type { OutcomeKey } from "../policy/effective.js";
@@ -33,6 +33,13 @@ export interface RegionalPolicyInput {
   windowStartsFrom: WindowStart;
   bypassReview: boolean;
   instructions: string[];
+  /** Labels & shipping: make a label at approval, and with which service (null: the store's default). */
+  generateLabels: boolean;
+  labelProvider: ShipmentProvider | null;
+  packingSlips: boolean;
+  packingSlipTaxInclusive: boolean;
+  packingSlipBarcode: boolean;
+  packingSlipBarcodeSource: PackingSlipBarcode;
   outcomes: Record<OutcomeKey, OutcomeInput>;
 }
 
@@ -78,6 +85,12 @@ export const serializeRegionalPolicy = (row: RegionalPolicyRow) => {
     windowStartsFrom: row.windowStartsFrom,
     bypassReview: row.bypassReview,
     instructions: row.instructions,
+    generateLabels: row.generateLabels,
+    labelProvider: row.labelProvider,
+    packingSlips: row.packingSlips,
+    packingSlipTaxInclusive: row.packingSlipTaxInclusive,
+    packingSlipBarcode: row.packingSlipBarcode,
+    packingSlipBarcodeSource: row.packingSlipBarcodeSource,
     sortOrder: row.sortOrder,
     outcomes,
   };
@@ -153,6 +166,12 @@ const scalars = (input: RegionalPolicyInput) => ({
   windowStartsFrom: input.windowStartsFrom,
   bypassReview: input.bypassReview,
   instructions: input.instructions,
+  generateLabels: input.generateLabels,
+  labelProvider: input.labelProvider,
+  packingSlips: input.packingSlips,
+  packingSlipTaxInclusive: input.packingSlipTaxInclusive,
+  packingSlipBarcode: input.packingSlipBarcode,
+  packingSlipBarcodeSource: input.packingSlipBarcodeSource,
 });
 
 export const createRegionalPolicy = async (

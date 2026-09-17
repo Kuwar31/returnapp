@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { logger } from "../../lib/logger.js";
 import { asyncHandler } from "../../middleware/asyncHandler.js";
+import { packingSlipHtml } from "../returns/packing-slip.js";
 import {
+  handleExternalEvent,
   handleEasyPostWebhook,
   handleSendcloudWebhook,
   handleShippoWebhook,
@@ -41,6 +43,38 @@ shippingRouter.get(
       return;
     }
     res.type("application/pdf").setHeader("content-disposition", `inline; filename="return-label-${req.params.id}.pdf"`).send(pdf);
+  }),
+);
+
+/** The packing slip, printable. Signed link, as the label. */
+shippingRouter.get(
+  "/packing-slip/:id",
+  asyncHandler(async (req, res) => {
+    const sig = typeof req.query.sig === "string" ? req.query.sig : undefined;
+    const html = await packingSlipHtml(req.params.id, sig);
+    if (!html) {
+      res.status(404).type("text/plain").send("No such packing slip.");
+      return;
+    }
+    res.type("text/html").send(html);
+  }),
+);
+
+/**
+ * What the store's own connector sends back: the label for a return it was
+ * asked about, or where the parcel is. Authenticated by the store's
+ * connector secret in `x-api-key`; the body names the return.
+ */
+shippingRouter.post(
+  "/external/events",
+  asyncHandler(async (req, res) => {
+    const key = req.header("x-api-key") ?? req.header("authorization")?.replace(/^Bearer\s+/i, "") ?? undefined;
+    const result = await handleExternalEvent(key, req.body);
+    if (result === "unauthorized") {
+      res.status(401).json({ error: "Unknown return or wrong secret" });
+      return;
+    }
+    res.json({ ok: true, result });
   }),
 );
 

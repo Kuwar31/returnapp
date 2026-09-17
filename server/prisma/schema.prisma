@@ -143,6 +143,8 @@ model Merchant {
   fedex                FedexAccount?
   ausPost              AusPostAccount?
   dhlParcelDe          DhlParcelDeAccount?
+  externalConnector    ExternalConnector?
+  packageSizes         PackageSize[]
   shipping             ShippingSettings?
 
   @@map("merchants")
@@ -650,6 +652,19 @@ model RegionalPolicy {
   bypassReview          Boolean     @default(false)
   /// Numbered steps shown on the confirmation page. Empty keeps the portal's own wording.
   instructions          String[]    @default([])
+  /**
+   * Labels & shipping, Loop's tab: whether a return label is made at
+   * approval for returns under this policy, and by which service — null
+   * follows the store's default carrier under Shipping, EXTERNAL asks the
+   * store's own connector.
+   */
+  generateLabels        Boolean     @default(true)
+  labelProvider         ShipmentProvider?
+  /// A printable packing slip for the shopper to put in the parcel.
+  packingSlips             Boolean            @default(false)
+  packingSlipTaxInclusive  Boolean            @default(true)
+  packingSlipBarcode       Boolean            @default(true)
+  packingSlipBarcodeSource PackingSlipBarcode @default(ORDER_NUMBER)
   /// Which policy wins when a country is somehow listed twice; also the list order.
   sortOrder             Int         @default(0)
   createdAt             DateTime    @default(now())
@@ -734,9 +749,62 @@ model ReturnRoutingMethod {
   autoApprove  Boolean           @default(false)
   /// STORE only: where to find the retail locations.
   storeUrl     String?
+  /**
+   * LABEL only — AfterShip's "Return shipping information": the carrier,
+   * shipping service, warehouse and package size for returns under this
+   * rule. Each null defers: carrier to the regional policy then the store's
+   * default, service to the cheapest offered, warehouse and package to
+   * the store's defaults.
+   */
+  carrier       ShipmentProvider?
+  /// Matched against the carrier's service names at booking; unmatched falls back to the cheapest.
+  serviceName   String?
+  destinationId String?
+  destination   ReturnDestination? @relation(fields: [destinationId], references: [id], onDelete: SetNull)
+  packageSizeId String?
+  packageSize   PackageSize?       @relation(fields: [packageSizeId], references: [id], onDelete: SetNull)
 
   @@unique([ruleId, kind])
   @@map("return_routing_methods")
+}
+
+/**
+ * A package size, as AfterShip has merchants define them: named
+ * dimensions and the empty package's weight, in the units the merchant
+ * thinks in. Carriers get centimetres and kilograms. One is the default;
+ * a routing rule can name another.
+ */
+model PackageSize {
+  id         String   @id @default(cuid())
+  merchantId String
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  name       String
+  /// As entered, in `unit`; the *Cm columns are what carriers get.
+  length     Decimal  @db.Decimal(8, 2)
+  width      Decimal  @db.Decimal(8, 2)
+  height     Decimal  @db.Decimal(8, 2)
+  unit       LengthUnit @default(CM)
+  /// The package's weight when empty, in `massUnit`; the label carries it plus the items' weight when known.
+  weight     Decimal  @db.Decimal(8, 3)
+  massUnit   MassUnit @default(KG)
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  routingMethods ReturnRoutingMethod[]
+
+  @@index([merchantId])
+  @@map("package_sizes")
+}
+
+enum LengthUnit {
+  CM
+  IN
+}
+
+enum MassUnit {
+  KG
+  LB
 }
 
 enum ReturnMethodKind {
@@ -793,6 +861,12 @@ model ReturnDestination {
   /// ISO 3166-1 alpha-2.
   countryCode String
   phone       String?
+  /// Who receives parcels there, as AfterShip's warehouse locations carry
+  /// them: the company and contact printed on the label, and the address
+  /// carriers write to. Null falls back to the store.
+  company     String?
+  contactName String?
+  email       String?
   isDefault   Boolean  @default(false)
   /// The Shopify Location to restock at, when the destination is one.
   locationId  String?
@@ -801,6 +875,7 @@ model ReturnDestination {
 
   policies         RegionalPolicy[]
   shippingSettings ShippingSettings[]
+  routingMethods   ReturnRoutingMethod[]
 
   @@index([merchantId])
   @@map("return_destinations")
@@ -934,6 +1009,8 @@ model Order {
   /// Order total in the presentment currency, used to derive the rate that
   /// converts a payout from shop currency into what the customer paid.
   presentmentTotal    Decimal?  @db.Decimal(12, 2)
+  /// Whether the store's prices already carry tax, as Shopify reports it.
+  taxesIncluded       Boolean   @default(false)
   placedAt            DateTime
   fulfilledAt         DateTime?
   deliveredAt         DateTime?
@@ -976,6 +1053,8 @@ model OrderLineItem {
   quantity         Int      @default(1)
   // Per-unit price after line discounts
   unitPrice        Decimal  @default(0) @db.Decimal(12, 2)
+  // Per-unit tax on that price; inside it when the order's taxesIncluded, on top otherwise.
+  unitTax          Decimal  @default(0) @db.Decimal(12, 2)
   currency         String   @default("USD")
   // Excluded from returns entirely
   finalSale        Boolean  @default(false)
@@ -1336,6 +1415,14 @@ enum ShipmentProvider {
   FEDEX
   AUSPOST
   DEUTSCHE_POST
+  /// A system of the merchant's own that makes labels on request; see ExternalConnector.
+  EXTERNAL
+}
+
+/// What a packing slip's barcode encodes.
+enum PackingSlipBarcode {
+  RETURN_ID
+  ORDER_NUMBER
 }
 
 enum ShipmentStatus {
@@ -1372,6 +1459,22 @@ model ShippingSettings {
   /// The address carriers write to about labels and deliveries; some need
   /// one on the label. Null falls back to the store owner's.
   shippingEmail     String?
+  /// Packing slips for returns under the store policy; a regional policy has its own.
+  packingSlips             Boolean            @default(false)
+  packingSlipTaxInclusive  Boolean            @default(true)
+  packingSlipBarcode       Boolean            @default(true)
+  packingSlipBarcodeSource PackingSlipBarcode @default(ORDER_NUMBER)
+  /// Which return methods show the packing slip; AfterShip's "Select return methods".
+  packingSlipMethods       ReturnMethodKind[] @default([LABEL, CARRIER, STORE])
+  /**
+   * AfterShip's Return labels settings. Auto-cancel: void a label with no
+   * shipping update this many days after approval and expire the return;
+   * null leaves labels alone. References: up to three fields printed in
+   * the label's reference slots, for carriers that have them — see
+   * LabelReference.
+   */
+  autoCancelDays           Int?
+  labelReferences          Json               @default("[]")
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
@@ -1546,6 +1649,25 @@ model AusPostAccount {
   updatedAt     DateTime @updatedAt
 
   @@map("auspost_accounts")
+}
+
+/**
+ * The merchant's own label system, Loop's "external connector": a URL the
+ * app posts each approved return to, signed with a shared secret, and which
+ * answers — at once or later, through /api/shipping/external/events — with
+ * the label and tracking number.
+ */
+model ExternalConnector {
+  id         String   @id @default(cuid())
+  merchantId String   @unique
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  url        String
+  /// Encrypted at rest; signs what goes out and authenticates what comes back.
+  secret     String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("external_connectors")
 }
 
 /// DHL Parcel DE (Deutsche Post / DHL Paket): API key, portal login, billing number.

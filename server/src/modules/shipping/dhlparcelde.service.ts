@@ -154,7 +154,7 @@ const address = (p: Party) => {
   const m = /^(.*?)[\s,]+(\d+[a-zA-Z\-/]*)$/.exec(p.address1.trim());
   return {
     name1: (fullName(p) || p.firstName).slice(0, 50),
-    ...(p.address2 ? { name2: p.address2.slice(0, 50) } : {}),
+    ...(p.company ? { name2: p.company.slice(0, 50) } : p.address2 ? { name2: p.address2.slice(0, 50) } : {}),
     addressStreet: (m ? m[1] : p.address1).slice(0, 50),
     ...(m ? { addressHouse: m[2].slice(0, 10) } : {}),
     postalCode: p.pincode,
@@ -193,7 +193,7 @@ export const book = async (
         {
           product,
           billingNumber: e.billing,
-          refNo: orderId.slice(0, 35),
+          refNo: (parcel.references[0] ?? orderId).slice(0, 35),
           shipper: address(parcel.from),
           consignee: address(parcel.to),
           details: {

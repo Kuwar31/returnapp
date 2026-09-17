@@ -278,6 +278,13 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
                 </div>
               ))}
             </div>
+            {detail.packingSlipUrl && (
+              <div className="confirm__label-actions" style={{ marginTop: 14 }}>
+                <a className="btn btn--secondary" href={detail.packingSlipUrl} target="_blank" rel="noreferrer">
+                  {t("status.packingSlip")}
+                </a>
+              </div>
+            )}
           </Section>
           )}
 

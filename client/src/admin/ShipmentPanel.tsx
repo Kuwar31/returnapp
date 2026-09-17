@@ -124,6 +124,15 @@ export function ShipmentPanel({
         </p>
       )}
 
+      {detail.packingSlipUrl && (
+        <p className="muted" style={{ marginBottom: 12 }}>
+          A packing slip goes in the parcel under this policy.{" "}
+          <a href={detail.packingSlipUrl} target="_blank" rel="noreferrer">
+            Open the packing slip ↗
+          </a>
+        </p>
+      )}
+
       {!shipment && (
         <p className="muted" style={{ marginBottom: 12 }}>
           {askedForLabel

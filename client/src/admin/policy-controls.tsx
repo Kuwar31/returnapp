@@ -9,10 +9,12 @@ import { countryName, flagOf, searchCountries } from "../lib/countries";
 export function Switch({
   on,
   label,
+  disabled,
   onChange,
 }: {
   on: boolean;
   label: string;
+  disabled?: boolean;
   onChange: (on: boolean) => void;
 }) {
   return (
@@ -21,6 +23,7 @@ export function Switch({
       role="switch"
       aria-checked={on}
       aria-label={label}
+      disabled={disabled}
       className={`switch${on ? " is-on" : ""}`}
       onClick={() => onChange(!on)}
     >

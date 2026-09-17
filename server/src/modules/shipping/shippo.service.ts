@@ -103,6 +103,7 @@ export const testConnection = async (merchantId: string) => {
 
 const address = (p: Party): api.AddressInput => ({
   name: fullName(p) || p.firstName,
+  ...(p.company ? { company: p.company } : {}),
   street1: p.address1,
   street2: p.address2 || undefined,
   city: p.city,
@@ -152,6 +153,7 @@ const makeShipment = async (e: api.Env, parcel: Parcel, reference: string) => {
     from: address(parcel.from),
     parcel: { length: parcel.lengthCm, width: parcel.breadthCm, height: parcel.heightCm, weight: parcel.weightKg },
     reference,
+    references: parcel.references,
   });
   if (!shipment.rates?.length) throw noRates(shipment);
   return shipment;

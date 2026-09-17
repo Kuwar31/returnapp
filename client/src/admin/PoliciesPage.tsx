@@ -10,10 +10,14 @@ import type {
   RegionalPoliciesResponse,
   RegionalPolicy,
   ReturnDestination,
+  ShipmentProvider,
+  ShippingView,
   ShopLocation,
   StorePolicySummary,
   WindowStart,
 } from "../lib/types";
+import { connectedProviders, PROVIDER_NAMES } from "../lib/shipping";
+import { PackingSlipFields } from "./ShippingPage";
 import { ErrorAlert, Loading } from "../components/Feedback";
 import { useAuth } from "./AuthContext";
 import { storePath } from "./store-path";
@@ -35,7 +39,7 @@ import { RoutingRulesTab } from "./RoutingRulesTab";
  */
 
 type Draft = Omit<RegionalPolicy, "id" | "sortOrder"> & { id: string | null };
-type Tab = "zone" | "outcomes" | "advanced";
+type Tab = "zone" | "labels" | "outcomes" | "advanced";
 type Page = "policies" | "destinations" | "locations" | "routing";
 
 const PAGES: Array<{ id: Page; label: string; path: string }> = [
@@ -47,6 +51,7 @@ const PAGES: Array<{ id: Page; label: string; path: string }> = [
 
 const TABS: Array<{ id: Tab; label: string; icon: string }> = [
   { id: "zone", label: "Policy name & zone", icon: "◎" },
+  { id: "labels", label: "Labels & shipping", icon: "⧉" },
   { id: "outcomes", label: "Return outcomes", icon: "▣" },
   { id: "advanced", label: "Advanced settings", icon: "⚙" },
 ];
@@ -121,6 +126,12 @@ const blankPolicy = (base: StorePolicySummary | null): Draft => ({
   windowStartsFrom: base?.windowStartsFrom ?? "DELIVERY",
   bypassReview: base?.autoApprove ?? false,
   instructions: [],
+  generateLabels: true,
+  labelProvider: null,
+  packingSlips: false,
+  packingSlipTaxInclusive: true,
+  packingSlipBarcode: true,
+  packingSlipBarcodeSource: "ORDER_NUMBER",
   outcomes: outcomesFrom(base),
 });
 
@@ -134,6 +145,9 @@ const blankDestination = (): DestinationDraft => ({
   zip: "",
   countryCode: "",
   phone: "",
+  company: "",
+  contactName: "",
+  email: "",
   isDefault: false,
   locationId: null,
 });
@@ -148,6 +162,9 @@ type DestinationDraft = {
   zip: string;
   countryCode: string;
   phone: string;
+  company: string;
+  contactName: string;
+  email: string;
   isDefault: boolean;
   locationId: string | null;
 };
@@ -606,6 +623,8 @@ export default function PoliciesPage() {
         : "policies";
 
   const [data, setData] = useState<RegionalPoliciesResponse | null>(null);
+  /** The store's label services, for the Labels & shipping tab. */
+  const [shipping, setShipping] = useState<ShippingView | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -635,6 +654,10 @@ export default function PoliciesPage() {
 
   useEffect(() => {
     void load();
+    api
+      .get<ShippingView>("/admin/settings/shipping", { auth: "admin" })
+      .then(setShipping)
+      .catch(() => setShipping(null));
   }, []);
 
   // Asked once, when the Locations tab is first opened: it's a Shopify call.
@@ -715,6 +738,12 @@ export default function PoliciesPage() {
         windowStartsFrom: editing.windowStartsFrom,
         bypassReview: editing.bypassReview,
         instructions: editing.instructions.map((s) => s.trim()).filter(Boolean),
+        generateLabels: editing.generateLabels,
+        labelProvider: editing.labelProvider,
+        packingSlips: editing.packingSlips,
+        packingSlipTaxInclusive: editing.packingSlipTaxInclusive,
+        packingSlipBarcode: editing.packingSlipBarcode,
+        packingSlipBarcodeSource: editing.packingSlipBarcodeSource,
         outcomes: editing.outcomes,
       };
       if (editing.id) {
@@ -772,6 +801,9 @@ export default function PoliciesPage() {
             zip: d.zip ?? "",
             countryCode: d.countryCode,
             phone: d.phone ?? "",
+            company: d.company ?? "",
+            contactName: d.contactName ?? "",
+            email: d.email ?? "",
             isDefault: d.isDefault,
             locationId: d.locationId,
           }
@@ -799,6 +831,9 @@ export default function PoliciesPage() {
         zip: destination.zip.trim() || null,
         countryCode: destination.countryCode,
         phone: destination.phone.trim() || null,
+        company: destination.company.trim() || null,
+        contactName: destination.contactName.trim() || null,
+        email: destination.email.trim() || null,
         isDefault: destination.isDefault,
         locationId: destination.locationId,
       };
@@ -1040,6 +1075,25 @@ export default function PoliciesPage() {
                   label="Phone"
                   value={destination.phone}
                   onChange={(phone) => setDestination({ ...destination, phone })}
+                />
+                <Field
+                  label="Contact name"
+                  value={destination.contactName}
+                  placeholder="Who receives returns here"
+                  onChange={(contactName) => setDestination({ ...destination, contactName })}
+                />
+                <Field
+                  label="Company"
+                  value={destination.company}
+                  placeholder="Printed on the return label"
+                  onChange={(company) => setDestination({ ...destination, company })}
+                />
+                <Field
+                  label="Email"
+                  value={destination.email}
+                  placeholder="Where carriers write about deliveries here"
+                  onChange={(email) => setDestination({ ...destination, email })}
+                  span
                 />
                 <label className="dform__field dform__field--span">
                   <span className="field-label">Restock returned items at</span>
@@ -1402,6 +1456,108 @@ export default function PoliciesPage() {
                       </div>
                     </div>
                   )}
+                </div>
+              </>
+            )}
+
+            {tab === "labels" && (
+              <>
+                <div className="panel">
+                  <div className="panel__head">
+                    <div>
+                      <h2 style={{ marginBottom: 0 }}>Generate labels</h2>
+                      <p className="settings-row__hint">
+                        Automatically generate shipping labels for a return order. Choose your label provider and
+                        return shipping carriers.
+                      </p>
+                    </div>
+                    <Switch
+                      on={editing.generateLabels}
+                      label="Generate labels"
+                      onChange={(generateLabels) => patch({ generateLabels })}
+                    />
+                  </div>
+                </div>
+
+                {editing.generateLabels && (
+                  <div className="panel">
+                    <h2 style={{ marginBottom: 4 }}>Label provider</h2>
+                    <p className="settings-row__hint" style={{ marginBottom: 14 }}>
+                      Choose a label provider to generate return labels. Available carriers depend on your
+                      selection. Need another label provider? Check available{" "}
+                      <Link to={`${basePath}/settings/shipping`}>integrations</Link>.
+                    </p>
+                    {(() => {
+                      const connected: ShipmentProvider[] = shipping ? connectedProviders(shipping) : [];
+                      const storeDefault = shipping?.settings.provider ?? null;
+                      const externalReady = connected.includes("EXTERNAL");
+                      const choices: Array<{ id: ShipmentProvider | null; label: string; hint: string; disabled?: boolean }> = [
+                        {
+                          id: null,
+                          label: "Store default",
+                          hint: storeDefault
+                            ? `Whatever is the default under Shipping — today ${PROVIDER_NAMES[storeDefault]}.`
+                            : "Whatever is made the default under Shipping. No service is connected yet.",
+                        },
+                        ...connected
+                          .filter((id) => id !== "EXTERNAL")
+                          .map((id) => ({ id, label: PROVIDER_NAMES[id], hint: "Connected under Shipping." })),
+                        {
+                          id: "EXTERNAL" as const,
+                          label: "External Connector",
+                          hint: externalReady
+                            ? "Your own label system, posted to at approval."
+                            : "Set up the external connector under Shipping to choose it.",
+                          disabled: !externalReady,
+                        },
+                      ];
+                      return (
+                        <div className="radio-list">
+                          {choices.map((c) => (
+                            <label key={c.id ?? "default"} className={`radio-list__item${c.disabled ? " is-disabled" : ""}`}>
+                              <input
+                                type="radio"
+                                name="label-provider"
+                                checked={editing.labelProvider === c.id}
+                                disabled={c.disabled}
+                                onChange={() => patch({ labelProvider: c.id })}
+                              />
+                              <span>
+                                <span className="radio-list__label">{c.label}</span>
+                                <span className="radio-list__hint">{c.hint}</span>
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      );
+                    })()}
+
+                    {editing.labelProvider === "EXTERNAL" && (
+                      <>
+                        <h3 className="labels__sub">External connector</h3>
+                        <div className="callout callout--warn">
+                          <span className="callout__icon" aria-hidden="true">
+                            ⚠
+                          </span>
+                          <div>
+                            <strong>Labels will only be provided from your external connector</strong>
+                            <div>
+                              Before enabling, work with your shipping/logistics partner directly to confirm that
+                              labels are being generated for your returns portal. Each approved return is posted to
+                              the connector URL set under Shipping.
+                            </div>
+                          </div>
+                          <Link className="callout__link" to={`${basePath}/settings/shipping`}>
+                            Shipping settings →
+                          </Link>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                <div className="panel">
+                  <PackingSlipFields value={editing} onChange={(changes) => patch(changes)} />
                 </div>
               </>
             )}

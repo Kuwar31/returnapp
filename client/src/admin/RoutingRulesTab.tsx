@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
-import { useBlocker } from "react-router";
+import { Link, useBlocker } from "react-router";
 import { api } from "../lib/api";
+import { PROVIDER_NAMES } from "../lib/shipping";
+import { useAuth } from "./AuthContext";
+import { storePath } from "./store-path";
 import { countryName } from "../lib/countries";
 import type {
   OutcomeKey,
@@ -103,6 +106,10 @@ const blankMethod = (kind: ReturnMethodKind): RoutingMethod => ({
   instructions: null,
   autoApprove: false,
   storeUrl: null,
+  carrier: null,
+  serviceName: null,
+  destinationId: null,
+  packageSizeId: null,
 });
 
 const blankRule = (): Draft => ({
@@ -153,6 +160,8 @@ export function RoutingRulesTab({
   /** The tab bar shared with the other Return policies screens. */
   subtabs: React.ReactNode;
 }) {
+  const { session } = useAuth();
+  const shippingPath = `${storePath(session!.merchant.slug)}/settings/shipping`;
   const [data, setData] = useState<RoutingRulesResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -692,14 +701,83 @@ export function RoutingRulesTab({
                   {kind === "LABEL" && (
                     <>
                       <div className="pairing__divider" />
-                      <div className="field-label">Prepaid return labels</div>
-                      <p className="settings-row__hint">
-                        With Shiprocket connected under Settings → Shipping, a
-                        courier is booked to collect the parcel when the return
-                        is approved, and the label goes out in the approval
-                        email. The instructions below tell the customer what to
-                        expect either way.
+                      <div className="field-label">Return shipping information</div>
+                      <p className="settings-row__hint" style={{ marginBottom: 12 }}>
+                        The carrier, shipping service, warehouse location and package size used to make labels for
+                        returns under this rule. Leave a field on its default to use what's set under{" "}
+                        <Link to={shippingPath}>Shipping</Link> and the customer's return policy.
                       </p>
+                      <div className="rship">
+                        <label className="rship__field">
+                          <span className="field-label">Carrier</span>
+                          <select
+                            className="settings-input"
+                            value={m.carrier ?? ""}
+                            onChange={(e) => patchMethod(kind, { carrier: (e.target.value || null) as RoutingMethod["carrier"] })}
+                          >
+                            <option value="">
+                              Default{data.defaultCarrier ? ` (${PROVIDER_NAMES[data.defaultCarrier]})` : ""}
+                            </option>
+                            {data.carriers.map((id) => (
+                              <option key={id} value={id}>
+                                {PROVIDER_NAMES[id]}
+                              </option>
+                            ))}
+                          </select>
+                          {data.carriers.length === 0 && (
+                            <span className="settings-row__hint">No carrier is connected yet.</span>
+                          )}
+                        </label>
+                        <label className="rship__field">
+                          <span className="field-label">Shipping service</span>
+                          <input
+                            type="text"
+                            className="settings-input"
+                            value={m.serviceName ?? ""}
+                            placeholder="Cheapest available"
+                            maxLength={120}
+                            onChange={(e) => patchMethod(kind, { serviceName: e.target.value || null })}
+                          />
+                          <span className="settings-row__hint">
+                            A service name as the carrier quotes it, e.g. "USPS Priority". Blank books the cheapest.
+                          </span>
+                        </label>
+                        <label className="rship__field">
+                          <span className="field-label">Warehouse location</span>
+                          <select
+                            className="settings-input"
+                            value={m.destinationId ?? ""}
+                            onChange={(e) => patchMethod(kind, { destinationId: e.target.value || null })}
+                          >
+                            <option value="">Default (the policy's, else the store's)</option>
+                            {data.destinations.map((d) => (
+                              <option key={d.id} value={d.id}>
+                                {d.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="rship__field">
+                          <span className="field-label">Package size</span>
+                          <select
+                            className="settings-input"
+                            value={m.packageSizeId ?? ""}
+                            onChange={(e) => patchMethod(kind, { packageSizeId: e.target.value || null })}
+                          >
+                            <option value="">
+                              Default{(() => {
+                                const d = data.packageSizes.find((p) => p.isDefault);
+                                return d ? ` (${d.name})` : "";
+                              })()}
+                            </option>
+                            {data.packageSizes.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name} — {p.summary}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
                     </>
                   )}
 

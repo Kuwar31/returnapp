@@ -179,6 +179,7 @@ export const es: Dict = {
   "status.label.tracking": "Número de seguimiento",
   "status.label.status": "Estado del paquete",
   "status.label.download": "Descargar etiqueta",
+  "status.packingSlip": "Imprimir albarán",
   "status.label.track": "Seguir el paquete",
   "review.method.change": "Cambiar",
   "status.questions": "¿Preguntas?",

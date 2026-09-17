@@ -7,6 +7,7 @@ import { validate } from "../../middleware/validate.js";
 import { serializeReturn, serializeReturnSummary } from "./serializers.js";
 import * as returnsService from "./returns.service.js";
 import { resolveDisplayMode } from "../settings/merchant-settings.js";
+import { packingSlipUrlFor } from "./packing-slip.js";
 import {
   cancelLabel,
   createReturnLabel,
@@ -191,6 +192,8 @@ returnsRouter.get(
       // The region's name where one applied; the store policy's otherwise.
       policyName: request.regionalPolicy?.name ?? request.policy?.name ?? null,
       portalSlug: merchant?.slug ?? null,
+      // The printable slip, when the policy makes one and there's something to pack.
+      packingSlipUrl: await packingSlipUrlFor(req.admin!.merchantId, req.params.id),
     });
   }),
 );

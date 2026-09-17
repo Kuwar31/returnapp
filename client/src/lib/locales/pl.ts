@@ -185,6 +185,7 @@ export const pl: Dict = {
   "status.label.tracking": "Numer śledzenia",
   "status.label.status": "Status paczki",
   "status.label.download": "Pobierz etykietę",
+  "status.packingSlip": "Drukuj list przewozowy",
   "status.label.track": "Śledź paczkę",
   "review.method.change": "Zmień",
   "status.questions": "Masz pytania?",

@@ -4,6 +4,7 @@ import {
   type ReturnMethodKind,
   type ReturnRoutingMethod,
   type ReturnRoutingRule,
+  type ShipmentProvider,
 } from "@prisma/client";
 import { notFound, unprocessable } from "../../lib/errors.js";
 import { prisma } from "../../lib/prisma.js";
@@ -91,6 +92,11 @@ export interface MethodInput {
   instructions: string | null;
   autoApprove: boolean;
   storeUrl: string | null;
+  /** LABEL only — AfterShip's return shipping information; each null defers. */
+  carrier: ShipmentProvider | null;
+  serviceName: string | null;
+  destinationId: string | null;
+  packageSizeId: string | null;
 }
 
 export interface RoutingRuleInput {
@@ -170,6 +176,10 @@ export const serializeMethod = (m: ReturnRoutingMethod) => ({
   instructions: m.instructions,
   autoApprove: m.autoApprove,
   storeUrl: m.storeUrl,
+  carrier: m.carrier,
+  serviceName: m.serviceName,
+  destinationId: m.destinationId,
+  packageSizeId: m.packageSizeId,
 });
 
 export const serializeRule = (row: RoutingRuleRow) => {
@@ -187,6 +197,10 @@ export const serializeRule = (row: RoutingRuleRow) => {
           instructions: null,
           autoApprove: false,
           storeUrl: null,
+          carrier: null,
+          serviceName: null,
+          destinationId: null,
+          packageSizeId: null,
         };
   }
   return {
@@ -215,8 +229,25 @@ const methodRows = (methods: RoutingRuleInput["methods"]) =>
       instructions: m.instructions,
       autoApprove: m.autoApprove,
       storeUrl: kind === "STORE" ? m.storeUrl : null,
+      carrier: kind === "LABEL" ? m.carrier : null,
+      serviceName: kind === "LABEL" ? m.serviceName : null,
+      destinationId: kind === "LABEL" ? m.destinationId : null,
+      packageSizeId: kind === "LABEL" ? m.packageSizeId : null,
     };
   });
+
+/** A rule may only send parcels to this store's own warehouse and package size. */
+const assertOwned = async (merchantId: string, input: RoutingRuleInput) => {
+  const label = input.methods.LABEL;
+  if (label.destinationId) {
+    const found = await prisma.returnDestination.findFirst({ where: { id: label.destinationId, merchantId }, select: { id: true } });
+    if (!found) throw unprocessable("That warehouse location no longer exists. Choose another.");
+  }
+  if (label.packageSizeId) {
+    const found = await prisma.packageSize.findFirst({ where: { id: label.packageSizeId, merchantId }, select: { id: true } });
+    if (!found) throw unprocessable("That package size no longer exists. Choose another.");
+  }
+};
 
 /**
  * The store's default rule, made on first sight so the list is never empty
@@ -273,6 +304,7 @@ const assertValid = (input: RoutingRuleInput) => {
 
 export const createRoutingRule = async (merchantId: string, input: RoutingRuleInput) => {
   assertValid(input);
+  await assertOwned(merchantId, input);
   await ensureDefaultRule(merchantId);
   const last = await prisma.returnRoutingRule.aggregate({
     where: { merchantId, isDefault: false },
@@ -301,6 +333,7 @@ export const updateRoutingRule = async (
   });
   if (!existing) throw notFound("Routing rule not found.");
   assertValid(input);
+  await assertOwned(merchantId, input);
   return prisma.$transaction(async (tx) => {
     await tx.returnRoutingMethod.deleteMany({ where: { ruleId: id } });
     return tx.returnRoutingRule.update({

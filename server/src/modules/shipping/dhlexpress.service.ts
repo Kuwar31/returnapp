@@ -145,7 +145,7 @@ const details = (p: Party) => ({
   },
   contactInformation: {
     fullName: fullName(p) || p.firstName,
-    companyName: (fullName(p) || p.firstName).slice(0, 35),
+    companyName: (p.company || fullName(p) || p.firstName).slice(0, 35),
     phone: p.phone || "0000000000",
     ...(p.email ? { email: p.email } : {}),
   },
@@ -239,7 +239,8 @@ export const book = async (
       productCode: product.productCode,
       accounts: [{ typeCode: "shipper", number: e.account }],
       customerDetails: { shipperDetails: details(parcel.from), receiverDetails: details(parcel.to) },
-      customerReferences: [{ value: orderId.slice(0, 35), typeCode: "CU" }],
+      // The store's label references, else the booking's own; DHL prints up to three.
+      customerReferences: (parcel.references.length ? parcel.references : [orderId]).slice(0, 3).map((value) => ({ value: value.slice(0, 35), typeCode: "CU" })),
       content: {
         packages: packages(parcel),
         isCustomsDeclarable: parcel.from.countryCode !== parcel.to.countryCode,
