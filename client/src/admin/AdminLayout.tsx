@@ -90,18 +90,28 @@ const initialsOf = (name: string | null, email: string): string => {
  */
 function AccountMenu({ session, onSignOut }: { session: AdminSession; onSignOut: () => void }) {
   const [open, setOpen] = useState(false);
+  /** The store list replaces the rows while a shop is being chosen. */
+  const [switching, setSwitching] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const stores = session.stores ?? [];
+  const base = storePath(session.merchant.slug);
+  const initials = initialsOf(session.user.name, session.user.email);
+  const person = session.user.name || session.user.email;
+
+  const close = () => {
+    setOpen(false);
+    setSwitching(false);
+  };
 
   // Close on a click anywhere else, and on Escape — the two things anyone
   // tries when a menu is open and they've changed their mind.
   useEffect(() => {
     if (!open) return;
     const onPointer = (event: MouseEvent) => {
-      if (!root.current?.contains(event.target as Node)) setOpen(false);
+      if (!root.current?.contains(event.target as Node)) close();
     };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") close();
     };
     document.addEventListener("mousedown", onPointer);
     document.addEventListener("keydown", onKey);
@@ -112,79 +122,141 @@ function AccountMenu({ session, onSignOut }: { session: AdminSession; onSignOut:
   }, [open]);
 
   return (
-    <div className="store-switch account" ref={root}>
+    <div className="account" ref={root}>
       <button
         type="button"
         className="account__button"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`Account: ${session.merchant.name}`}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => (open ? close() : setOpen(true))}
       >
         <span className="account__avatar" aria-hidden="true">
-          {initialsOf(session.user.name, session.user.email)}
+          {initials}
         </span>
         <span className="account__label">
           <span className="account__store">{session.merchant.name}</span>
-          <span className="account__person">{session.user.name || session.user.email}</span>
+          <span className="account__person">{person}</span>
         </span>
-        <span className="account__chevron" aria-hidden="true">
-          ⌄
-        </span>
+        <Icon name="chevron" className="account__chevron" />
       </button>
 
       {open && (
-        <div className="store-switch__menu account__menu" role="menu">
-          <div className="account__who" title={session.user.email}>
-            {session.user.email}
+        <div className="account__menu" role="menu">
+          <div className="account__card">
+            <span className="account__avatar account__avatar--lg" aria-hidden="true">
+              {initials}
+            </span>
+            <div className="account__card-store">{session.merchant.name}</div>
+            <div className="account__card-person" title={session.user.email}>
+              {person}
+            </div>
+            <button type="button" className="account__switch" onClick={() => setSwitching((v) => !v)}>
+              {switching ? "Back" : "Switch shop"}
+            </button>
           </div>
-          <div className="account__heading">Stores</div>
-          {stores.map((store) => {
-            const active = store.slug === session.merchant.slug;
-            return (
-              <Link
-                key={store.id}
-                role="menuitem"
-                to={storePath(store.slug)}
-                className={`store-switch__item${active ? " is-active" : ""}`}
-                onClick={() => setOpen(false)}
-              >
-                <span className="store-switch__check" aria-hidden="true">
-                  {active ? "✓" : ""}
-                </span>
-                <span className="store-switch__item-text">
-                  <span className="store-switch__item-name">{store.name}</span>
-                  {/*
-                    The slug, because two stores can easily share a display
-                    name and it is what the URL is keyed on.
-                  */}
-                  <span className="store-switch__item-slug">/{store.slug}</span>
-                </span>
-              </Link>
-            );
-          })}
 
-          <Link
-            className="store-switch__add"
-            to={storePath(session.merchant.slug, "/settings")}
-            onClick={() => setOpen(false)}
-          >
-            + Connect another store
-          </Link>
-          <button
-            type="button"
-            role="menuitem"
-            className="store-switch__add account__signout"
-            onClick={() => {
-              setOpen(false);
-              onSignOut();
-            }}
-          >
-            Sign out
-          </button>
+          {switching ? (
+            <div className="account__rows">
+              {stores.map((store) => {
+                const active = store.slug === session.merchant.slug;
+                return (
+                  <Link
+                    key={store.id}
+                    role="menuitem"
+                    to={storePath(store.slug)}
+                    className={`account__row${active ? " is-active" : ""}`}
+                    onClick={close}
+                  >
+                    <span className="account__check" aria-hidden="true">
+                      {active ? "✓" : ""}
+                    </span>
+                    <span className="account__row-text">
+                      <span>{store.name}</span>
+                      {/* The slug, because two stores can share a display name and it is what the URL is keyed on. */}
+                      <span className="account__row-sub">/{store.slug}</span>
+                    </span>
+                  </Link>
+                );
+              })}
+              <Link role="menuitem" className="account__row" to={`${base}/settings`} onClick={close}>
+                <Icon name="plus" />
+                Connect another store
+              </Link>
+            </div>
+          ) : (
+            <div className="account__rows">
+              <Link role="menuitem" className="account__row" to={`${base}/settings`} onClick={close}>
+                <Icon name="user" />
+                Account
+              </Link>
+              <Link role="menuitem" className="account__row" to={`${base}/settings/notifications`} onClick={close}>
+                <Icon name="mail" />
+                Notification settings
+              </Link>
+              <a role="menuitem" className="account__row" href={session.merchant.portalUrl} target="_blank" rel="noreferrer" onClick={close}>
+                <Icon name="external" />
+                Shopper return portal
+              </a>
+            </div>
+          )}
+
+          <div className="account__foot">
+            <button
+              type="button"
+              role="menuitem"
+              className="account__row account__row--danger"
+              onClick={() => {
+                close();
+                onSignOut();
+              }}
+            >
+              <Icon name="logout" />
+              Logout
+            </button>
+          </div>
         </div>
       )}
     </div>
+  );
+}
+
+/** The menu's line icons, drawn here so they match one another in weight. */
+function Icon({ name, className }: { name: "user" | "mail" | "external" | "logout" | "plus" | "chevron"; className?: string }) {
+  const paths: Record<typeof name, React.ReactNode> = {
+    user: (
+      <>
+        <circle cx="12" cy="8" r="3.5" />
+        <path d="M5 20c0-3.6 3.1-6 7-6s7 2.4 7 6" />
+      </>
+    ),
+    mail: (
+      <>
+        <rect x="3.5" y="5.5" width="17" height="13" rx="2" />
+        <path d="m4 7 8 6 8-6" />
+      </>
+    ),
+    external: (
+      <>
+        <path d="M14 4h6v6" />
+        <path d="M20 4 11 13" />
+        <path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4" />
+      </>
+    ),
+    logout: (
+      <>
+        <path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4" />
+        <path d="M15 8l4 4-4 4" />
+        <path d="M19 12H9" />
+      </>
+    ),
+    plus: <path d="M12 5v14M5 12h14" />,
+    chevron: <path d="m6 9 6 6 6-6" />,
+  };
+  return (
+    <svg className={`account__icon${className ? ` ${className}` : ""}`} viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {paths[name]}
+    </svg>
   );
 }
 
