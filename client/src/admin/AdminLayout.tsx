@@ -72,15 +72,23 @@ const NAV: Array<{ label: string | null; items: NavItem[] }> = [
   },
 ];
 
+/** "Kuwar Singh" → "KS"; an address falls back to its first two letters. */
+const initialsOf = (name: string | null, email: string): string => {
+  const words = (name ?? "").trim().split(/\s+/).filter(Boolean);
+  if (words.length > 0) return (words[0][0] + (words[1]?.[0] ?? "")).toUpperCase();
+  return email.slice(0, 2).toUpperCase();
+};
+
 /**
- * The store picker — now a set of links rather than a control with state.
+ * The account menu at the top right, where Loop keeps it: who is signed in
+ * and to which store, and under it the stores to switch to and the way out.
  *
  * Each store is a URL, so switching is a navigation: no token to exchange, no
  * page reload, and the browser's own back button and "open in new tab" work on
- * it. That last one is the point of the change — a merchant can keep two shops
- * open side by side instead of toggling one global setting between them.
+ * it — a merchant can keep two shops open side by side instead of toggling one
+ * global setting between them.
  */
-function StoreSwitcher({ session }: { session: AdminSession }) {
+function AccountMenu({ session, onSignOut }: { session: AdminSession; onSignOut: () => void }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const stores = session.stores ?? [];
@@ -104,25 +112,33 @@ function StoreSwitcher({ session }: { session: AdminSession }) {
   }, [open]);
 
   return (
-    <div className="store-switch" ref={root}>
+    <div className="store-switch account" ref={root}>
       <button
         type="button"
-        className="store-switch__button"
+        className="account__button"
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-label={`Account: ${session.merchant.name}`}
         onClick={() => setOpen((v) => !v)}
       >
-        <span className="store-switch__label">
-          <span className="store-switch__caption">Store</span>
-          <span className="store-switch__name">{session.merchant.name}</span>
+        <span className="account__avatar" aria-hidden="true">
+          {initialsOf(session.user.name, session.user.email)}
         </span>
-        <span className="store-switch__chevron" aria-hidden="true">
-          ▾
+        <span className="account__label">
+          <span className="account__store">{session.merchant.name}</span>
+          <span className="account__person">{session.user.name || session.user.email}</span>
+        </span>
+        <span className="account__chevron" aria-hidden="true">
+          ⌄
         </span>
       </button>
 
       {open && (
-        <div className="store-switch__menu" role="menu">
+        <div className="store-switch__menu account__menu" role="menu">
+          <div className="account__who" title={session.user.email}>
+            {session.user.email}
+          </div>
+          <div className="account__heading">Stores</div>
           {stores.map((store) => {
             const active = store.slug === session.merchant.slug;
             return (
@@ -155,6 +171,17 @@ function StoreSwitcher({ session }: { session: AdminSession }) {
           >
             + Connect another store
           </Link>
+          <button
+            type="button"
+            role="menuitem"
+            className="store-switch__add account__signout"
+            onClick={() => {
+              setOpen(false);
+              onSignOut();
+            }}
+          >
+            Sign out
+          </button>
         </div>
       )}
     </div>
@@ -185,16 +212,18 @@ export default function AdminLayout() {
 
   return (
     <div className="admin">
+      {/* Across the top, as Loop has it: the app on the left, the account on the right. */}
+      <header className="admin__bar">
+        <Link className="admin__brand" to={base}>
+          <span className="admin__mark" aria-hidden="true">
+            ↩
+          </span>
+          Returns Manager
+        </Link>
+        <AccountMenu session={session} onSignOut={logout} />
+      </header>
+
       <aside className="admin__sidebar">
-        <div className="admin__top">
-          <div className="admin__brand">
-            <span className="admin__mark" aria-hidden="true">
-              ↩
-            </span>
-            Returns Manager
-          </div>
-          <StoreSwitcher session={session} />
-        </div>
 
         <nav className="admin__nav">
           {NAV.map((group) => (
@@ -224,14 +253,6 @@ export default function AdminLayout() {
           ))}
         </nav>
 
-        <div className="admin__footer">
-          <div className="admin__user" title={session.user.email}>
-            {session.user.email}
-          </div>
-          <button className="btn btn--secondary btn--sm" onClick={logout}>
-            Sign out
-          </button>
-        </div>
       </aside>
 
       {/*
