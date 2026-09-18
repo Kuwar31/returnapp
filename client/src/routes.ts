@@ -75,6 +75,7 @@ export default [
       route("settings/shipping", "admin/ShippingPage.tsx"),
       route("settings/portal", "admin/PortalPage.tsx"),
       route("settings/notifications", "admin/NotificationsPage.tsx"),
+      route("settings/order-notes", "admin/OrderNotesPage.tsx"),
       route("settings/reasons", "admin/ReasonsPage.tsx"),
       route("settings/rules", "admin/ExchangeRulesPage.tsx"),
     ]),

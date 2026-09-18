@@ -22,7 +22,9 @@ application_url = "https://returnapp-yxkl.onrender.com"
 embedded = false
 
 [access_scopes]
-# Orders/products/customers are read-only — the app mirrors them, never edits.
+# Products/customers are read-only — the app mirrors them, never edits.
+# write_orders is for tags and notes on the order as its return moves along
+# (Settings → Tags and notes); nothing else about an order is ever changed.
 # Four write scopes, one per way a return can be settled:
 #   write_returns                            creates the Return and issues refunds
 #   write_store_credit_account_transactions  credits the customer's store credit
@@ -39,7 +41,7 @@ embedded = false
 # on others.
 #
 # Add read_all_orders to reach orders older than 60 days (needs Shopify approval).
-scopes = "read_orders,read_fulfillments,read_products,read_customers,write_customers,read_returns,write_returns,read_locations,read_store_credit_accounts,read_store_credit_account_transactions,write_store_credit_account_transactions,read_gift_cards,write_gift_cards,read_draft_orders,write_draft_orders,read_merchant_managed_fulfillment_orders,write_merchant_managed_fulfillment_orders,read_third_party_fulfillment_orders,write_third_party_fulfillment_orders"
+scopes = "read_orders,write_orders,read_fulfillments,read_products,read_customers,write_customers,read_returns,write_returns,read_locations,read_store_credit_accounts,read_store_credit_account_transactions,write_store_credit_account_transactions,read_gift_cards,write_gift_cards,read_draft_orders,write_draft_orders,read_merchant_managed_fulfillment_orders,write_merchant_managed_fulfillment_orders,read_third_party_fulfillment_orders,write_third_party_fulfillment_orders"
 
 # The storefront app proxy.
 #

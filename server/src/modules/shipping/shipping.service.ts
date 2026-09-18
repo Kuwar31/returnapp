@@ -16,6 +16,7 @@ import * as shiprocket from "./shiprocket.service.js";
 import { getSettings, type ShippingSettingsRow } from "./shipping.settings.js";
 import { changeStatus } from "../returns/returns.service.js";
 import { notify } from "../email/notifications.js";
+import { annotateOrdersInBackground } from "../shopify/order-notes.service.js";
 import {
   PHONE_RULES,
   PROVIDER_NAMES,
@@ -444,6 +445,7 @@ export const runAutoCancel = async (): Promise<{ cancelled: number; failed: numb
           message: `Closed automatically — the return label had no shipping update ${days} days after approval, so it was cancelled`,
         });
         await notify(returnRequestId, "EXPIRED");
+        annotateOrdersInBackground(store.merchantId, returnRequestId, "EXPIRED");
         cancelled++;
       } catch (error) {
         failed++;

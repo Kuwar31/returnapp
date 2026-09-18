@@ -31,6 +31,7 @@ import * as auspost from "../shipping/auspost.service.js";
 import * as dhlparcelde from "../shipping/dhlparcelde.service.js";
 import * as external from "../shipping/external.service.js";
 import * as packageSizes from "./package-sizes.service.js";
+import { canWriteOrders, listOrderNoteRules, ORDER_NOTE_PLACEHOLDERS, setOrderNoteRule } from "../shopify/order-notes.service.js";
 import { LABEL_REFERENCE_TYPES, MAX_LABEL_REFERENCES } from "../shipping/label-references.js";
 import * as shippingSettings from "../shipping/shipping.settings.js";
 import { indianMobile } from "../shipping/addresses.js";
@@ -876,6 +877,39 @@ settingsRouter.get(
   "/inventory-access",
   asyncHandler(async (req, res) => {
     res.json({ problem: await inventoryAccessProblem(req.admin!.merchantId) });
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// Tags and notes — what a return writes onto the Shopify order
+// ---------------------------------------------------------------------------
+
+settingsRouter.get(
+  "/order-notes",
+  asyncHandler(async (req, res) => {
+    const merchantId = req.admin!.merchantId;
+    const [rules, canWrite] = await Promise.all([listOrderNoteRules(merchantId), canWriteOrders(merchantId)]);
+    res.json({ rules, placeholders: ORDER_NOTE_PLACEHOLDERS, canWrite });
+  }),
+);
+
+const orderNoteRuleSchema = z.object({
+  event: z.enum(["SUBMITTED", "APPROVED", "RECEIVED", "REFUNDED_CREDIT", "REFUNDED_ORIGINAL", "EXCHANGE_CREATED", "EXPIRED"]),
+  target: z.enum(["ORIGINAL", "EXCHANGE"]),
+  enabled: z.boolean().optional(),
+  tags: z.array(z.string().trim().max(40)).max(10).optional(),
+  note: z.string().max(2000).optional(),
+});
+
+settingsRouter.patch(
+  "/order-notes",
+  validate(z.object({ rules: z.array(orderNoteRuleSchema).min(1).max(20) })),
+  asyncHandler(async (req, res) => {
+    const merchantId = req.admin!.merchantId;
+    for (const rule of req.body.rules as z.infer<typeof orderNoteRuleSchema>[]) {
+      await setOrderNoteRule(merchantId, rule.event, rule.target, rule);
+    }
+    res.json({ rules: await listOrderNoteRules(merchantId) });
   }),
 );
 

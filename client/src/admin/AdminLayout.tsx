@@ -62,6 +62,7 @@ const NAV: Array<{ label: string | null; items: NavItem[] }> = [
         end: false,
       },
       { to: "/settings/reasons", label: "Return reasons", icon: "☰", end: false },
+      { to: "/settings/order-notes", label: "Tags and notes", icon: "⌗", end: true },
       {
         to: "/settings/rules",
         label: "Advanced exchanges",

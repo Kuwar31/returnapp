@@ -4790,3 +4790,107 @@ table.data tbody tr:hover {
     max-width: 200px;
   }
 }
+
+/* Tags and notes: one card per moment, AfterShip's shape. */
+.onote__list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.onote__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.onote__head h2 {
+  margin-bottom: 0;
+}
+
+.onote__tagbox {
+  position: relative;
+}
+
+.onote__tagbox .settings-input {
+  width: 100%;
+  padding-right: 56px;
+}
+
+.onote__count {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+.onote__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.onote__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 10px;
+  border-radius: 8px;
+  background: var(--surface-muted);
+  font-size: 13px;
+}
+
+.onote__tag button {
+  border: 0;
+  background: none;
+  padding: 0 4px;
+  font: inherit;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.onote__note {
+  width: 100%;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+.onote__foot {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.onote__help summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.onote__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.onote__chip {
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.onote__chip:hover {
+  border-color: var(--border-strong);
+}

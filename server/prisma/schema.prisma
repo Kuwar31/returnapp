@@ -145,6 +145,7 @@ model Merchant {
   dhlParcelDe          DhlParcelDeAccount?
   externalConnector    ExternalConnector?
   packageSizes         PackageSize[]
+  orderNoteRules       OrderNoteRule[]
   shipping             ShippingSettings?
 
   @@map("merchants")
@@ -1870,6 +1871,45 @@ model NotificationSetting {
 
   @@unique([merchantId, kind])
   @@map("notification_settings")
+}
+
+/**
+ * Tags and notes written onto the shopper's Shopify orders as a return
+ * moves along — AfterShip's "Tags and notes". One rule per moment and
+ * target: the original order, or the exchange order the app raised.
+ * Missing rows mean the defaults in order-notes.service; a row is written
+ * the first time a merchant changes one.
+ */
+model OrderNoteRule {
+  id         String          @id @default(cuid())
+  merchantId String
+  merchant   Merchant        @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  event      OrderNoteEvent
+  target     OrderNoteTarget
+  enabled    Boolean         @default(true)
+  /// Added to the order's tags; may carry placeholders.
+  tags       String[]        @default([])
+  /// Appended to the order's note; may carry placeholders. Blank adds none.
+  note       String          @default("")
+  updatedAt  DateTime        @updatedAt
+
+  @@unique([merchantId, event, target])
+  @@map("order_note_rules")
+}
+
+enum OrderNoteEvent {
+  SUBMITTED
+  APPROVED
+  RECEIVED
+  REFUNDED_CREDIT
+  REFUNDED_ORIGINAL
+  EXCHANGE_CREATED
+  EXPIRED
+}
+
+enum OrderNoteTarget {
+  ORIGINAL
+  EXCHANGE
 }
 
 /// The lifecycle moments the app emails a customer about.

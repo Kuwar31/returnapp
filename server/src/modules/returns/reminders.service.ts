@@ -5,6 +5,7 @@ import {
   REMINDER_DAYS,
 } from "./reminder-windows.js";
 import { prisma } from "../../lib/prisma.js";
+import { annotateOrdersInBackground } from "../shopify/order-notes.service.js";
 import { notify } from "../email/notifications.js";
 import { isNotificationEnabled } from "../settings/notification-settings.js";
 
@@ -92,6 +93,7 @@ export const runReminderSweep = async (): Promise<SweepResult> => {
           },
         });
         await notify(request.id, "EXPIRED");
+        annotateOrdersInBackground(merchantId, request.id, "EXPIRED");
         result.expired += 1;
       }
     }
