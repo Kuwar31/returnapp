@@ -40,8 +40,12 @@ embedded = false
 # covering only own-warehouse stock would work on some stores and silently not
 # on others.
 #
+# customer_read_customers and customer_read_orders are for the "Start a return"
+# button in customer accounts: the extension reads the order and the shopper's
+# email through the Customer Account API, which has scopes of its own.
+#
 # Add read_all_orders to reach orders older than 60 days (needs Shopify approval).
-scopes = "read_orders,write_orders,read_fulfillments,read_products,read_customers,write_customers,read_returns,write_returns,read_locations,read_store_credit_accounts,read_store_credit_account_transactions,write_store_credit_account_transactions,read_gift_cards,write_gift_cards,read_draft_orders,write_draft_orders,read_merchant_managed_fulfillment_orders,write_merchant_managed_fulfillment_orders,read_third_party_fulfillment_orders,write_third_party_fulfillment_orders"
+scopes = "read_orders,write_orders,read_fulfillments,read_products,read_customers,write_customers,read_returns,write_returns,read_locations,read_store_credit_accounts,read_store_credit_account_transactions,write_store_credit_account_transactions,read_gift_cards,write_gift_cards,read_draft_orders,write_draft_orders,read_merchant_managed_fulfillment_orders,write_merchant_managed_fulfillment_orders,read_third_party_fulfillment_orders,write_third_party_fulfillment_orders,customer_read_customers,customer_read_orders"
 
 # The storefront app proxy.
 #
