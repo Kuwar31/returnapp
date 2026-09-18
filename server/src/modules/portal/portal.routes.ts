@@ -52,6 +52,7 @@ portalRouter.get(
         merchant.branding,
         heroImageUrl,
       ),
+      policy: await portalService.policySummary(merchant.id),
     });
   }),
 );

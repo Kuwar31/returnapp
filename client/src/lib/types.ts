@@ -28,6 +28,11 @@ export interface PortalConfig {
     similarExchange: boolean;
   };
   branding: PortalBranding;
+  /**
+   * The store policy in one line's worth of facts, for the returns centre's
+   * "Return policy" blurb. Null while the store has no policy yet.
+   */
+  policy: { windowDays: number; windowFrom: "ORDER_DATE" | "FULFILLMENT" | "DELIVERY" } | null;
 }
 
 /** One recommended replacement, and where it came from. */
