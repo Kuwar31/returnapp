@@ -3432,3 +3432,45 @@
     font-size: 13px;
   }
 }
+
+/* ---------- status card, as AfterShip draws it ----------
+   A headline for where the return stands, a bar for how far along it is,
+   and one line on what happens next. */
+
+.confirm__status-line {
+  margin: 4px 0 12px;
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.confirm__progress {
+  position: relative;
+  height: 8px;
+  margin: 0 0 14px;
+  border-radius: 999px;
+  background: var(--surface-muted, #ececed);
+  overflow: visible;
+}
+
+.confirm__progress-fill {
+  position: relative;
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent, #1a1a1c);
+  transition: width 0.4s ease;
+}
+
+.confirm__progress-knob {
+  position: absolute;
+  right: -2px;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid var(--accent, #1a1a1c);
+  box-sizing: border-box;
+}

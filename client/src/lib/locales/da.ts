@@ -187,6 +187,7 @@ export const da: Dict = {
   "status.orderNo": "Ordre nr. {number}",
   "status.returnWord": "Returnering",
   "status.requestSubmitted": "Anmodning sendt",
+  "status.cardTitle": "Returstatus",
   "status.storeReview": "Butikkens gennemgang",
   "status.declined": "Afvist",
   "status.awaitingReview": "Venter på butikkens gennemgang",

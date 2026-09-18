@@ -187,6 +187,7 @@ export const nl: Dict = {
   "status.orderNo": "Bestelling #{number}",
   "status.returnWord": "Retour",
   "status.requestSubmitted": "Aanvraag ingediend",
+  "status.cardTitle": "Retourstatus",
   "status.storeReview": "Beoordeling door de winkel",
   "status.declined": "Afgewezen",
   "status.awaitingReview": "Wachten op beoordeling door de winkel",

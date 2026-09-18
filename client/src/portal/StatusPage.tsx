@@ -106,44 +106,22 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
       ? detail.shipment
       : null;
   const methodInfo = Boolean(method && (method.instructions || method.storeUrl || keeping));
+  // The warehouse address is for a parcel. A store drop-off goes to the shop, and a kept item nowhere.
+  const sendsParcel = !method || method.kind === "LABEL" || method.kind === "CARRIER";
 
   /**
-   * The three-step progress list — but only the steps that can still happen.
-   * A declined return stops at review, and a cancelled one has no progress to
-   * show at all, so neither should be left staring at "waiting for the store".
+   * How far along the return is, for the bar under the headline — AfterShip's
+   * status card. A declined, cancelled or expired return has no progress to
+   * show, so the bar is left out rather than drawn empty.
    */
-  const timeline = dead
-    ? []
-    : [
-        {
-          title: t("status.requestSubmitted"),
-          detail: shortDate(detail.submittedAt),
-          done: true,
-        },
-        {
-          title: t("status.storeReview"),
-          detail:
-            detail.status === "REJECTED"
-              ? (detail.rejectionReason ?? t("status.declined"))
-              : detail.reviewedAt
-                ? t("status.approvedOn", { date: shortDate(detail.reviewedAt) })
-                : t("status.awaitingReview"),
-          done: Boolean(detail.reviewedAt),
-        },
-        ...(detail.status === "REJECTED"
-          ? []
-          : [
-              {
-                title: t("status.resolved"),
-                detail: finished
-                  ? shortDate(detail.resolvedAt ?? detail.submittedAt)
-                  : keeping
-                    ? t("status.keepItems")
-                    : t("status.onceItemsArrive"),
-                done: finished,
-              },
-            ]),
-      ];
+  const PROGRESS: Partial<Record<ReturnStatus, number>> = {
+    SUBMITTED: 0.2,
+    APPROVED: 0.45,
+    IN_TRANSIT: 0.65,
+    RECEIVED: 0.85,
+    RESOLVED: 1,
+  };
+  const progress = detail.status === "REJECTED" ? null : (PROGRESS[detail.status] ?? null);
 
   const creditSubtotal = detail.totals.itemsSubtotal;
   const purchaseSubtotal = detail.exchangeItems.reduce(
@@ -222,7 +200,22 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
               </span>
               <span>{detail.reference}</span>
             </div>
-            <h2 className="confirm__card-title">{copy.title}</h2>
+            <h2 className="confirm__card-title">{t("status.cardTitle")}</h2>
+            <div className="confirm__status-line">{copy.title}</div>
+            {progress !== null && (
+              <div
+                className="confirm__progress"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(progress * 100)}
+                aria-label={copy.title}
+              >
+                <span className="confirm__progress-fill" style={{ width: `${progress * 100}%` }}>
+                  <span className="confirm__progress-knob" />
+                </span>
+              </div>
+            )}
             <p className="muted confirm__card-body">
               {detail.status === "REJECTED" && detail.rejectionReason
                 ? detail.rejectionReason
@@ -239,20 +232,58 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
               )}
             </p>
 
-            {timeline.length > 0 && (
-              <ul className="timeline confirm__timeline">
-                {timeline.map((step) => (
-                  <li key={step.title} className={step.done ? "is-done" : ""}>
-                    <span className="timeline__marker" />
-                    <div>
-                      <div className="timeline__title">{step.title}</div>
-                      <div className="timeline__desc">{step.detail}</div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
           </div>
+
+          {/*
+            The region's own steps and address, where its policy set them.
+            Only while the return is live, for the same reason as the packing
+            list above: nothing to send once the request is off the table.
+          */}
+          {!dead &&
+            (methodInfo || (detail.instructions?.length ?? 0) > 0 || (detail.returnTo && sendsParcel)) && (
+              <Section title={t("status.instructions")}>
+                {method && (
+                  <div className="confirm__method">
+                    <div className="confirm__dest-label">{t("status.returnMethod")}</div>
+                    <div className="confirm__dest-name">{method.name}</div>
+                    {keeping && <p className="muted">{t("status.keepItems")}</p>}
+                    {method.instructions && (
+                      <p className="confirm__method-text">{method.instructions}</p>
+                    )}
+                    {method.storeUrl && (
+                      <a
+                        className="confirm__method-link"
+                        href={method.storeUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {t("status.storeLink")} ↗
+                      </a>
+                    )}
+                  </div>
+                )}
+                {(detail.instructions?.length ?? 0) > 0 && (
+                  <ol className="confirm__steps">
+                    {detail.instructions!.map((step, i) => (
+                      <li key={i}>{step}</li>
+                    ))}
+                  </ol>
+                )}
+                {detail.returnTo && sendsParcel && (
+                  <div className="confirm__dest">
+                    <div className="confirm__dest-label">
+                      {t("status.returnTo")}
+                    </div>
+                    <div className="confirm__dest-name">{detail.returnTo.name}</div>
+                    {detail.returnTo.lines.map((line, i) => (
+                      <div key={i} className="muted">
+                        {line}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Section>
+            )}
 
           {/* Nothing to pack once the request is off the table. */}
           {showPacking && (
@@ -335,57 +366,6 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
               </div>
             </Section>
           )}
-
-          {/*
-            The region's own steps and address, where its policy set them.
-            Only while the return is live, for the same reason as the packing
-            list above: nothing to send once the request is off the table.
-          */}
-          {!dead &&
-            (methodInfo || (detail.instructions?.length ?? 0) > 0 || (detail.returnTo && !keeping)) && (
-              <Section title={t("status.instructions")}>
-                {method && (
-                  <div className="confirm__method">
-                    <div className="confirm__dest-label">{t("status.returnMethod")}</div>
-                    <div className="confirm__dest-name">{method.name}</div>
-                    {keeping && <p className="muted">{t("status.keepItems")}</p>}
-                    {method.instructions && (
-                      <p className="confirm__method-text">{method.instructions}</p>
-                    )}
-                    {method.storeUrl && (
-                      <a
-                        className="confirm__method-link"
-                        href={method.storeUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        {t("status.storeLink")} ↗
-                      </a>
-                    )}
-                  </div>
-                )}
-                {(detail.instructions?.length ?? 0) > 0 && (
-                  <ol className="confirm__steps">
-                    {detail.instructions!.map((step, i) => (
-                      <li key={i}>{step}</li>
-                    ))}
-                  </ol>
-                )}
-                {detail.returnTo && !keeping && (
-                  <div className="confirm__dest">
-                    <div className="confirm__dest-label">
-                      {t("status.returnTo")}
-                    </div>
-                    <div className="confirm__dest-name">{detail.returnTo.name}</div>
-                    {detail.returnTo.lines.map((line, i) => (
-                      <div key={i} className="muted">
-                        {line}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </Section>
-            )}
 
           <div className="card confirm__card">
             <h2 className="confirm__card-title">{t("status.edit")}</h2>

@@ -193,6 +193,7 @@ export const pl: Dict = {
   "status.orderNo": "Zamówienie nr {number}",
   "status.returnWord": "Zwrot",
   "status.requestSubmitted": "Zgłoszenie wysłane",
+  "status.cardTitle": "Status zwrotu",
   "status.storeReview": "Weryfikacja przez sklep",
   "status.declined": "Odrzucono",
   "status.awaitingReview": "Czekamy na weryfikację przez sklep",
