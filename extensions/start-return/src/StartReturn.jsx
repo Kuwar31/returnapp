@@ -23,7 +23,17 @@ const askApp = async () => {
   const response = await fetch(`${API}/api/shopify/start-return?order=${encodeURIComponent(shopify.orderId)}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!response.ok) throw new Error(`the returns app answered ${response.status}`);
+  if (!response.ok) {
+    // The app says why in its body; that sentence is what a developer needs.
+    let said = "";
+    try {
+      const body = await response.json();
+      if (body && body.error && typeof body.error.message === "string") said = body.error.message;
+    } catch {
+      // A body that isn't JSON says nothing more than the status did.
+    }
+    throw new Error(`the returns app answered ${response.status}${said ? `: ${said}` : ""}`);
+  }
   return response.json();
 };
 
@@ -46,11 +56,12 @@ export default async () => {
   } catch (error) {
     console.error("Start a return: couldn't reach the returns app", error);
   }
+  // No button, no render: mounting nothing into the sandbox's root is what its host objects to.
+  if (!href) return;
   const label = String(shopify.settings?.value?.label ?? "").trim() || "Start a return";
   render(<StartReturn href={href} label={label} />, document.body);
 };
 
 function StartReturn({ href, label }) {
-  if (!href) return null;
   return <s-button href={href}>{label}</s-button>;
 }
