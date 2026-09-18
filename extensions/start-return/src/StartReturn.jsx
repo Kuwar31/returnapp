@@ -23,7 +23,9 @@ const post = async (url, query, variables) => {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ query, variables }),
   });
-  const { data } = await response.json();
+  const { data, errors } = await response.json();
+  // Said out loud: a missing scope is the usual reason, and the console is where a merchant's developer looks first.
+  if (errors?.length) console.warn("Start a return:", errors.map((e) => e.message).join("; "));
   return data ?? null;
 };
 
@@ -80,6 +82,7 @@ export default async () => {
   } catch (error) {
     console.error("Start a return: couldn't prepare the link", error);
   }
+  if (!href) console.warn("Start a return: no button — the order isn't fulfilled, or the order or store address couldn't be read.");
   const label = String(shopify.settings?.value?.label ?? "").trim() || "Start a return";
   render(<StartReturn href={href} label={label} />, document.body);
 };

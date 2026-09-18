@@ -15,6 +15,7 @@ api_version = "2026-04"
 type = "ui_extension"
 name = "Start a return"
 handle = "start-return"
+uid = "93ac2e84-2b0b-b036-6a31-7584816d6cdc9f8a3165"
 
   [[extensions.targeting]]
   module = "./src/StartReturn.jsx"
