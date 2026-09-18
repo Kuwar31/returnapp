@@ -170,9 +170,17 @@ Typecheck is necessary and not sufficient. The pattern that has worked:
   once. It deliberately doesn't use the Customer Account or Storefront APIs,
   which need scopes and capabilities of their own that failed silently. CORS
   admits `https://extensions.shopifycdn.com` for this. The API host is a
-  constant in the extension; a self-hosted fork changes it there. Extensions deploy with `npx shopify app deploy`, which needs the
-  owner's Shopify login, so they are not part of the Render/Vercel pipeline.
-  Validate extension code with the Shopify skill's validator before pushing.
+  constant in the extension; a self-hosted fork changes it there. Extensions
+  deploy with `npx shopify app deploy`, which needs the owner's Shopify login,
+  so they are not part of the Render/Vercel pipeline. Validate extension code
+  with the Shopify skill's validator before pushing.
+- The route re-fetches any order the mirror hasn't seen fulfilled (by
+  `order(id:)`, in `syncOrderById`) before saying no, because the mirror is
+  only refreshed when a shopper looks an order up. When it still says no, the
+  answer's `detail` says why in a sentence and the extension prints it in the
+  browser console as `Start a return: no button — <reason> — <detail>`.
+- `extensions/start-return/tsconfig.json` is load-bearing: it points the
+  bundler's JSX runtime at Preact. See the lesson below.
 
 ### Client
 
@@ -217,3 +225,12 @@ Typecheck is necessary and not sufficient. The pattern that has worked:
   restocking is only editable between approval and receipt.
 - **Shopify refunds in the transaction's currency**, which on a multi-currency
   store is the presentment currency, not the shop's.
+- **A Preact extension compiled with React's JSX runtime never renders.** The
+  Shopify CLI bundles with esbuild's automatic JSX and takes the runtime from
+  the nearest `tsconfig.json`; with none, it defaults to React, which this repo
+  has installed for the admin SPA. The JSX then produced frozen React elements
+  and Preact died mounting them ("Cannot add property __, object is not
+  extensible"), so the "Start a return" button was absent on every eligible
+  order while the app's answers looked right. Every Preact extension needs a
+  `tsconfig.json` with `"jsxImportSource": "preact"`; to check a bundle, build
+  it with esbuild the way the CLI does and grep for `react/jsx-runtime`.

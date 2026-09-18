@@ -308,23 +308,38 @@ shopifyRouter.get(
       res.json({ url: null, reason: "not_connected" });
       return;
     }
-    // Mirrored already for any order that's been looked at; fetched now for one that hasn't.
-    let order = await prisma.order.findFirst({
-      where: { merchantId: merchant.id, externalId },
-      select: { orderNumber: true, email: true, fulfilledAt: true },
-    });
-    if (!order && (await syncOrderById(merchant.id, externalId))) {
-      order = await prisma.order.findFirst({
+    const mirrored = () =>
+      prisma.order.findFirst({
         where: { merchantId: merchant.id, externalId },
         select: { orderNumber: true, email: true, fulfilledAt: true },
       });
+    /**
+     * The mirror is only as fresh as the last time someone looked this order
+     * up: webhooks don't reach a sleeping instance (see syncOrderByNumber),
+     * and the portal refreshes an order only when a shopper types its number.
+     * So an order the mirror hasn't seen fulfilled is asked of Shopify again
+     * before it is written off — this menu is exactly where yesterday's
+     * fulfilment has to show today. A fulfilled order stays fulfilled and
+     * answers from the mirror, so a customer's order list costs Shopify
+     * nothing for the orders that already qualify.
+     */
+    let order = await mirrored();
+    let problem: string | null = null;
+    if (!order?.fulfilledAt) {
+      problem = await syncOrderById(merchant.id, externalId);
+      if (problem === null) order = await mirrored();
     }
     if (!order) {
-      res.json({ url: null, reason: "unknown_order" });
+      res.json({ url: null, reason: "unknown_order", detail: problem });
       return;
     }
     if (!order.fulfilledAt) {
-      res.json({ url: null, reason: "unfulfilled", orderNumber: order.orderNumber });
+      res.json({
+        url: null,
+        reason: "unfulfilled",
+        orderNumber: order.orderNumber,
+        detail: problem ?? "Shopify shows no fulfilment on this order yet.",
+      });
       return;
     }
     const url = new URL(portalUrl(merchant.slug));

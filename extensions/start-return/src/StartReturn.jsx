@@ -13,6 +13,12 @@ import { render } from "preact";
  *
  * The link carries the order number and email, which is all the portal's
  * own lookup asks for, so the button grants nothing a shopper couldn't type.
+ *
+ * The JSX here must compile to Preact's runtime: tsconfig.json beside this
+ * file says so. Without it the CLI's bundler reaches for React, which this
+ * repo has installed for the admin, and Preact then fails to mount the
+ * frozen React elements with "Cannot add property __, object is not
+ * extensible" — silently, as far as the shopper is concerned: no button.
  */
 
 /** Where the returns app runs. */
@@ -52,16 +58,20 @@ export default async () => {
   try {
     const answer = await askApp();
     href = answer.url ? withPortalSetting(answer) : null;
-    if (!href) console.warn(`Start a return: no button — ${answer.reason ?? "the order can't be returned"}`);
+    if (!href) {
+      // The reason is a code for the menu and, when the app has one, a sentence for the developer.
+      const why = [answer.reason ?? "the order can't be returned", answer.detail].filter(Boolean).join(" — ");
+      console.warn(`Start a return: no button — ${why}`);
+    }
   } catch (error) {
     console.error("Start a return: couldn't reach the returns app", error);
   }
-  // No button, no render: mounting nothing into the sandbox's root is what its host objects to.
-  if (!href) return;
   const label = String(shopify.settings?.value?.label ?? "").trim() || "Start a return";
+  // Rendered either way, as Shopify's own example for this target does; a component that returns nothing is how a menu item stays absent.
   render(<StartReturn href={href} label={label} />, document.body);
 };
 
 function StartReturn({ href, label }) {
+  if (!href) return null;
   return <s-button href={href}>{label}</s-button>;
 }
