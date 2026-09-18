@@ -3219,6 +3219,145 @@
   }
 }
 
+/* ---------- your orders ----------
+   What a shopper signed in to the storefront sees instead of the lookup:
+   their orders as a list of cards, laid out like AfterShip's returns
+   centre — number and date on the left, the one button that applies on the
+   right, the items underneath. The card is wider than the lookup because
+   it holds rows of things, not two fields. */
+
+.orders {
+  padding: 32px 36px 28px;
+}
+
+.orders__title {
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 18px;
+}
+
+.orders__empty {
+  color: var(--text-muted);
+  margin-bottom: 20px;
+}
+
+.order-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.order-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.order-card__number {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.order-card__date {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+.order-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.order-card__note {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.order-card__lines {
+  list-style: none;
+  margin: 0;
+  padding: 0 20px;
+}
+
+.order-card__lines .line-item__thumb {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+  background: #fff;
+}
+
+.order-card__price {
+  color: var(--text);
+  margin-top: 6px;
+}
+
+/* The form for an order the account doesn't know, folded under the list. */
+.orders__other {
+  margin-top: 8px;
+}
+
+.orders__other summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 10px 0;
+  color: var(--text);
+}
+
+.orders__form {
+  padding-top: 12px;
+  max-width: 480px;
+}
+
+.orders__form .field input {
+  padding: 15px 16px;
+  font-size: 16px;
+  border-radius: var(--radius);
+}
+
+.orders__form .btn {
+  margin-top: 6px;
+  padding: 16px 20px;
+  font-size: 16px;
+  border-radius: var(--radius);
+}
+
+@media (max-width: 560px) {
+  .orders {
+    padding: 24px 18px 22px;
+  }
+
+  .order-card__head {
+    flex-wrap: wrap;
+    padding: 14px 16px;
+  }
+
+  .order-card__actions {
+    width: 100%;
+  }
+
+  .order-card__actions form,
+  .order-card__actions .btn {
+    flex: 1;
+    width: 100%;
+  }
+
+  .order-card__lines {
+    padding: 0 16px;
+  }
+
+  .order-card__lines .line-item__thumb {
+    width: 64px;
+    height: 64px;
+  }
+}
+
 /* ---------- the drawer on a phone: a full-screen sheet ----------
    Loop's and AfterShip's item screens take the whole viewport; a panel
    floating over a dimmed list, with the list's edges showing round it,

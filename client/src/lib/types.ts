@@ -149,6 +149,31 @@ export interface ReasonGroup {
   reasons: ReturnReasonOption[];
 }
 
+/**
+ * One of a signed-in shopper's orders, as the storefront's "Your orders"
+ * list draws it: enough to recognise the order and to say whether a return
+ * can start or has already.
+ */
+export interface CustomerOrder {
+  id: string;
+  orderNumber: string;
+  email: string;
+  placedAt: string;
+  fulfilledAt: string | null;
+  currency: string;
+  /** Whether anything on it can still be returned, by the mirror's reckoning. */
+  returnable: boolean;
+  returns: Array<{ reference: string; status: string }>;
+  lineItems: Array<{
+    id: string;
+    title: string;
+    variantLabel: string | null;
+    imageUrl: string | null;
+    quantity: number;
+    unitPrice: number;
+  }>;
+}
+
 export interface OrderSession {
   order: {
     id: string;

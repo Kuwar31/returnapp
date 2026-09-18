@@ -159,6 +159,25 @@ Typecheck is necessary and not sufficient. The pattern that has worked:
   General; the settings page says so (`canWrite`). The Render `SHOPIFY_SCOPES`
   env must include it too.
 
+### Storefront embed (app proxy)
+
+- `https://<shop>/apps/returns` is proxied to `/api/proxy`, which frames the
+  portal inside the theme (`proxy.routes.ts`). Every request is signed by
+  Shopify; `verifyProxySignature` checks it before anything else.
+- A shopper signed in to the storefront arrives with `logged_in_customer_id`
+  under that signature. The proxy turns it into a one-hour **customer token**
+  (`signCustomerToken`) on the frame's URL (`?customer=`), never the raw id.
+  The portal's lookup page then shows "Your orders" (AfterShip's layout) from
+  `GET /api/portal/customer/orders`, which refreshes that customer's orders
+  from Shopify (`syncCustomerOrders`, search `customer_id:`) and lists them
+  with `returnable` (mirror-only eligibility, no per-order Shopify call) and
+  existing returns; "Create return" is `POST /api/portal/customer/start`,
+  which hands out the same portal session the lookup form does.
+- The client keeps the token in `localStorage["returns.customer.token"]` for
+  the visit. A proxy load carrying `embedded=1` but no `customer` means nobody
+  is signed in and drops it; client-side navigation back to the lookup carries
+  neither parameter and keeps it.
+
 ### Shopify extensions
 
 - `extensions/start-return` is a customer-account UI extension (Preact, target

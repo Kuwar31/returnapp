@@ -31,6 +31,21 @@ export interface PortalTokenPayload {
 }
 
 /**
+ * A shopper who is signed in to the merchant's storefront, as Shopify vouched
+ * for them on an app-proxy request (`logged_in_customer_id`, under Shopify's
+ * signature). It lets the portal list that customer's orders and open any of
+ * them without asking for an order number and email the store already knows.
+ *
+ * It rides on the framed portal's URL, so it is short-lived and grants only
+ * what the signed-in customer could already see in their own account.
+ */
+export interface CustomerTokenPayload {
+  merchantId: string;
+  /** Shopify's customer GID, as the mirror stores it on each order. */
+  customerExternalId: string;
+}
+
+/**
  * Carried to the merchant's own storefront when a shopper goes off to spend
  * their return credit there.
  *
@@ -86,6 +101,10 @@ export const signAdminToken = (payload: AdminTokenPayload): string =>
 export const signShopToken = (payload: ShopTokenPayload): string =>
   jwt.sign({ ...payload, kind: "shop" }, env.JWT_SECRET, { expiresIn: "1h" });
 
+/** An hour as well: a storefront visit, and the proxy issues a fresh one on every page load. */
+export const signCustomerToken = (payload: CustomerTokenPayload): string =>
+  jwt.sign({ ...payload, kind: "customer" }, env.JWT_SECRET, { expiresIn: "1h" });
+
 export const signPortalToken = (
   payload: PortalTokenPayload,
   /**
@@ -99,7 +118,7 @@ export const signPortalToken = (
 
 const verify = <T>(
   token: string,
-  kind: "admin" | "portal" | "install" | "shop",
+  kind: "admin" | "portal" | "install" | "shop" | "customer",
 ): T | null => {
   try {
     const decoded = jwt.verify(token, env.JWT_SECRET) as Record<
@@ -124,3 +143,6 @@ export const verifyShopToken = (token: string) =>
 
 export const verifyInstallToken = (token: string) =>
   verify<InstallTokenPayload>(token, "install");
+
+export const verifyCustomerToken = (token: string) =>
+  verify<CustomerTokenPayload>(token, "customer");

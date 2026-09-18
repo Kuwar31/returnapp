@@ -4,7 +4,7 @@ import { env } from "../../config/env.js";
 import { notFound, unauthorized } from "../../lib/errors.js";
 import { signPortalToken } from "../../lib/tokens.js";
 import { asyncHandler } from "../../middleware/asyncHandler.js";
-import { requirePortalSession } from "../../middleware/auth.js";
+import { requireCustomerSession, requirePortalSession } from "../../middleware/auth.js";
 import { rateLimit } from "../../middleware/rateLimit.js";
 import { validate } from "../../middleware/validate.js";
 import { serializeAddress, serializeReturn } from "../returns/serializers.js";
@@ -85,6 +85,35 @@ portalRouter.post(
       email: order.email,
     });
 
+    res.json({ token, orderId: order.id });
+  }),
+);
+
+/**
+ * The storefront's "Your orders": what a shopper signed in to the store sees
+ * in place of the lookup form. Authenticated by the customer token the app
+ * proxy issued (see proxy.routes.ts), never by anything the browser could
+ * make up about who is signed in.
+ */
+portalRouter.get(
+  "/customer/orders",
+  requireCustomerSession,
+  asyncHandler(async (req, res) => {
+    const { merchantId, customerExternalId } = req.customer!;
+    res.json({ orders: await portalService.listCustomerOrders(merchantId, customerExternalId) });
+  }),
+);
+
+/** Opens one of those orders: the same session lookup hands out, with no form to fill. */
+portalRouter.post(
+  "/customer/start",
+  requireCustomerSession,
+  validate(z.object({ orderId: z.string().min(1) })),
+  asyncHandler(async (req, res) => {
+    const { merchantId, customerExternalId } = req.customer!;
+    const order = await portalService.openCustomerOrder(merchantId, customerExternalId, req.body.orderId);
+    if (!order) throw notFound("That order isn't one of yours.");
+    const token = signPortalToken({ merchantId, orderId: order.id, email: order.email });
     res.json({ token, orderId: order.id });
   }),
 );

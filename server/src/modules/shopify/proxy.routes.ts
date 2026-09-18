@@ -3,6 +3,7 @@ import { env } from "../../config/env.js";
 import { logger } from "../../lib/logger.js";
 import { portalUrl } from "../../lib/portal-links.js";
 import { prisma } from "../../lib/prisma.js";
+import { signCustomerToken } from "../../lib/tokens.js";
 import { asyncHandler } from "../../middleware/asyncHandler.js";
 import { verifyProxySignature } from "./shopify.hmac.js";
 
@@ -93,7 +94,7 @@ proxyRouter.get(
     const merchant = shop
       ? await prisma.merchant.findFirst({
           where: { domain: shop, status: "ACTIVE" },
-          select: { slug: true },
+          select: { id: true, slug: true },
         })
       : null;
 
@@ -120,6 +121,22 @@ proxyRouter.get(
         continue;
       }
       if (typeof value === "string") target.searchParams.set(key, value);
+    }
+
+    /**
+     * A shopper signed in to the storefront is named by Shopify on the
+     * request, under the same signature checked above, so the portal can
+     * greet them with their orders instead of a form — as AfterShip's and
+     * Loop's returns centres do. The id can't go across as-is: the portal's
+     * API would then trust whatever number a URL carried. It goes across as
+     * a token this server signed, which the API verifies like any other.
+     */
+    const customerId = typeof query.logged_in_customer_id === "string" ? query.logged_in_customer_id : "";
+    if (/^\d+$/.test(customerId)) {
+      target.searchParams.set(
+        "customer",
+        signCustomerToken({ merchantId: merchant.id, customerExternalId: `gid://shopify/Customer/${customerId}` }),
+      );
     }
 
     res

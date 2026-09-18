@@ -422,6 +422,41 @@ export const syncOrderById = async (merchantId: string, externalId: string): Pro
 };
 
 /**
+ * A signed-in customer's recent orders, refreshed for the storefront's
+ * "Your orders" list. Recent ones only: the list exists to start a return,
+ * and an order older than the reach of `read_orders` is older than any
+ * return window. Non-fatal for the same reason as syncOrderByNumber — the
+ * mirror still answers — and it returns the reason when it couldn't, for
+ * the caller's logs.
+ */
+export const syncCustomerOrders = async (
+  merchantId: string,
+  customerExternalId: string,
+  { first = 20 } = {},
+): Promise<string | null> => {
+  const numeric = customerExternalId.match(/^gid:\/\/shopify\/Customer\/(\d+)$/)?.[1];
+  if (!numeric) return "That isn't a Shopify customer id.";
+  try {
+    const { shop, accessToken } = await getShopCredentials(merchantId);
+    const result = await shopifyGraphQL<SyncOrdersResult>(shop, accessToken, SYNC_ORDERS_QUERY, {
+      first,
+      after: null,
+      query: `customer_id:${numeric}`,
+    });
+    for (const node of result.orders.nodes) {
+      const normalized = mapGraphQLOrder(node);
+      // Shopify's search is not exact; only this customer's orders may land under their name.
+      if (!normalized || normalized.customerExternalId !== customerExternalId) continue;
+      await upsertOrder(merchantId, normalized);
+    }
+    return null;
+  } catch (error) {
+    logger.warn({ merchantId, customerExternalId, error }, "Could not refresh this customer's orders from Shopify");
+    return error instanceof Error ? error.message : String(error);
+  }
+};
+
+/**
  * Everywhere Shopify might hold an order's phone number, in one query.
  *
  * Kept out of SYNC_ORDERS_QUERY on purpose. Phone is protected customer data,
