@@ -146,6 +146,19 @@ Typecheck is necessary and not sufficient. The pattern that has worked:
   checks. Shiprocket's webhook path deliberately doesn't mention Shiprocket:
   their form rejects URLs that do.
 
+### Tags and notes on Shopify orders
+
+- `server/src/modules/shopify/order-notes.service.ts` writes tags (`tagsAdd`)
+  and appends notes (`orderUpdate`) to the original order, and to the exchange
+  order on the draft-order path, at each moment in `OrderNoteEvent`. Rules
+  live in `OrderNoteRule` with code defaults; placeholders like `{RMA no.}`
+  are filled by `renderOrderNote`. Every write is best effort and lands on the
+  return's timeline; nothing is attempted for a store without Shopify.
+- Needs the `write_orders` scope. It is in the default scope list now, but a
+  store installed before it was asked for has to reconnect under Settings →
+  General; the settings page says so (`canWrite`). The Render `SHOPIFY_SCOPES`
+  env must include it too.
+
 ### Client
 
 - React Router 8 in framework mode; routes in `client/src/routes.ts`.

@@ -19,6 +19,7 @@ import {
   resolveExchangeMethod,
   resolveVariantDifference,
 } from "../settings/merchant-settings.js";
+import { annotateOrdersInBackground } from "./order-notes.service.js";
 import { queryShop } from "./shopify.client.js";
 import { resolveCustomerId } from "./credit.service.js";
 import { fetchVariantImages } from "./catalogue.service.js";
@@ -749,6 +750,16 @@ export const completeExchangeDraftOrder = async (
       metadata: { orderId: order?.id ?? null },
     },
   });
+
+  // Both orders learn of each other: the original gets the exchange's number, the exchange the original's.
+  if (order) {
+    annotateOrdersInBackground(merchantId, returnRequestId, "EXCHANGE_CREATED", {
+      exchangeOrderId: order.id,
+      exchangeOrderName: order.name,
+      amount: toDecimal(draft.creditApplied).toNumber(),
+      currency: draft.currency,
+    });
+  }
 };
 
 /**

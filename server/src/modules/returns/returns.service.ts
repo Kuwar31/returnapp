@@ -5,6 +5,7 @@ import { exchangeBonusFor } from "../settings/exchange-rules.service.js";
 import { displayConverter, forDisplay, toDecimal } from "../../lib/money.js";
 import { logger } from "../../lib/logger.js";
 import { notifyInBackground } from "../email/notifications.js";
+import { annotateOrdersInBackground } from "../shopify/order-notes.service.js";
 import {
   cancelLabelQuietly,
   createLabelOnApproval,
@@ -305,6 +306,8 @@ export const approveReturn = async (
   await createLabelOnApproval(merchantId, id, actorId, label);
 
   notifyInBackground(id, "APPROVED");
+  // After the label, so the note can carry its tracking number.
+  annotateOrdersInBackground(merchantId, id, "APPROVED");
   return getReturn(merchantId, id);
 };
 
@@ -630,6 +633,7 @@ export const markReceived = async (
   }
 
   notifyInBackground(id, "RECEIVED");
+  annotateOrdersInBackground(merchantId, id, "RECEIVED");
   return getReturn(merchantId, id);
 };
 
@@ -1037,6 +1041,21 @@ export const resolveReturn = async (
   // After the commit, so a store-credit email can read the code that was just
   // minted inside the transaction.
   notifyInBackground(id, "RESOLVED");
+
+  // The order's note says where the money went, in the merchant's own words.
+  if (owed("REFUND") && refreshed.externalRefundId) {
+    annotateOrdersInBackground(merchantId, id, "REFUNDED_ORIGINAL", {
+      amount: toDecimal(refreshed.settledTotal ?? amount).toNumber(),
+      currency: current.currency,
+    });
+  }
+  if (credit || giftCard) {
+    annotateOrdersInBackground(merchantId, id, "REFUNDED_CREDIT", {
+      amount: giftCard?.amount ?? credit?.amount ?? amount.toNumber(),
+      currency: giftCard?.currency ?? credit?.currency ?? current.currency,
+      giftCardId: giftCard?.giftCardId ?? credit?.accountId ?? null,
+    });
+  }
 
   return getReturn(merchantId, id);
 };

@@ -400,6 +400,24 @@ export const DROP_OFF_PROVIDERS: ShipmentProvider[] = [
 /** What a packing slip's barcode encodes. */
 export type PackingSlipBarcode = "RETURN_ID" | "ORDER_NUMBER";
 
+/** One moment's tags and note on a Shopify order — Settings → Tags and notes. */
+export interface OrderNoteRule {
+  event: "SUBMITTED" | "APPROVED" | "RECEIVED" | "REFUNDED_CREDIT" | "REFUNDED_ORIGINAL" | "EXCHANGE_CREATED" | "EXPIRED";
+  target: "ORIGINAL" | "EXCHANGE";
+  label: string;
+  description: string;
+  enabled: boolean;
+  tags: string[];
+  note: string;
+}
+
+export interface OrderNotesSettings {
+  rules: OrderNoteRule[];
+  placeholders: string[];
+  /** Whether the store's token may write orders; null when Shopify isn't connected. */
+  canWrite: boolean | null;
+}
+
 /** A named package, as AfterShip has merchants define them. */
 export interface PackageSize {
   id: string;

@@ -45,6 +45,7 @@ import {
   type BonusRule,
 } from "../policy/quote.service.js";
 import { notifyInBackground } from "../email/notifications.js";
+import { annotateOrdersInBackground } from "../shopify/order-notes.service.js";
 import {
   browseCollections,
   browseProducts,
@@ -1531,6 +1532,9 @@ export const submitReturn = async (
     created.id,
     created.status === "APPROVED" ? "APPROVED" : "SUBMITTED",
   );
+  // The order in Shopify learns about it too — tags to filter on, a note to read.
+  annotateOrdersInBackground(merchantId, created.id, "SUBMITTED");
+  if (created.status === "APPROVED") annotateOrdersInBackground(merchantId, created.id, "APPROVED");
 
   return record;
 };
