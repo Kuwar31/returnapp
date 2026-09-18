@@ -112,6 +112,14 @@ export const saveMethod = (orderId: string, method: ReturnMethodChoice): void =>
   }
 };
 
+export const clearMethod = (orderId: string): void => {
+  try {
+    sessionStorage.removeItem(methodKey(orderId));
+  } catch {
+    /* nothing to clean up */
+  }
+};
+
 export const loadMethod = (orderId: string): ReturnMethodChoice | null => {
   try {
     const raw = sessionStorage.getItem(methodKey(orderId));
