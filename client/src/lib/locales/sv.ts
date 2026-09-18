@@ -30,6 +30,7 @@ export const sv: Dict = {
   "orders.policy.ORDER_DATE": "Vi tar emot returer inom {days} dagar efter köpet.",
   "orders.policyFallback": "Vi tar emot returer av oanvända och oskadade varor enligt vår returpolicy.",
   "orders.policyLink": "Visa returpolicy",
+  "orders.returnRef": "Retur {reference}",
   "drawer.noOtherOptions": "Den här varan finns inte i några andra alternativ. Prova att byta till en annan produkt i stället.",
   "drawer.optionsFailed": "Vi kunde inte läsa in de andra alternativen just nu.",
   "drawer.tryAgain": "Försök igen",

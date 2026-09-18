@@ -45,6 +45,7 @@ export const en = {
   "orders.policy.ORDER_DATE": "We accept returns within {days} days of purchase.",
   "orders.policyFallback": "We accept returns of unused and undamaged items according to our return policy.",
   "orders.policyLink": "View return policy",
+  "orders.returnRef": "Return {reference}",
   "drawer.noOtherOptions": "This item has no other options. Try exchanging for another product instead.",
   "drawer.optionsFailed": "We couldn't load the other options just now.",
   "drawer.tryAgain": "Try again",

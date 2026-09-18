@@ -30,6 +30,7 @@ export const zh: Dict = {
   "orders.policy.ORDER_DATE": "购买后 {days} 天内可申请退货。",
   "orders.policyFallback": "根据我们的退货政策，未使用且未损坏的商品可以退货。",
   "orders.policyLink": "查看退货政策",
+  "orders.returnRef": "退货 {reference}",
   "drawer.noOtherOptions": "此商品没有其他款式可选，请尝试换成其他商品。",
   "drawer.optionsFailed": "暂时无法加载其他款式。",
   "drawer.tryAgain": "重试",

@@ -30,6 +30,7 @@ export const nl: Dict = {
   "orders.policy.ORDER_DATE": "We accepteren retouren binnen {days} dagen na aankoop.",
   "orders.policyFallback": "We accepteren retouren van ongebruikte en onbeschadigde artikelen volgens ons retourbeleid.",
   "orders.policyLink": "Retourbeleid bekijken",
+  "orders.returnRef": "Retour {reference}",
   "drawer.noOtherOptions": "Dit artikel heeft geen andere opties. Ruil het in plaats daarvan om voor een ander product.",
   "drawer.optionsFailed": "We konden de andere opties nu niet laden.",
   "drawer.tryAgain": "Opnieuw proberen",
