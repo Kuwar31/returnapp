@@ -172,60 +172,76 @@ export const backfillLineItemImages = async (
   return updated;
 };
 
+/**
+ * Everything the mirror keeps of an order, shared by every query below so
+ * that an order looks the same however it was fetched.
+ */
+const ORDER_FIELDS = `#graphql
+  fragment OrderFields on Order {
+    id
+    name
+    email
+    processedAt
+    currencyCode
+    customer { id displayName }
+    subtotalPriceSet { shopMoney { amount } }
+    totalPriceSet {
+      shopMoney { amount }
+      presentmentMoney { amount currencyCode }
+    }
+    taxesIncluded
+    fulfillments(first: 10) { createdAt deliveredAt displayStatus }
+    # Phone is deliberately absent. It is protected customer data, and an
+    # app without that approval doesn't simply get the field omitted —
+    # Shopify rejects the whole query, which silently broke every order
+    # sync this one backs.
+    shippingAddress {
+      name
+      firstName
+      lastName
+      company
+      address1
+      address2
+      city
+      provinceCode
+      zip
+      country
+      # The ISO code, not just the country's name. Reusing this address on a
+      # draft order needs an enum Shopify recognises, and "India" isn't one.
+      countryCodeV2
+    }
+    lineItems(first: 250) {
+      nodes {
+        id
+        title
+        variantTitle
+        sku
+        quantity
+        image { url }
+        discountedUnitPriceSet { shopMoney { amount } }
+        taxLines { priceSet { shopMoney { amount } } }
+        product { id productType tags }
+        variant { id selectedOptions { name value } }
+      }
+    }
+  }
+`;
+
 const SYNC_ORDERS_QUERY = `#graphql
   query SyncOrders($first: Int!, $after: String, $query: String) {
     orders(first: $first, after: $after, query: $query, sortKey: PROCESSED_AT) {
       pageInfo { hasNextPage endCursor }
-      nodes {
-        id
-        name
-        email
-        processedAt
-        currencyCode
-        customer { id displayName }
-        subtotalPriceSet { shopMoney { amount } }
-        totalPriceSet {
-          shopMoney { amount }
-          presentmentMoney { amount currencyCode }
-        }
-        taxesIncluded
-        fulfillments(first: 10) { createdAt deliveredAt displayStatus }
-        # Phone is deliberately absent. It is protected customer data, and an
-        # app without that approval doesn't simply get the field omitted —
-        # Shopify rejects the whole query, which silently broke every order
-        # sync this one backs.
-        shippingAddress {
-          name
-          firstName
-          lastName
-          company
-          address1
-          address2
-          city
-          provinceCode
-          zip
-          country
-          # The ISO code, not just the country's name. Reusing this address on a
-          # draft order needs an enum Shopify recognises, and "India" isn't one.
-          countryCodeV2
-        }
-        lineItems(first: 250) {
-          nodes {
-            id
-            title
-            variantTitle
-            sku
-            quantity
-            image { url }
-            discountedUnitPriceSet { shopMoney { amount } }
-            taxLines { priceSet { shopMoney { amount } } }
-            product { id productType tags }
-            variant { id selectedOptions { name value } }
-          }
-        }
-      }
+      nodes { ...OrderFields }
     }
   }
+  ${ORDER_FIELDS}
+`;
+
+const ORDER_BY_ID_QUERY = `#graphql
+  query OrderById($id: ID!) {
+    order(id: $id) { ...OrderFields }
+  }
+  ${ORDER_FIELDS}
 `;
 
 interface SyncOrdersResult {
@@ -379,30 +395,29 @@ export const syncOrderByNumber = async (
 
 /**
  * The same, by Shopify's id — what a customer-account extension knows an
- * order by. Shopify's order search takes the numeric part of the GID.
+ * order by. Asked of `order(id:)` directly rather than of the search index,
+ * which can trail a freshly placed order by minutes.
+ *
+ * Resolves to null once the mirror is current, otherwise to a sentence saying
+ * why it isn't. The extension has no other window into this server than the
+ * answer it gets, so the reason travels back to the browser console.
  */
-export const syncOrderById = async (merchantId: string, externalId: string): Promise<boolean> => {
-  const numeric = externalId.match(/^gid:\/\/shopify\/Order\/(\d+)$/)?.[1];
-  if (!numeric) return false;
+export const syncOrderById = async (merchantId: string, externalId: string): Promise<string | null> => {
   try {
     const { shop, accessToken } = await getShopCredentials(merchantId);
-    const result = await shopifyGraphQL<SyncOrdersResult>(shop, accessToken, SYNC_ORDERS_QUERY, {
-      first: 1,
-      after: null,
-      query: `id:${numeric}`,
+    const result = await shopifyGraphQL<{ order: GraphQLOrderNode | null }>(shop, accessToken, ORDER_BY_ID_QUERY, {
+      id: externalId,
     });
-    let synced = false;
-    for (const node of result.orders.nodes) {
-      if (node.id !== externalId) continue;
-      const normalized = mapGraphQLOrder(node);
-      if (!normalized) continue;
-      await upsertOrder(merchantId, normalized);
-      synced = true;
+    if (!result.order) {
+      return `Shopify has no order ${externalId} this app may read; read_orders reaches back 60 days, and older orders need read_all_orders.`;
     }
-    return synced;
+    const normalized = mapGraphQLOrder(result.order);
+    if (!normalized) return `Shopify's copy of order ${result.order.name} has no email address, and the portal identifies shoppers by email.`;
+    await upsertOrder(merchantId, normalized);
+    return null;
   } catch (error) {
     logger.warn({ merchantId, externalId, error }, "Could not fetch this order from Shopify");
-    return false;
+    return `Shopify couldn't be asked: ${error instanceof Error ? error.message : String(error)}`;
   }
 };
 
