@@ -1,0 +1,39 @@
+# "Start a return" in Shopify's customer accounts.
+#
+# A shopper signed in to the store's account sees a button on each fulfilled
+# order — on the Orders page and on the order's own page — that opens the
+# returns portal with that order already looked up. The same thing Loop puts
+# there, on the same target: Shopify's order action menu, which renders on
+# both pages by itself, so the merchant has nothing to place in an editor.
+#
+# Only for stores on Shopify's current customer accounts; the legacy ones
+# have no extension points.
+
+api_version = "2026-04"
+
+[[extensions]]
+type = "ui_extension"
+name = "Start a return"
+handle = "start-return"
+
+  [[extensions.targeting]]
+  module = "./src/StartReturn.jsx"
+  target = "customer-account.order.action.menu-item.render"
+
+  # The Storefront API is how the button learns the store's own address, so a
+  # merchant who never opens the settings still gets a working link.
+  [extensions.capabilities]
+  api_access = true
+
+  [extensions.settings]
+    [[extensions.settings.fields]]
+    key = "portal_url"
+    type = "single_line_text_field"
+    name = "Returns portal address"
+    description = "Where the button sends shoppers. Leave empty to use the returns page on your own store (/apps/returns)."
+
+    [[extensions.settings.fields]]
+    key = "label"
+    type = "single_line_text_field"
+    name = "Button label"
+    description = "Defaults to \"Start a return\"."

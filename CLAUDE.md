@@ -159,6 +159,16 @@ Typecheck is necessary and not sufficient. The pattern that has worked:
   General; the settings page says so (`canWrite`). The Render `SHOPIFY_SCOPES`
   env must include it too.
 
+### Shopify extensions
+
+- `extensions/start-return` is a customer-account UI extension (Preact, target
+  `customer-account.order.action.menu-item.render`): a "Start a return" button
+  on fulfilled orders that links to `<portal>?order=<number>&email=<email>`.
+  The lookup page reads those two query parameters, fills the form and submits
+  once. Extensions deploy with `npx shopify app deploy`, which needs the
+  owner's Shopify login, so they are not part of the Render/Vercel pipeline.
+  Validate extension code with the Shopify skill's validator before pushing.
+
 ### Client
 
 - React Router 8 in framework mode; routes in `client/src/routes.ts`.
