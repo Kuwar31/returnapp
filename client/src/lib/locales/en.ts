@@ -209,7 +209,7 @@ export const en = {
   "status.instructions": "Return instructions",
   "status.returnTo": "Send your items to",
   "totals.returnShipping": "Return shipping",
-  "review.method.title": "How would you like to return your items?",
+  "review.method.title": "Choose a return method",
   "review.method.free": "Free",
   "status.returnMethod": "Return method",
   "status.keepItems": "No need to send anything back. You can keep the items.",

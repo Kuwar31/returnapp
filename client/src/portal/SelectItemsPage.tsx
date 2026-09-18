@@ -211,7 +211,7 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
     if (!offerOpen || !nothingToSpend) return;
     setOfferSeen(true);
     setOfferOpen(false);
-    navigate(`/r/${slug}/method`);
+    navigate(`/r/${slug}/review`);
   }, [offerOpen, nothingToSpend, navigate, slug]);
 
   const goToReview = () => {
@@ -225,8 +225,8 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
       setOfferOpen(true);
       return;
     }
-    // How the items go back is its own step, before the review.
-    navigate(`/r/${slug}/method`);
+    // How the items go back is asked on the review, as Loop asks it.
+    navigate(`/r/${slug}/review`);
   };
 
   /**
@@ -605,7 +605,7 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
                 onClick={() => {
                   setOfferSeen(true);
                   setOfferOpen(false);
-                  navigate(`/r/${slug}/method`);
+                  navigate(`/r/${slug}/review`);
                 }}
               >
                 {quote
