@@ -188,6 +188,7 @@ export const pt: Dict = {
   "status.returnWord": "Devolução",
   "status.requestSubmitted": "Pedido enviado",
   "status.cardTitle": "Estado da devolução",
+  "status.packTitle": "Embale estes artigos. Use a embalagem original, se possível.",
   "status.storeReview": "Análise da loja",
   "status.declined": "Recusado",
   "status.awaitingReview": "A aguardar a análise da loja",

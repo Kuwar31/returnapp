@@ -166,9 +166,8 @@ export default function PortalLayout({ loaderData }: Route.ComponentProps) {
               style={{ width: branding.logoWidth, height: "auto" }}
             />
           ) : (
-            <div className="portal__store">{config.merchant.name}</div>
+            <h1 className="portal__store">{config.merchant.name}</h1>
           )}
-          <h1>{branding.headline}</h1>
         </header>
         )}
 

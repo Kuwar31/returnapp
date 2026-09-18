@@ -139,12 +139,6 @@ function Preview({ b, storeName }: { b: PortalBranding; storeName: string }) {
         ) : (
           <div className="pv__store">{storeName}</div>
         )}
-        <div
-          className="pv__headline"
-          style={{ fontFamily: fontStack(b.headingFont) }}
-        >
-          {b.headline}
-        </div>
       </div>
 
       <div
@@ -619,14 +613,6 @@ export default function PortalPage() {
 
           <div className="panel">
             <h2>Content</h2>
-            <Row label="Heading">
-              <input
-                type="text"
-                className="settings-input"
-                value={b.headline}
-                onChange={(e) => set("headline", e.target.value)}
-              />
-            </Row>
             <Row label="Start button">
               <input
                 type="text"

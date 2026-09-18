@@ -198,6 +198,7 @@ export const ar: Dict = {
   "status.returnWord": "إرجاع",
   "status.requestSubmitted": "تم إرسال الطلب",
   "status.cardTitle": "حالة الإرجاع",
+  "status.packTitle": "قم بتغليف هذه العناصر. استخدم العبوة الأصلية إن أمكن.",
   "status.storeReview": "مراجعة المتجر",
   "status.declined": "مرفوض",
   "status.awaitingReview": "في انتظار مراجعة المتجر",

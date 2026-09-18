@@ -87,7 +87,18 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
   const [error, setError] = useState<string | null>(null);
 
   const currency = detail.currency;
-  const copy = nextStep(t, detail.status);
+  /**
+   * The routing method's own words, where the merchant wrote some, for as
+   * long as the return is open — once it's received, declined or closed the
+   * standard wording says what actually happened.
+   */
+  const own = ["SUBMITTED", "APPROVED", "IN_TRANSIT"].includes(detail.status) ? detail.returnMethod : null;
+  const standard = nextStep(t, detail.status);
+  const copy = {
+    heading: standard.heading,
+    title: own?.statusTitle || standard.title,
+    body: own?.statusBody || standard.body,
+  };
   const auth = { slug: slug!, email: detail.customerEmail };
 
   const finished = detail.status === "RESOLVED";
@@ -287,7 +298,7 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
 
           {/* Nothing to pack once the request is off the table. */}
           {showPacking && (
-          <Section title="Pack these items. Use the original packaging if possible.">
+          <Section title={detail.returnMethod?.packingTitle || t("status.packTitle")}>
             <div className="confirm__grid">
               {detail.lineItems.map((item) => (
                 <div key={item.id} className="confirm__tile">

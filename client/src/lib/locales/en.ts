@@ -231,6 +231,7 @@ export const en = {
   "status.returnWord": "Return",
   "status.requestSubmitted": "Request submitted",
   "status.cardTitle": "Return status",
+  "status.packTitle": "Pack these items. Use the original packaging if possible.",
   "status.storeReview": "Store review",
   "status.declined": "Declined",
   "status.awaitingReview": "Waiting for the store to review",

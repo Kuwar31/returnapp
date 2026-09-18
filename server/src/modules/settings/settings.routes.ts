@@ -1022,6 +1022,10 @@ const routingMethodSchema = z.object({
     .refine((v) => v === null || /^https?:\/\/\S+$/i.test(v), {
       message: "Enter a valid URL, starting with http:// or https://.",
     }),
+  /** The status page's words while the return is open; blank keeps the portal's. */
+  statusTitle: blankToNull(120),
+  statusBody: blankToNull(500),
+  packingTitle: blankToNull(120),
   /** LABEL only — the rule's return shipping information; each null defers. */
   carrier: z.enum([...PROVIDERS, "EXTERNAL"]).nullable().optional().transform((v) => v ?? null),
   serviceName: blankToNull(120),

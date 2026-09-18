@@ -149,6 +149,9 @@ export const serializeReturn = (
         name: request.returnMethodName ?? "",
         instructions: request.returnInstructions,
         storeUrl: request.returnStoreUrl,
+        statusTitle: request.returnStatusTitle,
+        statusBody: request.returnStatusBody,
+        packingTitle: request.returnPackingTitle,
         cost: fx.money(request.returnShippingFee),
       }
     : null,

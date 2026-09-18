@@ -589,6 +589,10 @@ export interface ReturnDetail {
     name: string;
     instructions: string | null;
     storeUrl: string | null;
+    /** The method's own status-page words, when the merchant wrote some. */
+    statusTitle?: string | null;
+    statusBody?: string | null;
+    packingTitle?: string | null;
     cost: number;
   } | null;
   order: {
@@ -1015,6 +1019,10 @@ export interface RoutingMethod {
   autoApprove: boolean;
   /** STORE only: a link to the retail locations. */
   storeUrl: string | null;
+  /** The status page's words while the return is open; null keeps the portal's. */
+  statusTitle: string | null;
+  statusBody: string | null;
+  packingTitle: string | null;
   /** LABEL only — the rule's return shipping information; each null defers. */
   carrier: ShipmentProvider | null;
   /** Matched against the carrier's service names at booking; unmatched books the cheapest. */
