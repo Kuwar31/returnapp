@@ -3114,69 +3114,6 @@
 
 /* ---------- return method choice, on the review step ---------- */
 
-.methods {
-  display: grid;
-  gap: 10px;
-}
-
-.method {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 16px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  cursor: pointer;
-  transition: border-color 0.12s, box-shadow 0.12s;
-}
-
-.method:hover {
-  border-color: var(--border-strong, var(--border));
-}
-
-.method.is-selected {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
-}
-
-.method input {
-  flex: none;
-  width: 18px;
-  height: 18px;
-  margin: 0;
-  accent-color: var(--accent);
-}
-
-.method__icon {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  background: var(--surface-muted, rgba(0, 0, 0, 0.05));
-  font-size: 20px;
-}
-
-.method__body {
-  flex: 1;
-  min-width: 0;
-  display: grid;
-  gap: 2px;
-  font-size: 14px;
-  line-height: 1.4;
-}
-
-.method__name {
-  font-weight: 600;
-}
-
-.method__cost {
-  flex: none;
-  font-size: 14px;
-  font-weight: 600;
-}
-
 /* The chosen method on the status page: instructions keep their line breaks. */
 .confirm__method + .confirm__steps,
 .confirm__method + .confirm__dest {
@@ -3214,43 +3151,6 @@
 }
 
 /* ---------- the return-method step, between the items and the review ---------- */
-
-.method-page {
-  max-width: 720px;
-  margin: 0 auto;
-}
-
-.method-page h1 {
-  margin-bottom: 18px;
-}
-
-.method-page__actions {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 20px;
-}
-
-.method-page__actions .btn {
-  width: auto;
-  min-width: 140px;
-}
-
-/* The method already chosen, on the review: the card and a way back. */
-.review__method-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.review__method-head h2 {
-  margin-bottom: 0;
-}
-
-.review__method-head + .methods {
-  margin-top: 14px;
-}
 
 /* ---------- order lookup ----------
    The first thing a shopper sees, so it gets the room the rest of the
@@ -3428,5 +3328,107 @@
      screen's wrapper — clears the bar by the same margin. */
   .drawer__body > :first-child {
     margin-top: 18px;
+  }
+}
+
+/* ---------- return method rows, on the review, as Loop draws them ----------
+   One bordered group, a row per method: line icon, name and a line of
+   description, the cost muted on the right, and the radio at the edge. The
+   chosen row tints grey rather than growing a heavy outline. */
+
+.mrows {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.mrow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.mrow + .mrow {
+  border-top: 1px solid var(--border);
+}
+
+.mrow:hover {
+  background: var(--surface-muted, rgba(0, 0, 0, 0.03));
+}
+
+.mrow.is-selected {
+  background: var(--surface-muted, rgba(0, 0, 0, 0.04));
+}
+
+.mrow--only {
+  cursor: default;
+}
+
+.mrow__icon {
+  flex: none;
+  color: var(--text);
+}
+
+.mrow__body {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  line-height: 1.4;
+}
+
+.mrow__name {
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.mrow__desc {
+  font-size: 13.5px;
+  color: var(--text-muted);
+}
+
+.mrow__cost {
+  flex: none;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.mrow__radio {
+  flex: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  border: 2px solid var(--border-strong, #c8c8cc);
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.12s;
+}
+
+.mrow__radio:checked {
+  border: 5px solid var(--accent);
+}
+
+.mrow__radio:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .mrow {
+    gap: 12px;
+    padding: 14px 12px;
+  }
+
+  .mrow__name {
+    font-size: 14.5px;
+  }
+
+  .mrow__desc {
+    font-size: 13px;
   }
 }

@@ -13,12 +13,45 @@ import { ErrorAlert } from "../components/Feedback";
 import type { TranslateFn } from "../lib/i18n";
 
 /** One glyph per way of sending items back, on the review page's cards. */
-const METHOD_ICONS: Record<ReturnMethodKind, string> = {
-  LABEL: "🏷️",
-  CARRIER: "🚚",
-  STORE: "🏬",
-  KEEP: "🌱",
-};
+/** One line drawing per way of sending items back, in the weight Loop uses. */
+function MethodIcon({ kind }: { kind: ReturnMethodKind }) {
+  const paths: Record<ReturnMethodKind, React.ReactNode> = {
+    LABEL: (
+      <>
+        <rect x="3.5" y="5.5" width="17" height="13" rx="2" />
+        <path d="M7 10h6M7 13.5h4" />
+        <path d="M15.5 12.5h2" />
+      </>
+    ),
+    CARRIER: (
+      <>
+        <path d="M3.5 7h10v9h-10z" />
+        <path d="M13.5 10h3.5l3 3v3h-6.5" />
+        <circle cx="7" cy="17.5" r="1.6" />
+        <circle cx="17" cy="17.5" r="1.6" />
+      </>
+    ),
+    STORE: (
+      <>
+        <path d="M4 9.5 5.5 5h13L20 9.5" />
+        <path d="M4 9.5c0 1.4 1.2 2.5 2.7 2.5S9.3 10.9 9.3 9.5c0 1.4 1.2 2.5 2.7 2.5s2.7-1.1 2.7-2.5c0 1.4 1.2 2.5 2.7 2.5S20 10.9 20 9.5" />
+        <path d="M5.5 12v7h13v-7" />
+        <path d="M10 19v-4h4v4" />
+      </>
+    ),
+    KEEP: (
+      <>
+        <path d="M19 5c-8 0-13 4-13 11 0 1.2.2 2.2.5 3 4-1 9-3 12.5-14Z" />
+        <path d="M6 19c1.5-4 4-7 8-9.5" />
+      </>
+    ),
+  };
+  return (
+    <svg className="mrow__icon" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {paths[kind]}
+    </svg>
+  );
+}
 import { usePortal, useT } from "./PortalLayout";
 import {
   clearDraft,
@@ -114,7 +147,6 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
   const [returnMethod, setReturnMethod] = useState<ReturnMethodKind | null>(() =>
     loadMethod(order.id),
   );
-  const [methodChosenBefore] = useState(() => loadMethod(order.id) !== null);
   /** The "checkout opens in a new page" confirmation, for an upsell exchange. */
   const [payPrompt, setPayPrompt] = useState(false);
 
@@ -340,39 +372,24 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
           <div className="card review__card">
             {quote?.returnMethods && quote.returnMethods.options.length > 0 ? (
               (() => {
-                const picked = methodChosenBefore
-                  ? quote.returnMethods.options.find((m) => m.kind === returnMethod)
-                  : undefined;
-                // Chosen a step ago: show it, with the way back to change it.
-                if (picked) {
+                const options = quote.returnMethods.options;
+                const current = returnMethod ?? quote.returnMethods.selected;
+                const costOf = (m: (typeof options)[number]) =>
+                  m.costMode === "HIDDEN" ? null : m.costMode === "FREE" ? t("review.method.free") : money(m.cost, m.currency);
+                // One way back is no choice: say what it is, without a radio to press.
+                if (options.length === 1) {
+                  const only = options[0];
                   return (
                     <>
-                      <div className="review__method-head">
-                        <h2>{t("status.returnMethod")}</h2>
-                        <button
-                          type="button"
-                          className="linkish"
-                          onClick={() => navigate(`/r/${slug}/method`)}
-                        >
-                          {t("review.method.change")}
-                        </button>
-                      </div>
-                      <div className="methods">
-                        <div className="method is-selected">
-                          <span className="method__icon" aria-hidden="true">
-                            {METHOD_ICONS[picked.kind]}
+                      <h2>{t("status.returnMethod")}</h2>
+                      <div className="mrows">
+                        <div className="mrow mrow--only">
+                          <MethodIcon kind={only.kind} />
+                          <span className="mrow__body">
+                            <span className="mrow__name">{only.name}</span>
+                            {only.description && <span className="mrow__desc">{only.description}</span>}
                           </span>
-                          <span className="method__body">
-                            <span className="method__name">{picked.name}</span>
-                            {picked.description && <span className="muted">{picked.description}</span>}
-                          </span>
-                          {picked.costMode !== "HIDDEN" && (
-                            <span className="method__cost">
-                              {picked.costMode === "FREE"
-                                ? t("review.method.free")
-                                : money(picked.cost, picked.currency)}
-                            </span>
-                          )}
+                          {costOf(only) && <span className="mrow__cost">{costOf(only)}</span>}
                         </div>
                       </div>
                     </>
@@ -381,34 +398,27 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
                 return (
                   <>
                     <h2>{t("review.method.title")}</h2>
-                    <div className="methods" role="radiogroup" aria-label={t("review.method.title")}>
-                      {quote.returnMethods.options.map((m) => {
-                        const selected = (returnMethod ?? quote.returnMethods!.selected) === m.kind;
+                    <div className="mrows" role="radiogroup" aria-label={t("review.method.title")}>
+                      {options.map((m) => {
+                        const selected = current === m.kind;
                         return (
-                          <label key={m.kind} className={`method${selected ? " is-selected" : ""}`}>
+                          <label key={m.kind} className={`mrow${selected ? " is-selected" : ""}`}>
+                            <MethodIcon kind={m.kind} />
+                            <span className="mrow__body">
+                              <span className="mrow__name">{m.name}</span>
+                              {m.description && <span className="mrow__desc">{m.description}</span>}
+                            </span>
+                            {costOf(m) && <span className="mrow__cost">{costOf(m)}</span>}
                             <input
                               type="radio"
                               name="return-method"
+                              className="mrow__radio"
                               checked={selected}
                               onChange={() => {
                                 setReturnMethod(m.kind);
                                 saveMethod(order.id, m.kind);
                               }}
                             />
-                            <span className="method__icon" aria-hidden="true">
-                              {METHOD_ICONS[m.kind]}
-                            </span>
-                            <span className="method__body">
-                              <span className="method__name">{m.name}</span>
-                              {m.description && <span className="muted">{m.description}</span>}
-                            </span>
-                            {m.costMode !== "HIDDEN" && (
-                              <span className="method__cost">
-                                {m.costMode === "FREE"
-                                  ? t("review.method.free")
-                                  : money(m.cost, m.currency)}
-                              </span>
-                            )}
                           </label>
                         );
                       })}
