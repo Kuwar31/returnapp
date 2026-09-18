@@ -1517,11 +1517,14 @@
   align-items: start;
 }
 
+/* Sits above the two columns, at their width, so the cards below start level. */
 .confirm__heading {
+  width: 100%;
+  max-width: 1080px;
+  margin: 0 auto 20px;
   font-size: 38px;
   font-weight: 700;
   line-height: 1.1;
-  margin-bottom: 20px;
 }
 
 .confirm__card {
@@ -1742,13 +1745,6 @@
 
 .confirm__dest-name {
   font-weight: 600;
-}
-
-.confirm__restart {
-  display: inline-block;
-  margin-top: 4px;
-  font-size: 14px;
-  color: var(--text-muted);
 }
 
 .confirm__aside {
