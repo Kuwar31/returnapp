@@ -2,11 +2,13 @@ import {
   Prisma,
   type LookupCriterion,
   type ResolutionType,
+  type ReturnStatus,
 } from "@prisma/client";
 import { badRequest, notFound, unprocessable } from "../../lib/errors.js";
 import { matchesCriterion, normalizeCriteria } from "./lookup-match.js";
 import { logger } from "../../lib/logger.js";
 import { prisma } from "../../lib/prisma.js";
+import { isRedacted } from "../../lib/redaction.js";
 import { displayConverter, round2, toDecimal, ZERO } from "../../lib/money.js";
 import { evaluateOrder } from "../policy/eligibility.service.js";
 import { advancedExchangesAllowed } from "../policy/effective.js";
@@ -156,6 +158,8 @@ export const lookupOrder = async (
     include: { lineItems: { orderBy: { title: "asc" } } },
   });
   if (!order) return null;
+  // A forgotten customer's order has the public placeholder for an email; it must not open the order.
+  if (isRedacted(order.email)) return null;
 
   const criteria = await lookupCriteriaFor(merchantId);
 
@@ -287,6 +291,44 @@ export const resolvePortalBranding = (
 };
 
 /**
+ * What the portal says about the returns already raised on an order: the
+ * reference, where each stands, and the pictures of what went back, so a
+ * shopper with two returns on one order can tell them apart. Drafts and
+ * cancellations are left out — there is nothing to follow up on.
+ */
+const RETURNS_ON_ORDER = {
+  where: { status: { notIn: ["DRAFT", "CANCELLED"] as ReturnStatus[] } },
+  orderBy: { createdAt: "desc" as const },
+  select: {
+    reference: true,
+    status: true,
+    createdAt: true,
+    // The email the status page checks: the one on the return, snapshotted at
+    // submission, not the order's — a merchant may change that in Shopify later.
+    customerEmail: true,
+    lineItems: { select: { orderLineItem: { select: { title: true, imageUrl: true } } } },
+  },
+};
+
+type ReturnOnOrder = Prisma.ReturnRequestGetPayload<{ select: (typeof RETURNS_ON_ORDER)["select"] }>;
+
+const describeReturns = (requests: ReturnOnOrder[]) =>
+  requests.map((request) => ({
+    reference: request.reference,
+    status: request.status,
+    createdAt: request.createdAt,
+    email: request.customerEmail,
+    items: request.lineItems.map((line) => ({
+      title: line.orderLineItem.title,
+      imageUrl: line.orderLineItem.imageUrl,
+    })),
+  }));
+
+/** The returns already raised on one order, for the item picker's own list of them. */
+export const returnsOnOrder = async (merchantId: string, orderId: string) =>
+  describeReturns(await prisma.returnRequest.findMany({ ...RETURNS_ON_ORDER, where: { ...RETURNS_ON_ORDER.where, merchantId, orderId } }));
+
+/**
  * A signed-in shopper's orders, for the storefront's "Your orders" list —
  * what AfterShip's and Loop's returns centres show in place of the lookup
  * form once the store knows who is there.
@@ -311,17 +353,7 @@ export const listCustomerOrders = async (merchantId: string, customerExternalId:
     take: 20,
     include: {
       lineItems: { orderBy: { title: "asc" } },
-      returnRequests: {
-        where: { status: { notIn: ["DRAFT", "CANCELLED"] } },
-        orderBy: { createdAt: "desc" },
-        select: {
-          reference: true,
-          status: true,
-          createdAt: true,
-          // The pictures of what went back, so a shopper with two returns on one order can tell them apart.
-          lineItems: { select: { orderLineItem: { select: { title: true, imageUrl: true } } } },
-        },
-      },
+      returnRequests: RETURNS_ON_ORDER,
     },
   });
   const mode = await resolveDisplayMode(merchantId);
@@ -339,15 +371,7 @@ export const listCustomerOrders = async (merchantId: string, customerExternalId:
         fulfilledAt: order.fulfilledAt,
         currency: fx.currency,
         returnable: eligibility.hasEligibleItems,
-        returns: order.returnRequests.map((request) => ({
-          reference: request.reference,
-          status: request.status,
-          createdAt: request.createdAt,
-          items: request.lineItems.map((line) => ({
-            title: line.orderLineItem.title,
-            imageUrl: line.orderLineItem.imageUrl,
-          })),
-        })),
+        returns: describeReturns(order.returnRequests),
         lineItems: order.lineItems.map((line) => ({
           id: line.id,
           title: line.title,
@@ -1666,6 +1690,8 @@ export const getReturnByReference = async (
     include: confirmationInclude,
   });
   if (!request) return null;
+  // The placeholder a forgotten customer's return carries is public; it is not a match.
+  if (isRedacted(request.customerEmail)) return null;
   if (request.customerEmail.toLowerCase() !== email.toLowerCase()) return null;
   return request;
 };

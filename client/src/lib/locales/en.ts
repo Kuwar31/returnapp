@@ -83,7 +83,6 @@ export const en = {
   "shell.unavailable.body":
     "We couldn't find that store's returns portal. Please use the link the store sent you.",
   "shell.resume": "You have a return in progress",
-  "shell.resumeAction": "View it",
 
   // --- shared ------------------------------------------------------------
   "common.goBack": "Go back",
@@ -97,8 +96,7 @@ export const en = {
   "picker.title": "Select an item to return",
   "picker.intro": "You'll have the opportunity to add more later.",
   "picker.returnableUntil": "Returnable until {date}",
-  "picker.existing": "You already have a return for this order",
-  "picker.started": "started {date}",
+  "picker.existing": "Returns already started on this order",
   "picker.windowClosed": "This order is outside the {days}-day return window.",
   "picker.exchangingFor": "Exchanging for",
   "picker.returning": "Returning",

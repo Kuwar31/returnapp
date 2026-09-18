@@ -1232,36 +1232,32 @@
 }
 
 /*
- * The way back to a return already in flight for this order.
+ * The returns already raised on this order, above the items: a titled box of
+ * the same rows the storefront's order list uses.
  *
  * Given real weight rather than a line of grey text: a shopper who closed the
  * page and came back is looking at their own items greyed out as "already
  * returned", and this is the only thing on screen that explains why and offers
- * a way to their summary.
+ * a way to each return's summary.
  */
-.picker__submitted {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin: 0 0 18px;
-  padding: 14px 16px;
-  border: 1px solid var(--border-strong);
+.picker__returns {
+  margin: 0 0 22px;
+  border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: var(--surface);
-  font-size: 14px;
-  text-align: left;
+  overflow: hidden;
+  text-align: start;
 }
 
-.picker__submitted strong {
-  display: block;
+.picker__returns-title {
   font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
 }
 
-.picker__submitted .muted {
-  margin-top: 2px;
-  font-size: 13px;
+.picker__returns .return-row:last-child {
+  border-bottom: none;
 }
 
 .picker__until {
@@ -3325,6 +3321,7 @@
 .return-row__thumbs {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 10px;
 }
@@ -3707,7 +3704,7 @@
 
 .confirm__progress-knob {
   position: absolute;
-  right: -2px;
+  inset-inline-end: -2px;
   top: 50%;
   width: 14px;
   height: 14px;

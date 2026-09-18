@@ -1,16 +1,17 @@
 import { useEffect, useRef } from "react";
-import { Form, Link, redirect, useNavigation, useParams, useSearchParams, useSubmit } from "react-router";
+import { Form, redirect, useNavigation, useParams, useSearchParams, useSubmit } from "react-router";
 import { api, ApiError, clearToken, setToken } from "../lib/api";
 import { ErrorAlert } from "../components/Feedback";
 import { money, shortDate } from "../lib/format";
-import { at, type Key } from "../lib/i18n";
+import { at } from "../lib/i18n";
 import {
   lookupFieldLabel,
   lookupInputProps,
   lookupMissingMessage,
 } from "../lib/lookup";
-import type { CustomerOrder, ReturnStatus } from "../lib/types";
+import type { CustomerOrder } from "../lib/types";
 import { usePortal, useT } from "./PortalLayout";
+import { ReturnRows } from "./ReturnRows";
 import type { Route } from "./+types/LookupPage";
 
 /**
@@ -25,18 +26,6 @@ type LookupFailure =
   | { reason: "missing" | "notFound" }
   | { error: string };
 
-/**
- * How far along a return is, for the bar on its row — the status page's
- * scale, so the two never disagree. A declined, cancelled or expired return
- * has no progress to show and gets no bar.
- */
-const RETURN_PROGRESS: Partial<Record<ReturnStatus, number>> = {
-  SUBMITTED: 0.2,
-  APPROVED: 0.45,
-  IN_TRANSIT: 0.65,
-  RECEIVED: 0.85,
-  RESOLVED: 1,
-};
 
 /**
  * Who is here, when the store already knows.
@@ -257,42 +246,7 @@ export default function LookupPage({ actionData, loaderData }: Route.ComponentPr
                   )}
                 </div>
               </header>
-              {/*
-                Every return raised on the order, each its own row — AfterShip's
-                order page — so a second return is as visible as the first. The
-                pictures are what went back, the headline is the status page's,
-                and the bar is how far along it is; the row opens that page.
-              */}
-              {order.returns.map((request) => (
-                <Link
-                  key={request.reference}
-                  className="return-row"
-                  to={`/r/${slug}/status/${request.reference}?email=${encodeURIComponent(order.email)}`}
-                >
-                  <div className="return-row__thumbs">
-                    {request.items.slice(0, 4).map((item, i) =>
-                      item.imageUrl ? (
-                        <img key={i} src={item.imageUrl} alt={item.title} />
-                      ) : (
-                        <span key={i} className="return-row__thumb-blank" aria-hidden="true" />
-                      ),
-                    )}
-                    {request.items.length > 4 && <span className="return-row__more">+{request.items.length - 4}</span>}
-                  </div>
-                  <div className="return-row__ref">{t("orders.returnRef", { reference: request.reference })}</div>
-                  <div className="return-row__heading">{t(`status.${request.status}.heading` as Key)}</div>
-                  {RETURN_PROGRESS[request.status] !== undefined && (
-                    <div className="confirm__progress return-row__progress" aria-hidden="true">
-                      <span className="confirm__progress-fill" style={{ width: `${RETURN_PROGRESS[request.status]! * 100}%` }}>
-                        <span className="confirm__progress-knob" />
-                      </span>
-                    </div>
-                  )}
-                  <span className="return-row__chevron" aria-hidden="true">
-                    ›
-                  </span>
-                </Link>
-              ))}
+              <ReturnRows slug={slug!} returns={order.returns} />
               <ul className="order-card__lines">
                 {order.lineItems.map((line) => (
                   <li className="line-item" key={line.id}>

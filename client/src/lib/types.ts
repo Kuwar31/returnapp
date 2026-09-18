@@ -173,6 +173,8 @@ export interface CustomerOrder {
     reference: string;
     status: ReturnStatus;
     createdAt: string;
+    /** The email the status page authenticates this return with. */
+    email: string;
     items: Array<{ title: string; imageUrl: string | null }>;
   }>;
   lineItems: Array<{
@@ -202,6 +204,15 @@ export interface OrderSession {
     restockingFeePercent: number;
   };
   reasonGroups: ReasonGroup[];
+  /** Every return already raised on this order, newest first. */
+  returns: Array<{
+    reference: string;
+    status: ReturnStatus;
+    createdAt: string;
+    /** The email the status page authenticates this return with. */
+    email: string;
+    items: Array<{ title: string; imageUrl: string | null }>;
+  }>;
   /** How a size swap's price gap is settled, for what the picker promises. */
   variantExchangeDifference?: VariantExchangeDifference;
   /**
