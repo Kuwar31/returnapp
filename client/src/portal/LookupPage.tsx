@@ -1,4 +1,5 @@
-import { Form, redirect, useNavigation, useParams } from "react-router";
+import { useEffect, useRef } from "react";
+import { Form, redirect, useNavigation, useParams, useSearchParams, useSubmit } from "react-router";
 import { api, ApiError, setToken } from "../lib/api";
 import { ErrorAlert } from "../components/Feedback";
 import { at } from "../lib/i18n";
@@ -66,6 +67,27 @@ export default function LookupPage({ actionData }: Route.ComponentProps) {
   const navigation = useNavigation();
   const busy = navigation.state !== "idle";
 
+  /**
+   * A link that already knows the order — from the "Start a return" button
+   * in the shopper's Shopify account, or a link the store sent — fills the
+   * form and submits it once, so the shopper lands on their items without
+   * typing what the store already knows. A failure leaves the filled form
+   * and its message, as if they had pressed the button themselves.
+   */
+  const [search] = useSearchParams();
+  const presetOrder = (search.get("order") ?? "").trim().replace(/^#/, "");
+  const presetIdentifier = (search.get("email") ?? search.get("identifier") ?? "").trim();
+  const submit = useSubmit();
+  const autoSubmitted = useRef(false);
+  useEffect(() => {
+    if (autoSubmitted.current || !presetOrder || !presetIdentifier || actionData) return;
+    autoSubmitted.current = true;
+    const form = new FormData();
+    form.set("orderNumber", presetOrder);
+    form.set("identifier", presetIdentifier);
+    void submit(form, { method: "post" });
+  }, [presetOrder, presetIdentifier, actionData, submit]);
+
   const input = lookupInputProps(branding, t);
   const error = !actionData
     ? null
@@ -99,6 +121,7 @@ export default function LookupPage({ actionData }: Route.ComponentProps) {
             <input
               id="orderNumber"
               name="orderNumber"
+              defaultValue={presetOrder}
               placeholder={t("lookup.orderPlaceholder")}
               autoComplete="off"
               required
@@ -117,6 +140,7 @@ export default function LookupPage({ actionData }: Route.ComponentProps) {
               id="identifier"
               name="identifier"
               type={input.type}
+              defaultValue={presetIdentifier}
               autoComplete={input.autoComplete}
               placeholder={input.placeholder}
               required

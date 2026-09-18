@@ -5,7 +5,8 @@
   "description": "Returns and exchanges platform \u2014 shopper portal + merchant admin",
   "workspaces": [
     "server",
-    "client"
+    "client",
+    "extensions/start-return"
   ],
   "scripts": {
     "dev": "concurrently -n server,client -c cyan,magenta \"npm:dev:server\" \"npm:dev:client\"",

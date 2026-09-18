@@ -1,0 +1,11 @@
+{
+  "name": "start-return",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Start a return from Shopify customer accounts",
+  "dependencies": {
+    "@shopify/ui-extensions": "2026.4.x",
+    "preact": "^10.24.0",
+    "@preact/signals": "^2.0.0"
+  }
+}
