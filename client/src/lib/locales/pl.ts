@@ -30,6 +30,7 @@ export const pl: Dict = {
   "orders.policy.ORDER_DATE": "Przyjmujemy zwroty w ciągu {days} dni od zakupu.",
   "orders.policyFallback": "Przyjmujemy zwroty nieużywanych i nieuszkodzonych produktów zgodnie z naszymi zasadami zwrotów.",
   "orders.policyLink": "Zobacz zasady zwrotów",
+  "orders.returnRef": "Zwrot {reference}",
   "drawer.noOtherOptions": "Ten produkt nie ma innych wariantów. Spróbuj wymienić go na inny produkt.",
   "drawer.optionsFailed": "Nie udało się teraz wczytać pozostałych wariantów.",
   "drawer.tryAgain": "Spróbuj ponownie",

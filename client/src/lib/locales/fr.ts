@@ -30,6 +30,7 @@ export const fr: Dict = {
   "orders.policy.ORDER_DATE": "Nous acceptons les retours dans les {days} jours suivant l'achat.",
   "orders.policyFallback": "Nous acceptons le retour des articles non utilisés et non endommagés conformément à notre politique de retour.",
   "orders.policyLink": "Voir la politique de retour",
+  "orders.returnRef": "Retour {reference}",
   "drawer.noOtherOptions": "Cet article n'existe pas dans d'autres options. Essayez plutôt de l'échanger contre un autre produit.",
   "drawer.optionsFailed": "Impossible de charger les autres options pour le moment.",
   "drawer.tryAgain": "Réessayer",

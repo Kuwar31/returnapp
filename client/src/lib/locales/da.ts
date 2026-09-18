@@ -30,6 +30,7 @@ export const da: Dict = {
   "orders.policy.ORDER_DATE": "Vi accepterer returneringer inden for {days} dage efter købet.",
   "orders.policyFallback": "Vi accepterer returnering af ubrugte og ubeskadigede varer i henhold til vores returpolitik.",
   "orders.policyLink": "Se returpolitik",
+  "orders.returnRef": "Returnering {reference}",
   "drawer.noOtherOptions": "Denne vare findes ikke i andre varianter. Prøv i stedet at bytte den til et andet produkt.",
   "drawer.optionsFailed": "Vi kunne ikke indlæse de andre varianter lige nu.",
   "drawer.tryAgain": "Prøv igen",

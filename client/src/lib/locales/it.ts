@@ -30,6 +30,7 @@ export const it: Dict = {
   "orders.policy.ORDER_DATE": "Accettiamo resi entro {days} giorni dall'acquisto.",
   "orders.policyFallback": "Accettiamo resi di articoli non utilizzati e non danneggiati secondo la nostra politica sui resi.",
   "orders.policyLink": "Vedi la politica sui resi",
+  "orders.returnRef": "Reso {reference}",
   "drawer.noOtherOptions": "Questo articolo non ha altre opzioni. Prova a cambiarlo con un altro prodotto.",
   "drawer.optionsFailed": "Al momento non è stato possibile caricare le altre opzioni.",
   "drawer.tryAgain": "Riprova",

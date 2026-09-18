@@ -30,6 +30,7 @@ export const ar: Dict = {
   "orders.policy.ORDER_DATE": "نقبل الإرجاع خلال {days} يومًا من الشراء.",
   "orders.policyFallback": "نقبل إرجاع المنتجات غير المستخدمة وغير التالفة وفقًا لسياسة الإرجاع لدينا.",
   "orders.policyLink": "عرض سياسة الإرجاع",
+  "orders.returnRef": "الإرجاع {reference}",
   "drawer.noOtherOptions": "لا تتوفر خيارات أخرى لهذا المنتج. جرّب استبداله بمنتج آخر.",
   "drawer.optionsFailed": "تعذّر تحميل الخيارات الأخرى في الوقت الحالي.",
   "drawer.tryAgain": "حاول مرة أخرى",

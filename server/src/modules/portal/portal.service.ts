@@ -314,7 +314,13 @@ export const listCustomerOrders = async (merchantId: string, customerExternalId:
       returnRequests: {
         where: { status: { notIn: ["DRAFT", "CANCELLED"] } },
         orderBy: { createdAt: "desc" },
-        select: { reference: true, status: true },
+        select: {
+          reference: true,
+          status: true,
+          createdAt: true,
+          // The pictures of what went back, so a shopper with two returns on one order can tell them apart.
+          lineItems: { select: { orderLineItem: { select: { title: true, imageUrl: true } } } },
+        },
       },
     },
   });
@@ -333,7 +339,15 @@ export const listCustomerOrders = async (merchantId: string, customerExternalId:
         fulfilledAt: order.fulfilledAt,
         currency: fx.currency,
         returnable: eligibility.hasEligibleItems,
-        returns: order.returnRequests,
+        returns: order.returnRequests.map((request) => ({
+          reference: request.reference,
+          status: request.status,
+          createdAt: request.createdAt,
+          items: request.lineItems.map((line) => ({
+            title: line.orderLineItem.title,
+            imageUrl: line.orderLineItem.imageUrl,
+          })),
+        })),
         lineItems: order.lineItems.map((line) => ({
           id: line.id,
           title: line.title,

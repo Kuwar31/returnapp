@@ -30,6 +30,7 @@ export const ja: Dict = {
   "orders.policy.ORDER_DATE": "ご購入から{days}日以内の返品を承ります。",
   "orders.policyFallback": "返品ポリシーに従い、未使用・未損傷の商品の返品を承ります。",
   "orders.policyLink": "返品ポリシーを見る",
+  "orders.returnRef": "返品 {reference}",
   "drawer.noOtherOptions": "この商品には他のオプションがありません。代わりに別の商品との交換をお試しください。",
   "drawer.optionsFailed": "他のオプションを読み込めませんでした。",
   "drawer.tryAgain": "再試行",

@@ -30,6 +30,7 @@ export const de: Dict = {
   "orders.policy.ORDER_DATE": "Wir akzeptieren Rücksendungen innerhalb von {days} Tagen nach dem Kauf.",
   "orders.policyFallback": "Wir akzeptieren Rücksendungen unbenutzter und unbeschädigter Artikel gemäß unserer Rückgaberichtlinie.",
   "orders.policyLink": "Rückgaberichtlinie ansehen",
+  "orders.returnRef": "Rücksendung {reference}",
   "drawer.noOtherOptions": "Für diesen Artikel gibt es keine weiteren Optionen. Tauschen Sie ihn stattdessen gegen ein anderes Produkt um.",
   "drawer.optionsFailed": "Die weiteren Optionen konnten gerade nicht geladen werden.",
   "drawer.tryAgain": "Erneut versuchen",

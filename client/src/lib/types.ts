@@ -168,7 +168,13 @@ export interface CustomerOrder {
   currency: string;
   /** Whether anything on it can still be returned, by the mirror's reckoning. */
   returnable: boolean;
-  returns: Array<{ reference: string; status: string }>;
+  /** Every return raised on it, newest first, with the items that went back. */
+  returns: Array<{
+    reference: string;
+    status: ReturnStatus;
+    createdAt: string;
+    items: Array<{ title: string; imageUrl: string | null }>;
+  }>;
   lineItems: Array<{
     id: string;
     title: string;
