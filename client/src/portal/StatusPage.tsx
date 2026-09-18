@@ -196,10 +196,11 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
   return (
     <>
 
+      {/* Above both columns, so the first card and the summary start level with each other. */}
+      <h1 className="confirm__heading">{copy.heading}</h1>
+
       <div className="confirm">
         <div className="confirm__main">
-          <h1 className="confirm__heading">{copy.heading}</h1>
-
           <ErrorAlert message={error} />
 
           <div className="card confirm__card">
@@ -447,10 +448,6 @@ export default function StatusPage({ loaderData }: Route.ComponentProps) {
               </>
             )}
           </Section>
-
-          <Link className="confirm__restart" to={`/r/${slug}`}>
-            {t("status.startAnother")}
-          </Link>
         </div>
 
         <aside className="confirm__aside">
