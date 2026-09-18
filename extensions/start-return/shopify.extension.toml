@@ -21,17 +21,17 @@ uid = "93ac2e84-2b0b-b036-6a31-7584816d6cdc9f8a3165"
   module = "./src/StartReturn.jsx"
   target = "customer-account.order.action.menu-item.render"
 
-  # The Storefront API is how the button learns the store's own address, so a
-  # merchant who never opens the settings still gets a working link.
+  # The button asks the returns app itself about the order, with Shopify's
+  # session token as proof of where it's calling from.
   [extensions.capabilities]
-  api_access = true
+  network_access = true
 
   [extensions.settings]
     [[extensions.settings.fields]]
     key = "portal_url"
     type = "single_line_text_field"
     name = "Returns portal address"
-    description = "Where the button sends shoppers. Leave empty to use the returns page on your own store (/apps/returns)."
+    description = "Where the button sends shoppers. Leave empty to use the returns portal as set up in the app."
 
     [[extensions.settings.fields]]
     key = "label"

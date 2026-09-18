@@ -231,7 +231,10 @@ npx shopify app deploy      # signs you in to Shopify, then pushes the config an
 
 `start-return` needs no placement in an editor: Shopify shows order action
 buttons on its own once the app is installed. It only appears for stores on
-Shopify's current customer accounts, not the legacy ones. By default it sends
-shoppers to the store's own `/apps/returns` page; a different address, or a
-different button label, can be set on the extension in the checkout and
-accounts editor (Settings → Checkout → Customize → Apps).
+Shopify's current customer accounts, not the legacy ones, and only on
+fulfilled orders. The button asks the API (the host is a constant at the top
+of `extensions/start-return/src/StartReturn.jsx`) where to send the shopper;
+a different portal address, or a different button label, can be set on the
+extension in the checkout and accounts editor. Turn off Shopify's own
+"Self-serve returns" under Settings → Customer accounts so shoppers see one
+return button, not two.

@@ -378,6 +378,35 @@ export const syncOrderByNumber = async (
 };
 
 /**
+ * The same, by Shopify's id — what a customer-account extension knows an
+ * order by. Shopify's order search takes the numeric part of the GID.
+ */
+export const syncOrderById = async (merchantId: string, externalId: string): Promise<boolean> => {
+  const numeric = externalId.match(/^gid:\/\/shopify\/Order\/(\d+)$/)?.[1];
+  if (!numeric) return false;
+  try {
+    const { shop, accessToken } = await getShopCredentials(merchantId);
+    const result = await shopifyGraphQL<SyncOrdersResult>(shop, accessToken, SYNC_ORDERS_QUERY, {
+      first: 1,
+      after: null,
+      query: `id:${numeric}`,
+    });
+    let synced = false;
+    for (const node of result.orders.nodes) {
+      if (node.id !== externalId) continue;
+      const normalized = mapGraphQLOrder(node);
+      if (!normalized) continue;
+      await upsertOrder(merchantId, normalized);
+      synced = true;
+    }
+    return synced;
+  } catch (error) {
+    logger.warn({ merchantId, externalId, error }, "Could not fetch this order from Shopify");
+    return false;
+  }
+};
+
+/**
  * Everywhere Shopify might hold an order's phone number, in one query.
  *
  * Kept out of SYNC_ORDERS_QUERY on purpose. Phone is protected customer data,

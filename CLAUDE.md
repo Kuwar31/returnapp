@@ -163,9 +163,14 @@ Typecheck is necessary and not sufficient. The pattern that has worked:
 
 - `extensions/start-return` is a customer-account UI extension (Preact, target
   `customer-account.order.action.menu-item.render`): a "Start a return" button
-  on fulfilled orders that links to `<portal>?order=<number>&email=<email>`.
-  The lookup page reads those two query parameters, fills the form and submits
-  once. Extensions deploy with `npx shopify app deploy`, which needs the
+  on fulfilled orders. It asks this app (`GET /api/shopify/start-return`, a
+  Shopify session token as bearer, verified in `session-token.ts`) whether the
+  order can be returned and gets back `<portal>?order=<number>&email=<email>`;
+  the lookup page reads those two query parameters, fills the form and submits
+  once. It deliberately doesn't use the Customer Account or Storefront APIs,
+  which need scopes and capabilities of their own that failed silently. CORS
+  admits `https://extensions.shopifycdn.com` for this. The API host is a
+  constant in the extension; a self-hosted fork changes it there. Extensions deploy with `npx shopify app deploy`, which needs the
   owner's Shopify login, so they are not part of the Render/Vercel pipeline.
   Validate extension code with the Shopify skill's validator before pushing.
 
