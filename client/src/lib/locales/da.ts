@@ -188,6 +188,7 @@ export const da: Dict = {
   "status.returnWord": "Returnering",
   "status.requestSubmitted": "Anmodning sendt",
   "status.cardTitle": "Returstatus",
+  "status.packTitle": "Pak disse varer. Brug den originale emballage, hvis det er muligt.",
   "status.storeReview": "Butikkens gennemgang",
   "status.declined": "Afvist",
   "status.awaitingReview": "Venter på butikkens gennemgang",

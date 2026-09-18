@@ -106,6 +106,9 @@ const blankMethod = (kind: ReturnMethodKind): RoutingMethod => ({
   instructions: null,
   autoApprove: false,
   storeUrl: null,
+  statusTitle: null,
+  statusBody: null,
+  packingTitle: null,
   carrier: null,
   serviceName: null,
   destinationId: null,
@@ -266,6 +269,9 @@ export function RoutingRulesTab({
                 description: m.description?.trim() || null,
                 instructions: m.instructions?.trim() || null,
                 storeUrl: k.kind === "STORE" ? m.storeUrl?.trim() || null : null,
+                statusTitle: m.statusTitle?.trim() || null,
+                statusBody: m.statusBody?.trim() || null,
+                packingTitle: k.kind === "KEEP" ? null : m.packingTitle?.trim() || null,
                 costAmount: m.costMode === "FIXED" ? m.costAmount : null,
               },
             ];
@@ -697,6 +703,48 @@ export function RoutingRulesTab({
                       onChange={(description) => patchMethod(kind, { description })}
                     />
                   </div>
+
+                  <div className="pairing__divider" />
+                  <div className="field-label" style={{ marginBottom: 2 }}>
+                    After submitting
+                  </div>
+                  <p className="settings-row__hint" style={{ marginBottom: 14 }}>
+                    What the status page says while a return under this method is open. Leave a field empty to
+                    keep the standard wording.
+                  </p>
+                  <div className="rform__field">
+                    <div className="rform__label">Status headline</div>
+                    <Counted
+                      value={m.statusTitle ?? ""}
+                      max={120}
+                      label={`${title} status headline`}
+                      placeholder="We're reviewing your request"
+                      onChange={(statusTitle) => patchMethod(kind, { statusTitle })}
+                    />
+                  </div>
+                  <div className="rform__field">
+                    <div className="rform__label">Status message</div>
+                    <Counted
+                      value={m.statusBody ?? ""}
+                      max={500}
+                      multiline
+                      label={`${title} status message`}
+                      placeholder="You'll hear from us by email once the store has reviewed it."
+                      onChange={(statusBody) => patchMethod(kind, { statusBody })}
+                    />
+                  </div>
+                  {kind !== "KEEP" && (
+                    <div className="rform__field">
+                      <div className="rform__label">Packing block title</div>
+                      <Counted
+                        value={m.packingTitle ?? ""}
+                        max={120}
+                        label={`${title} packing block title`}
+                        placeholder="Pack these items. Use the original packaging if possible."
+                        onChange={(packingTitle) => patchMethod(kind, { packingTitle })}
+                      />
+                    </div>
+                  )}
 
                   {kind === "LABEL" && (
                     <>

@@ -1605,24 +1605,33 @@
   transform: rotate(0deg);
 }
 
+/* The packing list: a row per item, picture beside the words, so a single
+   item doesn't stretch its picture across the whole card. */
 .confirm__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 20px;
+  gap: 14px;
+}
+
+.confirm__tile {
+  display: grid;
+  grid-template-columns: 76px 1fr;
+  column-gap: 14px;
+  align-items: center;
 }
 
 .confirm__tile img,
 .confirm__tile-blank {
-  width: 100%;
-  aspect-ratio: 1;
-  object-fit: cover;
-  border-radius: var(--radius);
-  background: #f0f0f1;
+  grid-row: 1 / span 4;
+  width: 76px;
+  height: 76px;
+  object-fit: contain;
+  border-radius: 10px;
+  background: #f4f4f5;
 }
 
 .confirm__tile-title {
-  margin-top: 10px;
   font-size: 14px;
+  font-weight: 600;
   line-height: 1.35;
 }
 
@@ -2454,13 +2463,14 @@
 
 /* The store's own name, above the page's title. Quiet and small: it says whose
    returns page this is without competing with what the page is for. */
+/* The store's name is the whole header now: big enough to be the title, quiet enough not to compete with the page's own heading. */
 .portal__store {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--text-muted);
-  margin-bottom: 10px;
+  color: var(--text);
+  margin: 0;
 }
 
 /* An address in the details list: label left, lines stacked right, as written

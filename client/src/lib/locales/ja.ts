@@ -185,6 +185,7 @@ export const ja: Dict = {
   "status.returnWord": "返品",
   "status.requestSubmitted": "申請を送信しました",
   "status.cardTitle": "返品ステータス",
+  "status.packTitle": "商品を梱包してください。可能であれば元の包装をご利用ください。",
   "status.storeReview": "ショップによる確認",
   "status.declined": "却下されました",
   "status.awaitingReview": "ショップの確認をお待ちください",

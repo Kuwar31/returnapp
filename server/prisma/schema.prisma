@@ -751,6 +751,14 @@ model ReturnRoutingMethod {
   /// STORE only: where to find the retail locations.
   storeUrl     String?
   /**
+   * The status page's words while the return is open, when the merchant
+   * wants their own: the line under "Return status", the sentence under it,
+   * and the packing block's title. Null keeps the portal's wording.
+   */
+  statusTitle  String?
+  statusBody   String?
+  packingTitle String?
+  /**
    * LABEL only — AfterShip's "Return shipping information": the carrier,
    * shipping service, warehouse and package size for returns under this
    * rule. Each null defers: carrier to the regional policy then the store's
@@ -1100,6 +1108,10 @@ model ReturnRequest {
   returnMethodName   String?
   returnInstructions String?
   returnStoreUrl     String?
+  /// The method's own status-page words, copied at submission like the rest.
+  returnStatusTitle  String?
+  returnStatusBody   String?
+  returnPackingTitle String?
   /// The method's fixed cost, deducted from the payout; fixed at submission.
   returnShippingFee  Decimal            @default(0) @db.Decimal(12, 2)
 

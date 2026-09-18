@@ -185,6 +185,7 @@ export const zh: Dict = {
   "status.returnWord": "退货",
   "status.requestSubmitted": "申请已提交",
   "status.cardTitle": "退货状态",
+  "status.packTitle": "请打包这些商品。如有可能，请使用原包装。",
   "status.storeReview": "店铺审核",
   "status.declined": "已拒绝",
   "status.awaitingReview": "等待店铺审核",

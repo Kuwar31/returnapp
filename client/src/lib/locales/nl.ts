@@ -188,6 +188,7 @@ export const nl: Dict = {
   "status.returnWord": "Retour",
   "status.requestSubmitted": "Aanvraag ingediend",
   "status.cardTitle": "Retourstatus",
+  "status.packTitle": "Verpak deze artikelen. Gebruik indien mogelijk de originele verpakking.",
   "status.storeReview": "Beoordeling door de winkel",
   "status.declined": "Afgewezen",
   "status.awaitingReview": "Wachten op beoordeling door de winkel",

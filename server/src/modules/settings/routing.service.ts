@@ -92,6 +92,10 @@ export interface MethodInput {
   instructions: string | null;
   autoApprove: boolean;
   storeUrl: string | null;
+  /** The status page's words while the return is open; null keeps the portal's. */
+  statusTitle: string | null;
+  statusBody: string | null;
+  packingTitle: string | null;
   /** LABEL only — AfterShip's return shipping information; each null defers. */
   carrier: ShipmentProvider | null;
   serviceName: string | null;
@@ -176,6 +180,9 @@ export const serializeMethod = (m: ReturnRoutingMethod) => ({
   instructions: m.instructions,
   autoApprove: m.autoApprove,
   storeUrl: m.storeUrl,
+  statusTitle: m.statusTitle,
+  statusBody: m.statusBody,
+  packingTitle: m.packingTitle,
   carrier: m.carrier,
   serviceName: m.serviceName,
   destinationId: m.destinationId,
@@ -197,6 +204,9 @@ export const serializeRule = (row: RoutingRuleRow) => {
           instructions: null,
           autoApprove: false,
           storeUrl: null,
+          statusTitle: null,
+          statusBody: null,
+          packingTitle: null,
           carrier: null,
           serviceName: null,
           destinationId: null,
@@ -229,6 +239,9 @@ const methodRows = (methods: RoutingRuleInput["methods"]) =>
       instructions: m.instructions,
       autoApprove: m.autoApprove,
       storeUrl: kind === "STORE" ? m.storeUrl : null,
+      statusTitle: m.statusTitle,
+      statusBody: m.statusBody,
+      packingTitle: kind === "KEEP" ? null : m.packingTitle,
       carrier: kind === "LABEL" ? m.carrier : null,
       serviceName: kind === "LABEL" ? m.serviceName : null,
       destinationId: kind === "LABEL" ? m.destinationId : null,
@@ -388,6 +401,9 @@ export interface OfferedMethod {
   instructions: string | null;
   autoApprove: boolean;
   storeUrl: string | null;
+  statusTitle: string | null;
+  statusBody: string | null;
+  packingTitle: string | null;
 }
 
 const offered = (m: ReturnRoutingMethod): OfferedMethod => ({
@@ -402,6 +418,9 @@ const offered = (m: ReturnRoutingMethod): OfferedMethod => ({
   instructions: m.instructions,
   autoApprove: m.autoApprove,
   storeUrl: m.kind === "STORE" ? m.storeUrl : null,
+  statusTitle: m.statusTitle,
+  statusBody: m.statusBody,
+  packingTitle: m.packingTitle,
 });
 
 /** What the app falls back to with nothing configured at all: ship it yourself. */
@@ -414,6 +433,9 @@ const BUILT_IN_CARRIER: OfferedMethod = {
   instructions: null,
   autoApprove: false,
   storeUrl: null,
+  statusTitle: null,
+  statusBody: null,
+  packingTitle: null,
 };
 
 /**
