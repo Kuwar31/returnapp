@@ -62,6 +62,7 @@ import {
   lineIdOf,
   loadCart,
   loadDraft,
+  clearMethod,
   loadMethod,
   loadSubmitted,
   rememberSubmitted,
@@ -237,9 +238,30 @@ export default function ReviewPage({ loaderData }: Route.ComponentProps) {
         },
         { auth: "portal" },
       )
-      .then(setQuote)
-      .catch((e) => setError(e instanceof Error ? e.message : null));
-  }, [draft, shopping, shopPayloadKey, returnMethod]);
+      .then((q) => {
+        setQuote(q);
+        setError(null);
+        /**
+         * A method remembered from an earlier visit may not be offered for
+         * these items — the reasons changed, or a rule did. Forget it and let
+         * the store's first offer stand, rather than carry a choice the
+         * server would refuse at submission.
+         */
+        if (returnMethod && q.returnMethods && !q.returnMethods.options.some((m) => m.kind === returnMethod)) {
+          clearMethod(order.id);
+          setReturnMethod(null);
+        }
+      })
+      .catch((e) => {
+        // The same stale method, refused outright: drop it and quote again without.
+        if (returnMethod && e instanceof ApiError && e.status === 422) {
+          clearMethod(order.id);
+          setReturnMethod(null);
+          return;
+        }
+        setError(e instanceof Error ? e.message : null);
+      });
+  }, [draft, shopping, shopPayloadKey, returnMethod, order.id]);
 
   const remove = (id: string) => {
     const next = { ...draft };
