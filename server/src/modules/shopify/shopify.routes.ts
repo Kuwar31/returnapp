@@ -20,7 +20,9 @@ import {
   provisionMerchant,
   registerWebhooks,
 } from "./shopify.install.js";
-import { backfillOrders } from "./order.sync.js";
+import { backfillOrders, syncOrderById } from "./order.sync.js";
+import { verifyExtensionSessionToken } from "./session-token.js";
+import { portalUrl } from "../../lib/portal-links.js";
 import { handleWebhook } from "./webhook.handlers.js";
 
 export const shopifyRouter = Router();
@@ -280,5 +282,54 @@ shopifyRouter.post(
 
     const result = await backfillOrders(merchantId, { days: req.body.days });
     res.json(result);
+  }),
+);
+
+/**
+ * What the "Start a return" button in Shopify customer accounts asks before
+ * it draws itself: whether this order can be returned, and where to send the
+ * shopper. Authenticated by the extension's session token, which names the
+ * store; the order has to belong to that store. The link carries the order
+ * number and email, which is all the portal's own lookup asks for, so the
+ * button grants nothing a shopper couldn't type.
+ */
+shopifyRouter.get(
+  "/start-return",
+  rateLimit({ windowMs: 60_000, max: 120 }),
+  asyncHandler(async (req, res) => {
+    const session = verifyExtensionSessionToken(req.header("authorization")?.replace(/^Bearer\s+/i, ""));
+    const externalId = typeof req.query.order === "string" ? req.query.order : "";
+    if (!externalId.startsWith("gid://shopify/Order/")) throw badRequest("Name the order.");
+    const merchant = await prisma.merchant.findFirst({
+      where: { domain: session.shopDomain, status: "ACTIVE" },
+      select: { id: true, slug: true },
+    });
+    if (!merchant) {
+      res.json({ url: null, reason: "not_connected" });
+      return;
+    }
+    // Mirrored already for any order that's been looked at; fetched now for one that hasn't.
+    let order = await prisma.order.findFirst({
+      where: { merchantId: merchant.id, externalId },
+      select: { orderNumber: true, email: true, fulfilledAt: true },
+    });
+    if (!order && (await syncOrderById(merchant.id, externalId))) {
+      order = await prisma.order.findFirst({
+        where: { merchantId: merchant.id, externalId },
+        select: { orderNumber: true, email: true, fulfilledAt: true },
+      });
+    }
+    if (!order) {
+      res.json({ url: null, reason: "unknown_order" });
+      return;
+    }
+    if (!order.fulfilledAt) {
+      res.json({ url: null, reason: "unfulfilled", orderNumber: order.orderNumber });
+      return;
+    }
+    const url = new URL(portalUrl(merchant.slug));
+    url.searchParams.set("order", order.orderNumber);
+    url.searchParams.set("email", order.email);
+    res.json({ url: url.toString(), orderNumber: order.orderNumber, email: order.email });
   }),
 );

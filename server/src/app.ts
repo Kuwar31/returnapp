@@ -18,7 +18,9 @@ export const createApp = () => {
   app.use(helmet());
   app.use(
     cors({
-      origin: env.corsOrigins,
+      // The extension sandbox is where the "Start a return" button in customer
+      // accounts runs; its requests prove themselves with a session token.
+      origin: [...env.corsOrigins, "https://extensions.shopifycdn.com"],
       credentials: true,
     }),
   );

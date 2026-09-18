@@ -6,89 +6,51 @@ import { render } from "preact";
  *
  * Decided before the first render rather than after, as Shopify asks for
  * this target: the menu shouldn't flash a button that then disappears. The
- * order's name, whether anything has shipped, and the shopper's email all
- * come from the Customer Account API; the store's address from the
- * Storefront API, unless the merchant gave a portal address in settings.
+ * button asks the returns app itself whether this order can be returned
+ * and where to send the shopper, proving itself with Shopify's session
+ * token. The app already mirrors the store's orders, so nothing has to be
+ * read through Shopify's customer or storefront APIs from here.
  *
- * The link carries the order number and email so the portal can do the
- * lookup itself and land the shopper on their items — which is all the
- * portal ever asks for, so nothing here grants access the shopper lacks.
+ * The link carries the order number and email, which is all the portal's
+ * own lookup asks for, so the button grants nothing a shopper couldn't type.
  */
 
-const API = "2026-04";
+/** Where the returns app runs. */
+const API = "https://returnapp-yxkl.onrender.com";
 
-const post = async (url, query, variables) => {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query, variables }),
+const askApp = async () => {
+  const token = await shopify.sessionToken.get();
+  const response = await fetch(`${API}/api/shopify/start-return?order=${encodeURIComponent(shopify.orderId)}`, {
+    headers: { Authorization: `Bearer ${token}` },
   });
-  const { data, errors } = await response.json();
-  // Said out loud: a missing scope is the usual reason, and the console is where a merchant's developer looks first.
-  if (errors?.length) console.warn("Start a return:", errors.map((e) => e.message).join("; "));
-  return data ?? null;
+  if (!response.ok) throw new Error(`the returns app answered ${response.status}`);
+  return response.json();
 };
 
-/** The order and the person, or null when the order can't be returned yet. */
-const loadOrder = async () => {
-  const data = await post(
-    `shopify://customer-account/api/${API}/graphql.json`,
-    `query StartReturn($orderId: ID!) {
-      order(id: $orderId) {
-        name
-        cancelledAt
-        fulfillments(first: 1) { nodes { id } }
-      }
-      customer { emailAddress { emailAddress } }
-    }`,
-    { orderId: shopify.orderId },
-  );
-  const order = data?.order;
-  if (!order || order.cancelledAt || order.fulfillments.nodes.length === 0) return null;
-  return {
-    orderNumber: String(order.name ?? "").replace(/^#/, ""),
-    email: data?.customer?.emailAddress?.emailAddress ?? "",
-  };
-};
-
-/** Where the portal lives: the merchant's setting, else the store's own /apps/returns. */
-const loadPortalUrl = async () => {
+/** The merchant's own portal address, when they set one, with the same order and email on it. */
+const withPortalSetting = (answer) => {
   const configured = shopify.settings?.value?.portal_url;
-  if (typeof configured === "string" && configured.trim()) return configured.trim().replace(/\/+$/, "");
-  try {
-    const data = await post(
-      `shopify://storefront/api/${API}/graphql.json`,
-      `query StoreAddress { shop { primaryDomain { url } } }`,
-      {},
-    );
-    const origin = data?.shop?.primaryDomain?.url;
-    if (typeof origin === "string" && origin) return `${origin.replace(/\/+$/, "")}/apps/returns`;
-  } catch {
-    // Fall through: without an address there is nothing to link to.
-  }
-  return null;
+  if (typeof configured !== "string" || !configured.trim() || !answer.orderNumber) return answer.url;
+  const url = new URL(configured.trim());
+  url.searchParams.set("order", answer.orderNumber);
+  if (answer.email) url.searchParams.set("email", answer.email);
+  return url.toString();
 };
 
 export default async () => {
   let href = null;
   try {
-    const [order, portal] = await Promise.all([loadOrder(), loadPortalUrl()]);
-    if (order && portal) {
-      const url = new URL(portal);
-      url.searchParams.set("order", order.orderNumber);
-      if (order.email) url.searchParams.set("email", order.email);
-      href = url.toString();
-    }
+    const answer = await askApp();
+    href = answer.url ? withPortalSetting(answer) : null;
+    if (!href) console.warn(`Start a return: no button — ${answer.reason ?? "the order can't be returned"}`);
   } catch (error) {
-    console.error("Start a return: couldn't prepare the link", error);
+    console.error("Start a return: couldn't reach the returns app", error);
   }
-  if (!href) console.warn("Start a return: no button — the order isn't fulfilled, or the order or store address couldn't be read.");
   const label = String(shopify.settings?.value?.label ?? "").trim() || "Start a return";
   render(<StartReturn href={href} label={label} />, document.body);
 };
 
 function StartReturn({ href, label }) {
-  // Nothing shipped yet, or nothing to link to: no button, as Shopify's own returns behave.
   if (!href) return null;
   return <s-button href={href}>{label}</s-button>;
 }
