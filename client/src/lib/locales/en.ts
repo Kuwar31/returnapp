@@ -230,6 +230,7 @@ export const en = {
   "status.orderNo": "Order #{number}",
   "status.returnWord": "Return",
   "status.requestSubmitted": "Request submitted",
+  "status.cardTitle": "Return status",
   "status.storeReview": "Store review",
   "status.declined": "Declined",
   "status.awaitingReview": "Waiting for the store to review",

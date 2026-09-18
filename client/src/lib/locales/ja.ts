@@ -184,6 +184,7 @@ export const ja: Dict = {
   "status.orderNo": "注文番号 {number}",
   "status.returnWord": "返品",
   "status.requestSubmitted": "申請を送信しました",
+  "status.cardTitle": "返品ステータス",
   "status.storeReview": "ショップによる確認",
   "status.declined": "却下されました",
   "status.awaitingReview": "ショップの確認をお待ちください",

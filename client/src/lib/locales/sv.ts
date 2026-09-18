@@ -187,6 +187,7 @@ export const sv: Dict = {
   "status.orderNo": "Order nr {number}",
   "status.returnWord": "Retur",
   "status.requestSubmitted": "Begäran skickad",
+  "status.cardTitle": "Returstatus",
   "status.storeReview": "Butikens granskning",
   "status.declined": "Avvisad",
   "status.awaitingReview": "Väntar på butikens granskning",
