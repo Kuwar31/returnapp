@@ -3227,13 +3227,38 @@
    it holds rows of things, not two fields. */
 
 .orders {
-  padding: 32px 36px 28px;
+  max-width: 820px;
+  padding: 32px 40px 28px;
 }
 
-.orders__title {
-  font-size: 22px;
-  font-weight: 700;
-  margin-bottom: 18px;
+/* The page's own name, centred over everything, as AfterShip sets it. */
+.orders__heading {
+  font-size: 28px;
+  font-weight: 600;
+  text-align: center;
+  margin: 8px 0 28px;
+}
+
+.orders__subtitle {
+  font-size: 19px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.orders__policy {
+  margin-bottom: 30px;
+}
+
+.orders__policy p {
+  color: var(--text-muted);
+  font-size: 15px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.orders__policy a {
+  color: var(--text);
+  text-decoration: underline;
 }
 
 .orders__empty {
@@ -3332,6 +3357,11 @@
 @media (max-width: 560px) {
   .orders {
     padding: 24px 18px 22px;
+  }
+
+  .orders__heading {
+    font-size: 24px;
+    margin-bottom: 20px;
   }
 
   .order-card__head {

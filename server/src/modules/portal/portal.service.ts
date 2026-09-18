@@ -83,6 +83,19 @@ const resolvePolicy = async (merchantId: string, policyId: string | null) => {
   return fallback;
 };
 
+/**
+ * The store policy's headline facts, for the returns centre's "Return policy"
+ * blurb before any order is chosen. The default policy's, since the region's
+ * terms aren't known until an order is: a summary, not a ruling.
+ */
+export const policySummary = async (merchantId: string) => {
+  const policy = await prisma.returnPolicy.findFirst({
+    where: { merchantId, isDefault: true, active: true },
+    select: { returnWindowDays: true, windowStartsFrom: true },
+  });
+  return policy ? { windowDays: policy.returnWindowDays, windowFrom: policy.windowStartsFrom } : null;
+};
+
 /** The store behind a session, for building links that name it. */
 export const getMerchantById = async (id: string) =>
   prisma.merchant.findUniqueOrThrow({

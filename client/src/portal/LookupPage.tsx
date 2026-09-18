@@ -111,7 +111,7 @@ export async function clientAction({
 
 export default function LookupPage({ actionData, loaderData }: Route.ComponentProps) {
   const { slug } = useParams();
-  const { branding, merchant } = usePortal();
+  const { branding, merchant, policy } = usePortal();
   const t = useT();
   const navigation = useNavigation();
   const busy = navigation.state !== "idle";
@@ -201,7 +201,27 @@ export default function LookupPage({ actionData, loaderData }: Route.ComponentPr
   if (orders) {
     return (
       <div className="card portal__card portal__card--wide orders">
-        <h2 className="orders__title">{t("orders.title")}</h2>
+        <h1 className="orders__heading">{t("orders.heading")}</h1>
+        {/*
+          The store's terms in a sentence, before any order is chosen, as
+          AfterShip's returns centre opens. The sentence comes from the
+          default policy's window; the link is the merchant's own page.
+        */}
+        <section className="orders__policy">
+          <h2 className="orders__subtitle">{t("orders.policyTitle")}</h2>
+          <p>
+            {policy ? t(`orders.policy.${policy.windowFrom}`, { days: policy.windowDays }) : t("orders.policyFallback")}
+            {branding.policyUrl && (
+              <>
+                {" "}
+                <a href={branding.policyUrl} target="_blank" rel="noreferrer">
+                  {t("orders.policyLink")}
+                </a>
+              </>
+            )}
+          </p>
+        </section>
+        <h2 className="orders__subtitle">{t("orders.title")}</h2>
         <ErrorAlert message={error} />
         {orders.length === 0 && <p className="orders__empty">{t("orders.empty")}</p>}
         {orders.map((order) => {
