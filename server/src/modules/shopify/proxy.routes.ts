@@ -46,14 +46,24 @@ const escapeHtml = (value: string): string =>
  * measures itself and posts its height out; this listens for that and resizes.
  * Messages are checked against the portal's own origin — anything else on the
  * page can post too.
+ *
+ * The width is asked for twice on purpose. A theme decides how the content
+ * area is laid out, and Horizon centres it in a container that shrinks to
+ * fit its contents: there `width: 100%` resolves to nothing and the frame
+ * fell back to an iframe's built-in 300px, drawing the portal's phone layout
+ * in the middle of a desktop page. The `width` attribute gives the frame an
+ * intrinsic size the container has to make room for, and the CSS caps it at
+ * whatever room there is.
  */
 const embedPage = (src: string, origin: string): string => `
-<div id="returns-portal-embed" style="max-width:1100px;margin:0 auto;padding:0 16px">
+<div id="returns-portal-embed" style="display:block;width:100%;max-width:1100px;margin:0 auto;padding:0 16px;box-sizing:border-box">
   <iframe
     id="returns-portal-frame"
     src="${escapeHtml(src)}"
     title="Returns and exchanges"
-    style="width:100%;min-height:720px;border:0;display:block"
+    width="1068"
+    height="720"
+    style="width:1068px;max-width:100%;min-height:720px;border:0;display:block"
     allow="clipboard-write"
   ></iframe>
 </div>
