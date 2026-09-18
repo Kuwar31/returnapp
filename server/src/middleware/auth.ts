@@ -1,6 +1,6 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import { forbidden, unauthorized } from "../lib/errors.js";
-import { verifyAdminToken, verifyPortalToken } from "../lib/tokens.js";
+import { verifyAdminToken, verifyCustomerToken, verifyPortalToken } from "../lib/tokens.js";
 import { resolveMembership } from "../modules/auth/membership.js";
 
 const bearer = (req: Request): string | null => {
@@ -85,5 +85,24 @@ export const requirePortalSession: RequestHandler = (
   }
 
   req.portal = payload;
+  next();
+};
+
+/**
+ * A shopper signed in to the storefront, by the token the app proxy issued.
+ * Sent as a bearer like the others; there is no cookie fallback because the
+ * framed portal is on its own origin and never had one.
+ */
+export const requireCustomerSession: RequestHandler = (
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+) => {
+  const token = bearer(req);
+  const payload = token ? verifyCustomerToken(token) : null;
+  if (!payload) {
+    return next(unauthorized("Sign in to the store to see your orders."));
+  }
+  req.customer = payload;
   next();
 };

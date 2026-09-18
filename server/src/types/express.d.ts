@@ -1,4 +1,4 @@
-import type { PortalTokenPayload } from "../lib/tokens.js";
+import type { CustomerTokenPayload, PortalTokenPayload } from "../lib/tokens.js";
 import type { ResolvedMembership } from "../modules/auth/membership.js";
 
 declare global {
@@ -12,6 +12,8 @@ declare global {
       admin?: ResolvedMembership & { sub: string };
       /** Set by requirePortalSession — the shopper's verified order scope. */
       portal?: PortalTokenPayload;
+      /** Set by requireCustomerSession — a shopper signed in to the storefront, vouched for by Shopify. */
+      customer?: CustomerTokenPayload;
     }
   }
 }

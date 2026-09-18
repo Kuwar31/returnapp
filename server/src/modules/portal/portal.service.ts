@@ -58,7 +58,7 @@ import {
   getShopifyReturnableQuantities,
 } from "../shopify/returns.service.js";
 import { ensureExchangeDraftOrder } from "../shopify/exchange.service.js";
-import { fetchOrderPhone, syncOrderByNumber } from "../shopify/order.sync.js";
+import { fetchOrderPhone, syncCustomerOrders, syncOrderByNumber } from "../shopify/order.sync.js";
 import { exchangeGeneration } from "../returns/exchange-chain.js";
 import { generateReference } from "../returns/reference.js";
 import type { QuoteInput, SubmitInput } from "./portal.schemas.js";
@@ -272,6 +272,77 @@ export const resolvePortalBranding = (
   }
   return resolved;
 };
+
+/**
+ * A signed-in shopper's orders, for the storefront's "Your orders" list —
+ * what AfterShip's and Loop's returns centres show in place of the lookup
+ * form once the store knows who is there.
+ *
+ * Refreshed from Shopify first, for the reason lookup is: the mirror is only
+ * as current as the last look at each order. Then read back newest first,
+ * with whether anything on the order can still be returned and any return
+ * already raised, so each card can say "Create return", "View return", or
+ * neither.
+ *
+ * Eligibility here is decided from the mirror alone — window, fulfilment,
+ * final-sale lines, exchange depth — without Shopify's own returnable counts,
+ * which the item picker consults for the one order actually opened. Asking
+ * Shopify once per order to draw twenty cards costs more than a card's answer
+ * is worth, and the picker corrects any difference before anything is chosen.
+ */
+export const listCustomerOrders = async (merchantId: string, customerExternalId: string) => {
+  await syncCustomerOrders(merchantId, customerExternalId);
+  const orders = await prisma.order.findMany({
+    where: { merchantId, customerExternalId },
+    orderBy: { placedAt: "desc" },
+    take: 20,
+    include: {
+      lineItems: { orderBy: { title: "asc" } },
+      returnRequests: {
+        where: { status: { notIn: ["DRAFT", "CANCELLED"] } },
+        orderBy: { createdAt: "desc" },
+        select: { reference: true, status: true },
+      },
+    },
+  });
+  const mode = await resolveDisplayMode(merchantId);
+  return Promise.all(
+    orders.map(async (order) => {
+      const policy = await effectivePolicyFor(merchantId, await resolvePolicy(merchantId, order.policyId), order);
+      const eligibility = evaluateOrder(order, policy, new Date(), await exchangeGeneration(merchantId, order.id));
+      const labels = new Map(eligibility.items.map((item) => [item.id, item.variantLabel]));
+      const fx = displayConverter(order, mode, order.currency);
+      return {
+        id: order.id,
+        orderNumber: order.orderNumber,
+        email: order.email,
+        placedAt: order.placedAt,
+        fulfilledAt: order.fulfilledAt,
+        currency: fx.currency,
+        returnable: eligibility.hasEligibleItems,
+        returns: order.returnRequests,
+        lineItems: order.lineItems.map((line) => ({
+          id: line.id,
+          title: line.title,
+          variantLabel: labels.get(line.id) ?? line.variantTitle,
+          imageUrl: line.imageUrl,
+          quantity: line.quantity,
+          unitPrice: fx.money(line.unitPrice) ?? Number(line.unitPrice),
+        })),
+      };
+    }),
+  );
+};
+
+/**
+ * One of those orders, opened. Null unless it is this customer's: the token
+ * names the customer, and the order id is whatever the browser sent.
+ */
+export const openCustomerOrder = async (merchantId: string, customerExternalId: string, orderId: string) =>
+  prisma.order.findFirst({
+    where: { id: orderId, merchantId, customerExternalId },
+    select: { id: true, email: true },
+  });
 
 export const getOrderEligibility = async (
   merchantId: string,

@@ -11,3 +11,6 @@ coverage/
 .vite/
 server/generated/
 server/.mail/
+
+# Written by the Shopify CLI on every dev/deploy run for editor types; not source.
+extensions/*/shopify.d.ts

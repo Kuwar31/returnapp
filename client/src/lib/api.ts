@@ -16,11 +16,13 @@ export class ApiError extends Error {
   }
 }
 
-// Two independent sessions can be active at once: a merchant signed into the
-// admin, and a shopper mid-return in the portal.
+// Three independent sessions can be active at once: a merchant signed into the
+// admin, a shopper mid-return in the portal, and — inside a storefront — the
+// shopper's sign-in to the store itself, which the app proxy vouches for.
 const TOKEN_KEYS = {
   admin: "returns.admin.token",
   portal: "returns.portal.token",
+  customer: "returns.customer.token",
 } as const;
 
 export type TokenScope = keyof typeof TOKEN_KEYS;
