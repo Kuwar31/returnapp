@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, redirect, useNavigate, useParams } from "react-router";
+import { redirect, useNavigate, useParams } from "react-router";
 import { api, ApiError, getToken } from "../lib/api";
-import { money, shortDate } from "../lib/format";
+import { money } from "../lib/format";
 import type {
   ExchangeProduct,
   OrderSession,
@@ -11,13 +11,13 @@ import type {
 import { ErrorAlert } from "../components/Feedback";
 import { ItemDrawer, type ItemDecision } from "./ItemDrawer";
 import { usePortal, useT } from "./PortalLayout";
+import { ReturnRows } from "./ReturnRows";
 import {
   articleKey,
   exchangePriceIn,
   hydrateExchangeDetails,
   lineIdOf,
   loadDraft,
-  loadSubmitted,
   saveDraft,
   toSelections,
   toShopSelections,
@@ -53,7 +53,7 @@ export async function clientLoader({ params }: Route.ClientLoaderArgs) {
 const EXCHANGE_RESOLUTIONS = ["EXCHANGE", "INSTANT_EXCHANGE"];
 
 export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
-  const { order, reasonGroups, eligibility, shopNow } = loaderData;
+  const { order, reasonGroups, eligibility, shopNow, returns } = loaderData;
   const { merchant } = usePortal();
   const t = useT();
   const { slug } = useParams();
@@ -272,7 +272,6 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
   const eligible = eligibility.items.filter((i) => i.eligible);
   const ineligible = eligibility.items.filter((i) => !i.eligible);
   const count = Object.keys(decisions).length;
-  const submitted = loadSubmitted(order.id);
 
   return (
     <>
@@ -293,30 +292,18 @@ export default function SelectItemsPage({ loaderData }: Route.ComponentProps) {
         <ErrorAlert message={error} />
 
         {/*
-          A return was already submitted for this order in this session — most
-          often the shopper is on their way back from the exchange checkout.
-          Their own items now read "already returned", which looks like a
-          failure, so give them the way back to the summary that says otherwise.
+          The returns already raised on this order, every one of them, from
+          the server. Their items now read "already returned" below, which
+          looks like a failure without this; and a shopper back on another
+          device, or with two returns going, has to be able to find each.
+          This used to be one row from local storage — whichever return this
+          browser last submitted — which showed one at most and often none.
         */}
-        {submitted && (
-          <div className="picker__submitted">
-            <div>
-              <strong>{t("picker.existing")}</strong>
-              <div className="muted">
-                {submitted.reference}
-                {submitted.at &&
-                  ` · ${t("picker.started", { date: shortDate(submitted.at) })}`}
-              </div>
-            </div>
-            <Link
-              className="btn btn--secondary btn--sm"
-              to={`/r/${slug}/status/${submitted.reference}?email=${encodeURIComponent(
-                submitted.email,
-              )}`}
-            >
-              {t("shell.resumeAction")}
-            </Link>
-          </div>
+        {returns.length > 0 && (
+          <section className="picker__returns">
+            <h3 className="picker__returns-title">{t("picker.existing")}</h3>
+            <ReturnRows slug={slug!} returns={returns} />
+          </section>
         )}
 
         {/*

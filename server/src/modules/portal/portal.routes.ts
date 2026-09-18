@@ -174,6 +174,12 @@ portalRouter.get(
       })),
       eligibility,
       /**
+       * Every return already raised on this order, from the server rather
+       * than from whatever this browser remembers: a shopper coming back on
+       * another device, or with two returns going, should see them all.
+       */
+      returns: await portalService.returnsOnOrder(merchantId, orderId),
+      /**
        * The "shop now" offer, converted into the money this order is shown in.
        * Absent details when the merchant has it switched off, so the portal has
        * one thing to check rather than a rule to reimplement.

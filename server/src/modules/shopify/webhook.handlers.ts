@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { logger } from "../../lib/logger.js";
 import { prisma } from "../../lib/prisma.js";
+import { REDACTED_EMAIL } from "../../lib/redaction.js";
 import { mapWebhookOrder, type WebhookOrder } from "./order.mapper.js";
 import { upsertOrder } from "./order.sync.js";
 
@@ -67,14 +68,6 @@ const applyFulfillment = async (
   });
 };
 
-/**
- * What a redacted record's email becomes.
- *
- * Not null: the column is required, and rows are looked up by email in several
- * places. A recognisable placeholder also makes it obvious in the admin that
- * the person asked to be forgotten, rather than looking like corrupt data.
- */
-const REDACTED_EMAIL = "redacted@removed.invalid";
 
 export const handleWebhook = async ({
   topic,
